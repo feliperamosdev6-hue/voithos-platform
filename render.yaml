@@ -75,8 +75,9 @@ services:
       - key: SESSIONS_DIR
         value: .sessions
 
-  - type: static
+  - type: web
     name: voithos-web
+    runtime: static
     rootDir: .
     buildCommand: node scripts/build-render-web.mjs
     staticPublishPath: ./render-static
