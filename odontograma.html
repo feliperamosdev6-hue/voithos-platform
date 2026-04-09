@@ -1,0 +1,1315 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="registros_servicos/scripts/scripts/css/estilosOdontograma.css">
+  <style>
+    #odontograma-deciduo-container {
+      padding-left: 18px;
+      box-sizing: border-box;
+      transform: translateX(-460px);
+    }
+
+    @media (max-width: 900px) {
+      #odontograma-deciduo-container {
+        padding-left: 8px;
+        transform: translateX(-120px);
+      }
+    }
+  </style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+    <defs id="tooth-symbols">
+      <symbol id="tooth-incisivo" viewBox="0 0 55.894825 85.683101">
+        <path class="tooth-outline" d="m 25.979231,1.152830 -3.68888,1.47009 -2.70521,5.25038 -1.22962,5.8804 -1.96741,6.09041 v 5.88042 l -2.21333,4.20029 -1.47556,6.30042 -6.148154,7.1405 c 0,0 -4.426682,8.40057 -4.426682,9.24062 0,0.84007 -0.983713,13.65094 -0.983713,13.65094 l 0.491858,9.45068 0.737782,0.84004 0.983713,2.94019 6.394088,3.15022 4.672608,1.47012 6.14815,-1.89015 5.41038,0.63005 2.45927,-0.63005 9.837057,2.31016 8.60742,-1.05006 3.68892,-3.15022 3.93481,-5.8804 0.24584,-12.39086 -2.21336,-6.30044 -3.19702,-10.2907 -5.65631,-7.98055 -5.16446,-10.71074 -2.21334,-14.28098 -0.98371,-6.30042 -2.95113,-4.62033 z" />
+      </symbol>
+      <symbol id="tooth-canino" viewBox="0 0 38.339611 76.454417">
+        <path class="tooth-outline" d="m 21.205965,34.998833 -2.39031,3.6139 12.122299,1.626251 5.1221,9.757525 1.365888,6.685716 -1.536628,3.975285 -7.683149,9.576828 L 20.693759,75.47449 19.157123,74.9324 14.03503,73.125444 1.5712501,61.92237 0.88831111,50.719281 3.2786191,43.310788 l 5.805047,-7.589185 0.85368,-1.806948 1.0244219,-5.96293 0.17072,-7.950576 0.512226,-5.059462 1.365889,-6.5050201 2.561049,-4.5173733 3.585471,-2.8911136 2.731783,1.2648608 2.219574,4.1559871 0.682949,4.1559811 0.85368,4.155981 0.170718,8.131274 2.39031,7.589188 2.902531,9.938222 z" />
+      </symbol>
+      <symbol id="tooth-premolar" viewBox="0 0 5.9057493 9.441583">
+        <path class="tooth-outline" d="m 3.4384541,4.0940205 -0.0747,0.317467 1.400593,0.186746 0.373491,0.653608 0.298791,0.597586 0.168072,0.578911 0.112048,0.61626 0.05602,0.989751 -0.09337,0.504212 -0.20542,0.373491 -0.522885,0.261444 -0.541563,0.130722 -0.690959,-0.224095 -0.392166,-0.112047 -0.522885,0.112047 -0.149397,-0.03735 -0.485539,0.186746 h -0.448189 l -0.690965,-0.112048 -0.48552997,-0.317467 -0.33614,-0.504213 -0.0747,-1.064449 0.13072,-0.78433 0.1494,-0.746982 0.28011,-0.41084 0.41083997,-0.541562 0.42952,-0.541562 0.20542,-0.298793 0.112048,-0.597585 0.03735,-0.448189 0.03735,-0.541562 0.01868,-0.746982 0.112048,-0.541562 0.242768,-0.42951496 0.261443,-0.41084 0.298794,-0.05602 0.168071,0.03735 0.20542,0.05602 0.186746,0.0747 0.13072,0.168071 0.130723,0.168071 0.168071,0.56023596 0.130723,1.363242 0.298791,1.120473 0.485539,0.82168 0.01867,0.149396 z" />
+      </symbol>
+      <symbol id="tooth-premolar2" viewBox="0 0 5.9057493 9.441583">
+        <path class="tooth-outline" d="m 3.4384541,4.0940205 -0.0747,0.317467 1.400593,0.186746 0.373491,0.653608 0.298791,0.597586 0.168072,0.578911 0.112048,0.61626 0.05602,0.989751 -0.09337,0.504212 -0.20542,0.373491 -0.522885,0.261444 -0.541563,0.130722 -0.690959,-0.224095 -0.392166,-0.112047 -0.522885,0.112047 -0.149397,-0.03735 -0.485539,0.186746 h -0.448189 l -0.690965,-0.112048 -0.48552997,-0.317467 -0.33614,-0.504213 -0.0747,-1.064449 0.13072,-0.78433 0.1494,-0.746982 0.28011,-0.41084 0.41083997,-0.541562 0.42952,-0.541562 0.20542,-0.298793 0.112048,-0.597585 0.03735,-0.448189 0.03735,-0.541562 0.01868,-0.746982 0.112048,-0.541562 0.242768,-0.42951496 0.261443,-0.41084 0.298794,-0.05602 0.168071,0.03735 0.20542,0.05602 0.186746,0.0747 0.13072,0.168071 0.130723,0.168071 0.168071,0.56023596 0.130723,1.363242 0.298791,1.120473 0.485539,0.82168 0.01867,0.149396 z" />
+      </symbol>
+      <symbol id="tooth-refined-25" viewBox="-6 -4 112 128">
+        <path class="tooth-outline" transform="matrix(2.28 0 0 2.18 -118.8 -100.4)" d="m 73.949817,95.915041 c -0.764535,0.680674 -1.443349,1.155528 -3.336131,1.528734 -0.996589,0.196505 -1.653153,0.31399 -2.551159,0.761105 -1.050506,0.523041 -2.114685,0.727789 -3.336131,0.763463 -0.816758,0.02385 -1.608951,-0.09721 -2.354916,-0.424871 -0.991175,-0.435371 -2.726615,-1.157165 -3.434557,-1.932074 -0.656415,-0.718508 -1.556731,-1.816156 -1.939867,-2.677195 -0.792284,-1.780536 -0.324355,-4.419304 -0.104935,-6.302093 0.09255,-0.794153 0.392122,-1.288488 0.920192,-1.980701 0.836378,-1.096362 1.69516,-3.170837 2.178509,-4.501593 0.320385,-0.882086 0.697327,-2.004847 0.836153,-2.88102 0.157197,-0.992114 0.38522,-1.984915 0.579037,-3.061083 0.321649,-1.785946 0.66879,-3.62833 0.909289,-5.401912 0.152857,-1.127255 0.192127,-1.904387 0.828281,-2.881019 0.54274,-0.833224 0.78107,-1.565697 0.978337,-2.520892 0.197778,-0.957671 0.563354,-1.534801 1.16277,-2.340829 0.934326,-1.256371 1.686089,-2.83519 3.366567,-3.596133 1.094437,-0.49558 2.17964,0.105396 2.569784,1.076074 0.311083,0.773972 0.509997,1.497499 0.67519,2.339996 0.09726,0.496057 0.09026,0.926629 0.09116,1.440509 9.97e-4,0.56964 0,1.007856 0,1.620574 0,0.852346 0.05867,2.192128 -0.130527,3.061083 -0.178166,0.818285 -0.260094,1.30214 -0.261959,2.160765 -0.0034,1.554286 -0.767036,4.029953 1.178365,4.867834 0.637979,0.274774 1.264908,0.448381 1.961523,0.591738 1.864362,0.383665 4.448262,-0.47564 4.632606,-2.398489 0.07246,-0.755866 -0.108348,-1.384366 -0.119775,-2.160765 -0.03765,-2.558423 -0.462651,-5.333464 -0.394606,-7.922803 0.03177,-1.209048 -0.02595,-2.282952 0.144002,-3.421211 0.191824,-1.284751 1.251723,-2.045164 2.799494,-1.486916 3.468445,1.250989 5.439895,6.821708 6.441493,9.769847 0.344629,1.014394 0.644973,1.911694 1.093572,2.88102 0.374295,0.808775 0.447305,1.510866 0.50908,2.340828 0.100978,1.35669 0.201088,3.114471 0.201088,4.501593 0,0.892087 0.05155,1.629454 -0.05769,2.160765 -0.04973,0.241878 -0.339838,0.601912 -0.222444,1.077047 0.157549,0.637647 1.185166,1.011852 1.57237,1.363397 0.590699,0.536306 1.863883,2.141998 2.162763,2.968556 0.672339,1.859342 0.790775,4.398681 0.716076,6.295142 -0.0257,0.652516 -0.02069,1.307759 -0.136133,1.980701 -0.353127,2.058462 -1.657285,3.582964 -3.446212,4.771826 -1.4355,0.953989 -4.429889,0.775645 -6.083533,0.577981 -1.072692,-0.128218 -1.834601,-0.39905 -2.747402,-0.918101 -0.777127,-0.4419 -1.456464,-0.649341 -2.354916,-0.870865 -0.736513,-0.181591 -1.264674,-0.470612 -1.96243,-0.609798 -0.843334,-0.168221 -2.720273,-0.0276 -3.432435,-0.6883 -0.818477,-0.759331 -1.095135,-1.530377 -1.47364,-1.902616 M 88.471799,80.789688 h 0.981215" />
+      </symbol>
+      <symbol id="tooth-refined-18" viewBox="16 30 64 56">
+        <path class="tooth-outline" d="m 32.193261,79.628112 c -1.36269,0.159779 -2.60665,-0.04533 -3.98291,-0.135287 -1.66195,-0.108639 -4.00099,-0.452832 -5.416763,-1.433365 -3.218461,-2.229044 -4.619936,-6.335559 -4.620179,-9.872584 -8.1e-5,-1.156604 0.0011,-2.135156 0.264789,-3.268924 0.952834,-4.097411 3.737418,-7.607749 4.850059,-11.738411 0.782508,-2.905047 1.122127,-6.107223 1.767479,-9.063836 0.202833,-0.929262 0.471195,-1.770294 0.832475,-2.674575 0.60227,-1.507455 0.73574,-3.443445 1.90689,-4.74666 1.77532,-1.975527 2.68593,0.554718 2.89609,1.923498 0.47563,3.097864 0.48599,6.171649 0.90968,9.212424 0.14515,1.041754 0.33184,3.454874 2.02563,2.524037 1.29011,-0.708996 1.54644,-2.154038 1.85685,-3.415562 0.74178,-3.014646 1.37718,-6.020233 2.03104,-9.063837 0.24815,-1.155117 0.43962,-2.170629 1.17717,-3.119765 0.4624,-0.595058 1.14464,-1.171133 1.94548,-1.281449 1.84802,-0.25456 3.36857,1.441858 4.04991,2.91534 1.18751,2.568117 1.82335,5.583081 2.44851,8.320899 0.25435,1.113916 0.43835,2.155978 0.74704,3.268924 0.34549,1.245642 0.72412,3.569791 1.91992,4.359255 0.51862,0.3424 1.06942,-0.232649 1.33759,-0.645255 0.5443,-0.837466 0.64723,-1.722618 0.64919,-2.673888 0.004,-2.128939 0.20366,-4.439749 -0.0917,-6.537849 -0.15558,-1.105183 -0.32364,-2.373359 -0.19988,-3.566099 0.1245,-1.199814 0.81743,-3.244511 2.52202,-2.458001 3.38989,1.564123 4.27538,6.633505 5.18996,9.738787 0.68836,2.337224 1.09188,4.60874 1.72028,6.983612 0.57384,2.1687 1.23873,4.241026 1.72408,6.389262 0.34471,1.525742 0.78099,3.067546 1.07059,4.606211 0.29057,1.543831 0.33215,2.999578 0.33203,4.606212 -4e-5,0.686841 -0.0362,1.246384 -0.13854,1.931638 -0.33109,2.216179 -1.2246,4.75396 -2.89486,6.389261 -1.21467,1.18924 -2.56398,1.874303 -4.29516,2.27857 -1.55133,0.362273 -3.23837,0.545146 -4.77949,0.544592 -1.62762,-5.85e-4 -3.37553,-0.35752 -4.93882,-0.461583 -0.81106,-0.05399 -1.14639,0.754564 -1.7258,0.664975 -0.80993,-0.125234 -0.0479,-0.888088 0.13264,-1.094917 -0.55324,-0.130531 -0.90793,0.195575 -1.59317,0.717372 -0.30685,0.233655 -0.5872,0.370616 -0.9559,0.428677 -1.14583,0.180447 -2.55396,-0.105478 -3.82359,-0.105936 -1.16371,-4.17e-4 -2.61223,0.130803 -3.8236,-0.06592 -0.69849,-0.113436 -0.98568,-0.418079 -1.59317,-0.588047 -0.51495,-0.144076 -0.95237,0.01877 -1.43385,0.208207 l 1.11522,1.040113 0.9559,-0.891525 m -0.63727,-0.445763 c 0.79104,-1.029288 1.6666,-2.409 3.66428,-3.031369 1.04329,-0.325026 2.25297,-0.694994 3.34565,-0.315975 1.41646,0.491325 3.18687,1.804144 4.30155,2.752995 m -0.31864,-0.148588 c -0.47336,0.441491 -0.75879,0.707695 -1.59316,1.485875 m 2.54906,-0.891525 h 0.79659 m -2.8677,1.040112 1.27453,-0.148587" />
+      </symbol>
+      <symbol id="tooth-molar" viewBox="0 0 38.554043 49.65476">
+        <path class="tooth-outline" d="m 19.792234,48.004159 8.072327,-0.938815 2.919775,-0.563298 0.515261,-1.314337 -4.465535,-2.44095 -4.637303,-1.502111 h -4.122031 l -3.606785,1.877635 -1.545771,1.314355 2.061025,1.314361 1.889269,0.751047 0.343483,0.751064 3.263281,0.938821 L 13.265661,47.065336 10.517635,45.93875 8.1131191,47.065336 5.7085835,46.689806 3.81932,43.685568 1.4148041,39.366991 0.89954501,37.113823 V 34.297358 L 1.0713211,30.917602 3.3040807,26.41126 4.3345872,21.529385 4.5063634,14.957635 6.052129,13.079991 7.4261383,8.9491796 l 1.0305131,-3.379762 1.8892696,-1.314345 1.889255,0.751055 v 2.253167 l 0.171778,1.126587 v 1.6898794 l -0.515261,2.628706 v 1.502111 3.379755 l -0.171707,1.126588 -0.171706,1.689878 1.545765,0.375531 1.889263,0.375531 h 0.686966 l 0.343483,-1.314345 0.343485,-1.689878 -0.687037,-2.628707 v -3.379754 l 0.343483,-4.3185774 1.202248,-4.8818743 1.545772,-1.8776433 2.576273,0.9388216 1.71752,2.440933 -0.343483,3.379763 0.515259,3.0042234 1.5e-5,3.379763 0.858756,3.191989 0.171708,1.689885 0.687037,1.877643 -0.858758,-7e-6 2.748021,7e-6 0.171845,-3.191996 -0.343484,-4.130812 -0.687036,-7.6983454 2.404517,-2.440935 2.404528,2.628707 0.858757,3.19199 1.374025,3.9430534 0.85875,5.257398 1.030513,4.130817 2.232766,7.510574 -0.171707,2.816465 0.686967,5.445165 v 3.755271 l -2.576264,3.004245 -3.263287,1.502106 -4.122044,2.065408 h -3.606769 z" />
+      </symbol>
+    </defs>
+  </svg>
+
+  <section id="odontograma-root">
+  <div id="odontograma-permanente-container">
+    <div class="odontograma-linha">
+    <div class="quadrante">
+<div class="tooth" data-dente="18">
+      <span class="tooth-label">18</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="17">
+      <span class="tooth-label">17</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="16">
+      <span class="tooth-label">16</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="15">
+      <span class="tooth-label">15</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="14">
+      <span class="tooth-label">14</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="13">
+      <span class="tooth-label">13</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="12">
+      <span class="tooth-label">12</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="11">
+      <span class="tooth-label">11</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="21">
+      <span class="tooth-label">21</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="22">
+      <span class="tooth-label">22</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="23">
+      <span class="tooth-label">23</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="24">
+      <span class="tooth-label">24</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="25">
+      <span class="tooth-label">25</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="26">
+      <span class="tooth-label">26</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="27">
+      <span class="tooth-label">27</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="28">
+      <span class="tooth-label">28</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+      </div>
+    </div>
+  </div>
+  <div class="linha-meio"></div>
+  <div class="odontograma-linha inferior">
+    <div class="quadrante">
+<div class="tooth" data-dente="48">
+      <span class="tooth-label">48</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="47">
+      <span class="tooth-label">47</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="46">
+      <span class="tooth-label">46</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="45">
+      <span class="tooth-label">45</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true" style="transform: scaleY(-1); transform-origin: 50% 50%;">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="44">
+      <span class="tooth-label">44</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="43">
+      <span class="tooth-label">43</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="42">
+      <span class="tooth-label">42</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="41">
+      <span class="tooth-label">41</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="31">
+      <span class="tooth-label">31</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="32">
+      <span class="tooth-label">32</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="33">
+      <span class="tooth-label">33</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="34">
+      <span class="tooth-label">34</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="35">
+      <span class="tooth-label">35</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true" style="transform: scaleY(-1); transform-origin: 50% 50%;">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="36">
+      <span class="tooth-label">36</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="37">
+      <span class="tooth-label">37</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>
+<div class="tooth" data-dente="38">
+      <span class="tooth-label">38</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+            <use href="#tooth-refined-25" class="tooth-outline" x="0" y="0" width="100" height="120" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+      </div>
+    </div>
+  </div>
+<div class="linha-meio linha-meio--leve"></div>
+  </div>
+  <div id="odontograma-deciduo-container">
+   <div class="odontograma-linha infantil"> 
+    <div class="quadrante infantil">
+<div class="tooth infantil" data-dente="55">
+      <span class="tooth-label">55</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="54">
+      <span class="tooth-label">54</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="53">
+      <span class="tooth-label">53</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="52">
+      <span class="tooth-label">52</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="51">
+      <span class="tooth-label">51</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="61">
+      <span class="tooth-label">61</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="62">
+      <span class="tooth-label">62</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="63">
+      <span class="tooth-label">63</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="64">
+      <span class="tooth-label">64</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="65">
+      <span class="tooth-label">65</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>    </div>
+  </div>
+  <div class="linha-meio linha-meio--leve"></div>
+   <div class="odontograma-linha infantil inferior"> 
+    <div class="quadrante infantil">
+<div class="tooth infantil" data-dente="85">
+      <span class="tooth-label">85</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="84">
+      <span class="tooth-label">84</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="83">
+      <span class="tooth-label">83</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="82">
+      <span class="tooth-label">82</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="81">
+      <span class="tooth-label">81</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="71">
+      <span class="tooth-label">71</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="72">
+      <span class="tooth-label">72</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="73">
+      <span class="tooth-label">73</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="74">
+      <span class="tooth-label">74</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div><div class="tooth infantil" data-dente="75">
+      <span class="tooth-label">75</span>
+      <svg viewBox="0 0 100 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="toothGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#fff3d6"/>
+          <stop offset="45%" stop-color="#f6d18a"/>
+          <stop offset="100%" stop-color="#e4b35b"/>
+        </linearGradient>
+      </defs>
+      <path class="tooth-outline" d="M50 8c18 0 32 14 32 32 0 10-4 18-8 26-4 8-6 16-7 26-3 18-9 26-17 26s-14-8-17-26c-1-10-3-18-7-26-4-8-8-16-8-26C18 22 32 8 50 8z" />
+      <polygon class="face" data-face="V" points="32,18 68,18 62,40 38,40" />
+      <polygon class="face" data-face="M" points="18,42 36,50 36,76 18,84" />
+      <polygon class="face" data-face="D" points="82,42 64,50 64,76 82,84" />
+      <polygon class="face" data-face="L" points="32,98 68,98 62,78 38,78" />
+      <rect class="face" data-face="O" x="38" y="50" width="24" height="24" rx="8" />
+      </svg>
+    </div>    </div>
+  </div>
+  </div></section>
+
+  <script>
+  (function () {
+    var selecionados = {};
+    var selecionadosHistorico = {};
+    var selecionadosHistoricoFila = {};
+    var root = document.getElementById("odontograma-root");
+    if (!root) return;
+
+    var faceOrder = ['D', 'L', 'M', 'O', 'V'];
+    var modoAtual = 'permanente';
+    var permanenteContainer = document.getElementById('odontograma-permanente-container');
+    var deciduoContainer = document.getElementById('odontograma-deciduo-container');
+    function isDenteDeciduo(dente) {
+      var valor = String(dente || '').trim();
+      return /^(5|6|7|8)\d$/.test(valor);
+    }
+    function dentePertenceAoModo(dente, modo) {
+      if (!dente) return false;
+      var isDeciduo = isDenteDeciduo(dente);
+      return String(modo || 'permanente') === 'deciduo' ? isDeciduo : !isDeciduo;
+    }
+    function aplicarModoOdontograma(modo) {
+      modoAtual = String(modo || 'permanente') === 'deciduo' ? 'deciduo' : 'permanente';
+      if (permanenteContainer) {
+        permanenteContainer.style.display = modoAtual === 'permanente' ? '' : 'none';
+        permanenteContainer.setAttribute('aria-hidden', modoAtual === 'permanente' ? 'false' : 'true');
+      }
+      if (deciduoContainer) {
+        deciduoContainer.style.display = modoAtual === 'deciduo' ? '' : 'none';
+        deciduoContainer.setAttribute('aria-hidden', modoAtual === 'deciduo' ? 'false' : 'true');
+      }
+    }
+    function getFacesOrdenadas(map) {
+      return faceOrder.filter(function (face) { return map && map[face]; });
+    }
+
+    function getFacesCombinadas(dente) {
+      var merged = {};
+      var hist = selecionadosHistorico[dente] || {};
+      var histFila = selecionadosHistoricoFila[dente] || {};
+      var atual = selecionados[dente] || {};
+      Object.keys(hist).forEach(function (f) { merged[f] = true; });
+      Object.keys(histFila).forEach(function (f) { merged[f] = true; });
+      Object.keys(atual).forEach(function (f) { merged[f] = true; });
+      return merged;
+    }
+
+    function syncToothVisual(toothEl, dente) {
+      if (!toothEl || !dente) return;
+      var merged = getFacesCombinadas(dente);
+      var facesAtivas = getFacesOrdenadas(merged);
+      var hasWorking = Boolean(selecionados[dente]);
+      var hasHistory = Boolean(selecionadosHistorico[dente] || selecionadosHistoricoFila[dente]);
+      var hasSelection = hasWorking || hasHistory;
+      toothEl.classList.toggle('is-selected', hasSelection);
+      toothEl.classList.toggle('is-working-selection', hasWorking);
+      toothEl.classList.toggle('is-history-selection', hasHistory && !hasWorking);
+      toothEl.classList.toggle('full-selected', facesAtivas.length === faceOrder.length);
+      toothEl.querySelectorAll('.face').forEach(function (f) {
+        var face = String(f.getAttribute('data-face') || '').trim();
+        f.classList.toggle('ativa', Boolean(face && merged[face]));
+      });
+    }
+
+    function syncAllTeethVisual() {
+      var teeth = root.querySelectorAll('.tooth');
+      teeth.forEach(function (toothEl) {
+        var d = String(toothEl.getAttribute('data-dente') || '').trim();
+        if (!d) return;
+        syncToothVisual(toothEl, d);
+      });
+    }
+
+    function buildResumo(lastDente) {
+      var dentes = Object.keys(selecionados).filter(function (d) { return dentePertenceAoModo(d, modoAtual); }).sort(function (a, b) { return Number(a) - Number(b); });
+      var resumo = dentes.map(function (d) {
+        var faces = getFacesOrdenadas(selecionados[d]);
+        if (faces.length === faceOrder.length) return d + '(Completo)';
+        return faces.length ? (d + '(' + faces.join('') + ')') : d;
+      });
+      var facesAtual = [];
+      var fullAtual = false;
+      if (lastDente && selecionados[lastDente] && dentePertenceAoModo(lastDente, modoAtual)) {
+        facesAtual = getFacesOrdenadas(selecionados[lastDente]);
+        fullAtual = facesAtual.length === faceOrder.length;
+      }
+      return { dentes: dentes, resumo: resumo, lastDente: lastDente || '', lastFaces: facesAtual, lastFull: fullAtual, mode: modoAtual };
+    }
+
+    function enviarSelecao(lastDente) {
+      if (!window.parent) return;
+      var payload = buildResumo(lastDente);
+      window.parent.postMessage({ type: "odontograma:update", payload: payload }, "*");
+    }
+
+    function limparTooth(tooth, dente) {
+      delete selecionados[dente];
+      syncToothVisual(tooth, dente);
+    }
+
+    var ultimoDente = '';
+
+    function selecionarToothSimples(tooth, dente) {
+      selecionados[dente] = selecionados[dente] || {};
+      syncToothVisual(tooth, dente);
+      ultimoDente = dente;
+    }
+
+    root.addEventListener("click", function (e) {
+      var tooth = e.target.closest(".tooth");
+      if (!tooth) return;
+      var dente = tooth.getAttribute("data-dente");
+      if (!dente) return;
+
+      if (selecionados[dente]) {
+        limparTooth(tooth, dente);
+        if (ultimoDente === dente) ultimoDente = '';
+        enviarSelecao(ultimoDente);
+        return;
+      }
+
+      selecionarToothSimples(tooth, dente);
+      enviarSelecao(ultimoDente);
+    });
+
+    aplicarModoOdontograma(modoAtual);
+
+    window.addEventListener('message', function (event) {
+      if (!event || !event.data) return;
+      if (event.data.type === 'odontograma:set-mode') {
+        aplicarModoOdontograma(event.data.mode || 'permanente');
+        if (ultimoDente && !dentePertenceAoModo(ultimoDente, modoAtual)) {
+          ultimoDente = '';
+        }
+        enviarSelecao(ultimoDente);
+        return;
+      }
+      if (event.data.type === 'odontograma:set-dentes') {
+        var dentes = Array.isArray(event.data.dentes) ? event.data.dentes.map(function (d) { return String(d).trim(); }).filter(Boolean) : [];
+        var keep = {};
+        dentes.forEach(function (d) { keep[d] = true; });
+
+        Object.keys(selecionados).forEach(function (d) {
+          if (!keep[d]) {
+            delete selecionados[d];
+          }
+        });
+
+        var teeth = root.querySelectorAll('.tooth');
+        teeth.forEach(function (toothEl) {
+          var d = String(toothEl.getAttribute('data-dente') || '').trim();
+          if (!d) return;
+          if (keep[d]) {
+            selecionados[d] = selecionados[d] || {};
+          }
+          syncToothVisual(toothEl, d);
+        });
+
+        ultimoDente = String(event.data.lastDente || dentes[dentes.length - 1] || '').trim();
+        enviarSelecao(ultimoDente);
+        return;
+      }
+      if (event.data.type === 'odontograma:clear-selection') {
+        selecionados = {};
+        ultimoDente = '';
+        syncAllTeethVisual();
+        enviarSelecao('');
+        return;
+      }
+      if (event.data.type === 'odontograma:clear-working-selection') {
+        selecionados = {};
+        ultimoDente = '';
+        syncAllTeethVisual();
+        enviarSelecao('');
+        return;
+      }
+      if (event.data.type === 'odontograma:clear-queue-history') {
+        selecionadosHistoricoFila = {};
+        syncAllTeethVisual();
+        return;
+      }
+      if (event.data.type !== 'odontograma:set-faces') return;
+      var dente = String(event.data.dente || '').trim();
+      if (!dente) return;
+      var tooth = root.querySelector('.tooth[data-dente="' + dente + '"]');
+      if (!tooth) return;
+
+      var faces = Array.isArray(event.data.faces) ? event.data.faces : [];
+      var isHistorico = Boolean(event.data.historico);
+      var historyBucket = String(event.data.historyBucket || '').trim().toLowerCase();
+      var targetMap = selecionados;
+      if (isHistorico) {
+        targetMap = historyBucket === 'queue' ? selecionadosHistoricoFila : selecionadosHistorico;
+      }
+      targetMap[dente] = {};
+      faces.forEach(function (face) { targetMap[dente][face] = true; });
+
+      if (!faces.length && !isHistorico) {
+        delete targetMap[dente];
+      }
+
+      syncToothVisual(tooth, dente);
+      if (!isHistorico) {
+        ultimoDente = dente;
+        enviarSelecao(dente);
+      }
+    });
+  })();
+
+    function getToothType(dente) {
+      var num = Number(dente);
+      if (!num) return 'incisivo';
+      var digit = num % 10;
+      if (digit <= 2) return 'incisivo';
+      if (digit == 3) return 'canino';
+      if (digit == 4) return 'premolar';
+      if (digit == 5) return 'premolar2';
+      return 'molar';
+    }
+
+    function getToothSymbolId(dente) {
+      var refinedMolarUpperTeeth = {
+        '18': true, '17': true, '16': true, '26': true, '27': true, '28': true
+      };
+      if (refinedMolarUpperTeeth[String(dente)]) return 'tooth-refined-18';
+      var refinedMolarLowerTeeth = {
+        '48': true, '47': true, '46': true, '38': true, '37': true, '36': true
+      };
+      if (refinedMolarLowerTeeth[String(dente)]) return 'tooth-refined-18';
+      var refinedTeeth = {
+        '15': true, '25': true, '35': true, '45': true
+      };
+      if (refinedTeeth[String(dente)]) return 'tooth-refined-25';
+      return 'tooth-' + getToothType(dente);
+    }
+
+    function applyToothShapes() {
+      var root = document.getElementById("odontograma-root");
+      if (!root) return;
+      var teeth = root.querySelectorAll('.tooth');
+      teeth.forEach(function (tooth) {
+        var dente = tooth.getAttribute('data-dente') || '';
+        var toothType = getToothType(dente);
+        tooth.classList.toggle('tooth-molar', toothType === 'molar');
+        var svg = tooth.querySelector('svg');
+        if (!svg) return;
+        while (svg.firstChild) { svg.removeChild(svg.firstChild); }
+        var symbolId = getToothSymbolId(dente);
+        var symbol = document.getElementById(symbolId);
+        if (!symbol) {
+          symbolId = 'tooth-' + getToothType(dente);
+          symbol = document.getElementById(symbolId);
+        }
+        if (symbol && symbol.getAttribute('viewBox')) {
+          svg.setAttribute('viewBox', symbol.getAttribute('viewBox'));
+        } else {
+          svg.setAttribute('viewBox', '0 0 100 140');
+        }
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+        var fillUse = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        fillUse.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + symbolId);
+        fillUse.setAttribute('href', '#' + symbolId);
+        fillUse.setAttribute('class', 'tooth-fill');
+        svg.appendChild(fillUse);
+
+        var use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#' + symbolId);
+        use.setAttribute('href', '#' + symbolId);
+        use.setAttribute('class', 'tooth-stroke');
+        svg.appendChild(use);
+
+        // Centraliza o desenho real do simbolo no centro do viewBox
+        // para manter alinhamento consistente entre tipos de dente.
+        try {
+          var vb = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal : null;
+          var bb = use.getBBox();
+          if (
+            vb && bb &&
+            Number.isFinite(bb.x) && Number.isFinite(bb.width) && bb.width > 0 &&
+            Number.isFinite(bb.y) && Number.isFinite(bb.height) && bb.height > 0
+          ) {
+            var targetCx = vb.x + (vb.width / 2);
+            var currentCx = bb.x + (bb.width / 2);
+            var dx = targetCx - currentCx;
+            var targetCy = vb.y + (vb.height / 2);
+            var currentCy = bb.y + (bb.height / 2);
+            var dy = targetCy - currentCy;
+            var dxValue = Math.abs(dx) > 0.01 ? dx.toFixed(3) : '0';
+            var dyValue = Math.abs(dy) > 0.01 ? dy.toFixed(3) : '0';
+            fillUse.setAttribute('x', dxValue);
+            fillUse.setAttribute('y', dyValue);
+            use.setAttribute('x', dxValue);
+            use.setAttribute('y', dyValue);
+          }
+        } catch (_err) {
+          // Em fallback, mantem renderizacao padrao sem bloquear o restante.
+        }
+      });
+    }
+
+    applyToothShapes();
+</script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

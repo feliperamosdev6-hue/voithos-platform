@@ -1,0 +1,906 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OutboundChannel {
+  WHATSAPP
+}
+
+enum OutboundMessageType {
+  APPOINTMENT_CONFIRMATION
+  APPOINTMENT_REMINDER
+  CAMPAIGN
+}
+
+enum OutboundMessageStatus {
+  PENDING
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum OutboundMessageProvider {
+  WHATSAPP_NG
+}
+
+enum InboundChannel {
+  WHATSAPP
+}
+
+enum InboundMessageStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+enum InboundMessageIntent {
+  UNKNOWN
+  APPOINTMENT_CONFIRMATION
+  APPOINTMENT_RESCHEDULE
+}
+
+enum NotificationEventType {
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_RESCHEDULE_REQUESTED
+  APPOINTMENT_REMINDER_SENT
+  APPOINTMENT_ACTION_LINK_USED
+  BIRTHDAY_MESSAGE_SENT
+  BIRTHDAY_MESSAGE_FAILED
+  BIRTHDAY_MESSAGE_JOB_COMPLETED
+  PLAN_MESSAGE_EVENT_CREATED
+  PLAN_MESSAGE_DISPATCH_STARTED
+  PLAN_MESSAGE_DISPATCH_COMPLETED
+  PLAN_MESSAGE_DISPATCH_FAILED
+  PLAN_MESSAGE_DISPATCH_BLOCKED
+  PLAN_MESSAGE_RESEND_REQUESTED
+  PLAN_MESSAGE_HISTORY_LOADED
+}
+
+enum CampaignChannel {
+  WHATSAPP
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  SCHEDULED
+  PAUSED
+  COMPLETED
+  INACTIVE
+}
+
+enum CampaignBatchStatus {
+  CREATED
+  PROCESSING
+  COMPLETED
+  FAILED
+  BLOCKED
+  CANCELLED
+}
+
+enum CampaignDispatchStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  BLOCKED
+}
+
+enum PlanMessageEventType {
+  PLAN_INSTALLMENT_DUE_SOON
+  PLAN_INSTALLMENT_DUE_TODAY
+  PLAN_INSTALLMENT_OVERDUE
+  PLAN_PAYMENT_CONFIRMED
+}
+
+enum PlanMessageStatus {
+  CREATED
+  PENDING
+  SENT
+  FAILED
+  BLOCKED
+}
+
+enum AppointmentActionType {
+  CONFIRM_APPOINTMENT
+  RESCHEDULE_APPOINTMENT
+}
+
+enum AppointmentActionTokenStatus {
+  ACTIVE
+  USED
+  EXPIRED
+  CANCELLED
+}
+
+enum AppointmentActionChannel {
+  WHATSAPP_LINK
+}
+
+enum FinancialAccountStatus {
+  OPEN
+  PARTIAL
+  PAID
+  CANCELED
+}
+
+enum FinancialInstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+enum FinancialTransactionType {
+  PAYMENT
+  ADJUSTMENT
+}
+
+enum FinancialTransactionMethod {
+  PIX
+  BOLETO
+  CASH
+  CARD
+  TRANSFER
+  OTHER
+}
+
+enum PatientPlanStatus {
+  ACTIVE
+  IN_PROGRESS
+  RELEASED
+  CANCELED
+}
+
+enum LaboratoryOrderStatus {
+  REQUESTED
+  IN_PROGRESS
+  SENT
+  RECEIVED
+  DELIVERED
+  CANCELED
+}
+
+model Clinic {
+  id                String            @id @default(uuid())
+  nomeFantasia      String
+  razaoSocial       String?
+  cnpjCpf           String?           @unique
+  email             String?
+  telefoneComercial String?
+  endereco          String?
+  operationalSettings Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  users             User[]
+  patients          Patient[]
+  appointments      Appointment[]
+  outboundMessages  OutboundMessage[]
+  inboundMessages   InboundMessage[]
+  notificationEvents NotificationEvent[]
+  appointmentActionTokens AppointmentActionToken[]
+  patientClinicalRecords PatientClinicalRecord[]
+  anamneses         Anamnesis[]
+  clinicalNotes     ClinicalNote[]
+  patientProcedures PatientProcedure[]
+  patientDocumentMetadata PatientDocumentMetadata[]
+  financialAccounts FinancialAccount[]
+  financialInstallments FinancialInstallment[]
+  financialTransactions FinancialTransaction[]
+  patientPlans      PatientPlan[]
+  financialSnapshots FinancialSnapshot[]
+  laboratoryOrders  LaboratoryOrder[]
+  laboratoryOrderItems LaboratoryOrderItem[]
+  laboratoryOrderEvents LaboratoryOrderEvent[]
+  campaigns         Campaign[]
+  campaignAudienceSnapshots CampaignAudienceSnapshot[]
+  campaignAudienceSnapshotMembers CampaignAudienceSnapshotMember[]
+  campaignBatches   CampaignBatch[]
+  campaignDispatches CampaignDispatch[]
+}
+
+model User {
+  id           String    @id @default(uuid())
+  clinicId     String
+  clinic       Clinic    @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  nome         String
+  email        String    @unique
+  passwordHash String
+  role         String
+  isClinicAdmin Boolean  @default(false)
+  ativo        Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+
+  @@index([clinicId])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Patient {
+  id               String            @id @default(uuid())
+  clinicId         String
+  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  nome             String
+  cpf              String?
+  rg               String?
+  dataNascimento   DateTime?
+  telefone         String?
+  email            String?
+  endereco         String?
+  allowsMessages   Boolean           @default(true)
+  lastBirthdayMessageAt DateTime?
+  birthdayMessageYear Int?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  appointments     Appointment[]
+  outboundMessages OutboundMessage[]
+  inboundMessages  InboundMessage[]
+  notificationEvents NotificationEvent[]
+  appointmentActionTokens AppointmentActionToken[]
+  clinicalRecord   PatientClinicalRecord?
+  anamneses        Anamnesis[]
+  clinicalNotes    ClinicalNote[]
+  patientProcedures PatientProcedure[]
+  patientDocumentMetadata PatientDocumentMetadata[]
+  financialAccounts FinancialAccount[]
+  patientPlans      PatientPlan[]
+  laboratoryOrders  LaboratoryOrder[]
+
+  @@index([clinicId])
+}
+
+model Appointment {
+  id               String            @id @default(uuid())
+  clinicId         String
+  clinic           Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId        String
+  patient          Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  profissionalId   String?
+  profissionalNome String?
+  dataHora         DateTime
+  horaFim          DateTime?
+  status           String
+  confirmado       Boolean           @default(false)
+  attendanceStatus String?
+  tipo             String?
+  observacoes      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  outboundMessages OutboundMessage[]
+  inboundMessages  InboundMessage[]
+  notificationEvents NotificationEvent[]
+  appointmentActionTokens AppointmentActionToken[]
+  patientProcedures PatientProcedure[]
+  financialAccounts FinancialAccount[]
+  laboratoryOrders  LaboratoryOrder[]
+
+  @@index([clinicId, dataHora])
+  @@index([patientId])
+}
+
+model OutboundMessage {
+  id                String                  @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String?
+  patient           Patient?                @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointmentId     String?
+  appointment       Appointment?            @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  channel           OutboundChannel
+  type              OutboundMessageType
+  phone             String?
+  body              String
+  status            OutboundMessageStatus   @default(PENDING)
+  provider          OutboundMessageProvider
+  providerMessageId String?
+  lastError         String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  inboundMessages   InboundMessage[]
+  appointmentActionTokens AppointmentActionToken[]
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([status])
+}
+
+model InboundMessage {
+  id                String               @id @default(uuid())
+  clinicId          String
+  clinic            Clinic               @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String?
+  patient           Patient?             @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointmentId     String?
+  appointment       Appointment?         @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  outboundMessageId String?
+  outboundMessage   OutboundMessage?     @relation(fields: [outboundMessageId], references: [id], onDelete: SetNull)
+  channel           InboundChannel
+  fromPhone         String
+  body              String
+  normalizedBody    String
+  status            InboundMessageStatus @default(RECEIVED)
+  intent            InboundMessageIntent @default(UNKNOWN)
+  providerMessageId String?
+  processingNotes   String?
+  rawPayload        Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([outboundMessageId])
+  @@index([status])
+  @@unique([clinicId, providerMessageId])
+}
+
+model NotificationEvent {
+  id            String                @id @default(uuid())
+  clinicId      String
+  clinic        Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  appointmentId String?
+  appointment   Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patientId     String?
+  patient       Patient?              @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  phone         String?
+  type          NotificationEventType
+  payload       Json?
+  createdAt     DateTime              @default(now())
+
+  @@index([clinicId])
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Campaign {
+  id                 String                 @id @default(uuid())
+  clinicId           String
+  clinic             Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  name               String
+  description        String?
+  period             String?
+  color              String?
+  startAt            DateTime?
+  endAt              DateTime?
+  channel            CampaignChannel        @default(WHATSAPP)
+  status             CampaignStatus         @default(ACTIVE)
+  audienceSegmentKey String?
+  audienceFilters    Json?
+  sourceType         String?
+  originType         String?
+  eventType          String?
+  entityType         String?
+  entityId           String?
+  metadata           Json?
+  createdByUserId    String?
+  createdByName      String?
+  deletedAt          DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  audienceSnapshots  CampaignAudienceSnapshot[]
+  batches            CampaignBatch[]
+  dispatches         CampaignDispatch[]
+
+  @@index([clinicId, createdAt])
+  @@index([clinicId, status, createdAt])
+  @@index([deletedAt])
+}
+
+model CampaignAudienceSnapshot {
+  id                String                        @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                        @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  campaignId        String?
+  campaign          Campaign?                     @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  segmentKey        String
+  filters           Json?
+  totalRecipients   Int                           @default(0)
+  includedRecipients Int                          @default(0)
+  blockedRecipients Int                           @default(0)
+  source            String?
+  summary           Json?
+  createdByUserId   String?
+  createdByName     String?
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+  members           CampaignAudienceSnapshotMember[]
+  batches           CampaignBatch[]
+  dispatches        CampaignDispatch[]
+
+  @@index([clinicId, createdAt])
+  @@index([campaignId])
+}
+
+model CampaignAudienceSnapshotMember {
+  id           String                 @id @default(uuid())
+  clinicId     String
+  clinic       Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  snapshotId   String
+  snapshot     CampaignAudienceSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  patientId    String
+  patientName  String?
+  phone        String?
+  allowsMessages Boolean              @default(true)
+  included     Boolean                @default(true)
+  status       String?
+  reasonCode   String?
+  reasonLabel  String?
+  metadata     Json?
+  createdAt    DateTime               @default(now())
+  dispatches   CampaignDispatch[]
+
+  @@index([clinicId, snapshotId])
+  @@index([patientId])
+  @@unique([snapshotId, patientId])
+}
+
+model CampaignBatch {
+  id                String                 @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  campaignId        String?
+  campaign          Campaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  audienceSnapshotId String
+  audienceSnapshot  CampaignAudienceSnapshot @relation(fields: [audienceSnapshotId], references: [id], onDelete: Restrict)
+  channel           CampaignChannel        @default(WHATSAPP)
+  status            CampaignBatchStatus    @default(CREATED)
+  sourceType        String?
+  originType        String?
+  eventType         String?
+  entityType        String?
+  entityId          String?
+  totalRecipients   Int                    @default(0)
+  processedCount    Int                    @default(0)
+  successCount      Int                    @default(0)
+  failedCount       Int                    @default(0)
+  blockedCount      Int                    @default(0)
+  pendingCount      Int                    @default(0)
+  lastError         String?
+  createdByUserId   String?
+  createdByName     String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  metadata          Json?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  dispatches        CampaignDispatch[]
+
+  @@index([clinicId, createdAt])
+  @@index([campaignId])
+  @@index([status])
+  @@index([audienceSnapshotId])
+}
+
+model CampaignDispatch {
+  id                String                 @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                 @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  campaignId        String?
+  campaign          Campaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  batchId           String
+  batch             CampaignBatch          @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  audienceSnapshotId String
+  audienceSnapshot  CampaignAudienceSnapshot @relation(fields: [audienceSnapshotId], references: [id], onDelete: Restrict)
+  audienceMemberId  String
+  audienceMember    CampaignAudienceSnapshotMember @relation(fields: [audienceMemberId], references: [id], onDelete: Restrict)
+  channel           CampaignChannel        @default(WHATSAPP)
+  status            CampaignDispatchStatus @default(PENDING)
+  dispatchType      String
+  sourceType        String?
+  originType        String?
+  eventType         String?
+  entityType        String?
+  entityId          String?
+  patientId         String
+  patientName       String?
+  phone             String
+  body              String
+  bodyRedacted      String?
+  idempotencyKey    String
+  attemptCount      Int                    @default(0)
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  failedAt          DateTime?
+  blockedAt         DateTime?
+  provider          String?
+  providerMessageId String?
+  lastError         String?
+  metadata          Json?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@index([clinicId, campaignId, createdAt])
+  @@index([batchId])
+  @@index([status])
+  @@index([patientId])
+  @@index([audienceSnapshotId])
+  @@unique([clinicId, idempotencyKey])
+  @@unique([batchId, audienceMemberId])
+}
+
+model PlanMessageEvent {
+  id                       String               @id @default(uuid())
+  clinicId                 String
+  patientId                String
+  planId                   String
+  financialAccountId       String
+  installmentId            String?
+  installmentSequence      Int
+  eventType                PlanMessageEventType
+  status                   PlanMessageStatus    @default(CREATED)
+  templateKey              String
+  templateVersion          Int                  @default(1)
+  dueDate                  DateTime?
+  amount                   Decimal              @db.Decimal(12, 2)
+  paymentMethod            FinancialTransactionMethod?
+  externalBillingReference String?
+  paymentUrl               String?
+  barcode                  String?
+  latestBatchId            String?
+  latestDispatchId         String?
+  idempotencyKey           String
+  attemptCount             Int                  @default(0)
+  manualResendCount        Int                  @default(0)
+  lastAttemptAt            DateTime?
+  sentAt                   DateTime?
+  failedAt                 DateTime?
+  blockedAt                DateTime?
+  lastError                String?
+  payload                  Json?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  @@index([clinicId, planId, createdAt])
+  @@index([clinicId, financialAccountId, eventType])
+  @@index([clinicId, patientId, createdAt])
+  @@index([clinicId, status, createdAt])
+  @@unique([clinicId, idempotencyKey])
+}
+
+model AppointmentActionToken {
+  id                String                       @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String
+  patient           Patient                      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointmentId     String
+  appointment       Appointment                  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  actionType        AppointmentActionType
+  tokenHash         String                       @unique
+  expiresAt         DateTime
+  usedAt            DateTime?
+  status            AppointmentActionTokenStatus @default(ACTIVE)
+  channel           AppointmentActionChannel
+  outboundMessageId String?
+  outboundMessage   OutboundMessage?             @relation(fields: [outboundMessageId], references: [id], onDelete: SetNull)
+  metadata          Json?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([outboundMessageId])
+}
+
+model PatientClinicalRecord {
+  id                String                  @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String                  @unique
+  patient           Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  summary           Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  anamneses         Anamnesis[]
+  clinicalNotes     ClinicalNote[]
+  patientProcedures PatientProcedure[]
+  patientDocuments  PatientDocumentMetadata[]
+
+  @@index([clinicId])
+}
+
+model Anamnesis {
+  id                String                  @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String
+  patient           Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinicalRecordId  String
+  clinicalRecord    PatientClinicalRecord   @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+  sourceDocumentId  String?
+  sourceDocument    PatientDocumentMetadata? @relation("AnamnesisSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  title             String?
+  data              Json
+  createdByUserId   String?
+  createdByName     String?
+  documentDate      DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([clinicalRecordId])
+}
+
+model ClinicalNote {
+  id                String                  @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                  @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String
+  patient           Patient                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinicalRecordId  String
+  clinicalRecord    PatientClinicalRecord   @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+  sourceDocumentId  String?
+  sourceDocument    PatientDocumentMetadata? @relation("ClinicalNoteSourceDocument", fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+  noteType          String
+  title             String?
+  content           Json
+  status            String?
+  createdByUserId   String?
+  createdByName     String?
+  noteDate          DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([clinicalRecordId])
+}
+
+model PatientProcedure {
+  id                String                @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String
+  patient           Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinicalRecordId  String
+  clinicalRecord    PatientClinicalRecord @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+  appointmentId     String?
+  appointment       Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  externalId        String?
+  procedureCode     String?
+  name              String
+  status            String
+  dentistId         String?
+  dentistName       String?
+  tooth             String?
+  faces             String[]
+  observations      String?
+  registeredAt      DateTime?
+  performedAt       DateTime?
+  financialSnapshot Json?
+  payload           Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  financialAccounts FinancialAccount[]
+  laboratoryOrders  LaboratoryOrder[]
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([clinicalRecordId])
+  @@index([appointmentId])
+  @@index([externalId])
+}
+
+model PatientDocumentMetadata {
+  id                String                @id @default(uuid())
+  clinicId          String
+  clinic            Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId         String
+  patient           Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinicalRecordId  String
+  clinicalRecord    PatientClinicalRecord @relation(fields: [clinicalRecordId], references: [id], onDelete: Cascade)
+  externalDocumentId String?
+  title             String?
+  category          String?
+  type              String?
+  localPath         String?
+  originalName      String?
+  storedName        String?
+  extension         String?
+  size              Int?
+  documentDate      DateTime?
+  archived          Boolean               @default(false)
+  archivedAt        DateTime?
+  createdByUserId   String?
+  createdByName     String?
+  metadata          Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  anamneses         Anamnesis[]           @relation("AnamnesisSourceDocument")
+  clinicalNotes     ClinicalNote[]        @relation("ClinicalNoteSourceDocument")
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([clinicalRecordId])
+  @@index([externalDocumentId])
+  @@index([archived])
+}
+
+model FinancialAccount {
+  id                 String                     @id @default(uuid())
+  clinicId           String
+  clinic             Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId          String?
+  patient            Patient?                   @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointmentId      String?
+  appointment        Appointment?               @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patientProcedureId String?
+  patientProcedure   PatientProcedure?          @relation(fields: [patientProcedureId], references: [id], onDelete: SetNull)
+  description        String
+  totalAmount        Decimal                    @db.Decimal(12, 2)
+  status             FinancialAccountStatus     @default(OPEN)
+  category           String?
+  source             String?
+  dueDate            DateTime?
+  paymentMethod      FinancialTransactionMethod?
+  externalReference  String?
+  metadata           Json?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  installments       FinancialInstallment[]
+  transactions       FinancialTransaction[]
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([appointmentId])
+  @@index([patientProcedureId])
+  @@index([externalReference])
+  @@index([status])
+}
+
+model FinancialInstallment {
+  id           String                     @id @default(uuid())
+  clinicId     String
+  clinic       Clinic                     @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  accountId    String
+  account      FinancialAccount           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sequence     Int
+  dueDate      DateTime
+  amount       Decimal                    @db.Decimal(12, 2)
+  status       FinancialInstallmentStatus @default(PENDING)
+  paidAt       DateTime?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  transactions FinancialTransaction[]
+
+  @@index([clinicId, accountId])
+  @@index([dueDate])
+  @@index([status])
+}
+
+model FinancialTransaction {
+  id            String                   @id @default(uuid())
+  clinicId      String
+  clinic        Clinic                   @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  accountId     String
+  account       FinancialAccount         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  installmentId String?
+  installment   FinancialInstallment?    @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+  type          FinancialTransactionType
+  amount        Decimal                  @db.Decimal(12, 2)
+  method        FinancialTransactionMethod
+  metadata      Json?
+  createdAt     DateTime                 @default(now())
+
+  @@index([clinicId, accountId, createdAt])
+  @@index([installmentId])
+  @@index([type])
+}
+
+model PatientPlan {
+  id           String            @id @default(uuid())
+  clinicId     String
+  clinic       Clinic            @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId    String
+  patient      Patient           @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  name         String
+  totalValue   Decimal           @db.Decimal(12, 2)
+  installments Int
+  status       PatientPlanStatus @default(ACTIVE)
+  entryAmount  Decimal?          @db.Decimal(12, 2)
+  releaseRule  String?
+  metadata     Json?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([status])
+}
+
+model FinancialSnapshot {
+  id            String   @id @default(uuid())
+  clinicId      String
+  clinic        Clinic   @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  month         Int
+  year          Int
+  totalRevenue  Decimal  @db.Decimal(12, 2)
+  totalReceived Decimal  @db.Decimal(12, 2)
+  totalPending  Decimal  @db.Decimal(12, 2)
+  totalOverdue  Decimal  @db.Decimal(12, 2)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([clinicId, year, month])
+  @@unique([clinicId, year, month])
+}
+
+model LaboratoryOrder {
+  id               String                @id @default(uuid())
+  clinicId         String
+  clinic           Clinic                @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId        String
+  patient          Patient               @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointmentId    String?
+  appointment      Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  procedureId      String?
+  procedure        PatientProcedure?     @relation(fields: [procedureId], references: [id], onDelete: SetNull)
+  labName          String
+  externalReference String?
+  description      String
+  status           LaboratoryOrderStatus @default(REQUESTED)
+  requestedAt      DateTime              @default(now())
+  expectedAt       DateTime?
+  completedAt      DateTime?
+  notes            String?
+  totalCost        Decimal?              @db.Decimal(12, 2)
+  metadata         Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  items            LaboratoryOrderItem[]
+  events           LaboratoryOrderEvent[]
+
+  @@index([clinicId, patientId, createdAt])
+  @@index([appointmentId])
+  @@index([procedureId])
+  @@index([status])
+  @@index([externalReference])
+}
+
+model LaboratoryOrderItem {
+  id        String           @id @default(uuid())
+  orderId    String
+  order      LaboratoryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  clinicId   String
+  clinic     Clinic          @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  name       String
+  quantity   Int             @default(1)
+  unitCost   Decimal?        @db.Decimal(12, 2)
+  notes      String?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@index([clinicId, orderId])
+}
+
+model LaboratoryOrderEvent {
+  id          String           @id @default(uuid())
+  orderId      String
+  order        LaboratoryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  clinicId     String
+  clinic       Clinic          @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  type         String
+  description  String
+  createdAt    DateTime        @default(now())
+
+  @@index([clinicId, orderId, createdAt])
+}

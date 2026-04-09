@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prontuario - voithos</title>
+  <link rel="stylesheet" href="prontuario.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <header class="page-header">
+        <h1>Prontuario</h1>
+        <button
+          class="page-back-btn"
+          type="button"
+          aria-label="Voltar"
+          onclick="if (window.history.length > 1) { window.history.back(); } else { window.location.href = 'arquivos.html'; }"
+        >
+          <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        </button>
+    </header>
+
+<main class="container">
+    <section class="patient-card">
+      <div class="patient-avatar" id="patient-avatar" title="Sem foto de perfil">
+        <img class="patient-avatar-photo" id="patient-avatar-photo" alt="" hidden>
+        <span class="patient-avatar-fallback" id="patient-avatar-fallback">P</span>
+      </div>
+      <div class="patient-info">
+        <div class="patient-title">
+          <h2 id="patient-name">Paciente</h2>
+          <button class="btn ghost" id="btn-edit-profile">Editar perfil</button>
+          <button class="btn ghost" id="btn-general-info"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Informacoes gerais</button>
+          <button class="btn ghost patient-wa-btn" id="btn-whatsapp-patient" type="button" aria-label="Falar com paciente no WhatsApp" title="Falar com paciente no WhatsApp">
+            <img src="Logo whatsapp.svg" alt="" aria-hidden="true">
+          </button>
+        </div>
+        <div class="patient-meta">
+          <span id="patient-phone">Telefone: -</span>
+          <span id="patient-cpf">CPF: -</span>
+          <span id="patient-prontuario">Prontuario: -</span>
+        </div>
+        <div class="patient-status">
+          <span class="pill" id="patient-status">Sem anamnese registrada</span>
+        </div>
+      </div>
+      <div class="patient-actions">
+        <button class="btn primary" id="btn-new-atestado" title="Criar novo atestado para este paciente" aria-label="Novo atestado">Novo atestado</button>
+        <button class="btn outline" id="btn-new-anamnese">Nova anamnese</button>
+        <button class="btn outline" id="btn-new-receita">Nova receita</button>
+      </div>
+    </section>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="ficha">Ficha clinica</button>
+      <button class="tab" data-tab="anamnese">Anamnese</button>
+      <button class="tab" data-tab="evolucao">Evolucao</button>
+      <button class="tab" data-tab="orcamentos">Orcamentos</button>
+      <button class="tab" data-tab="financeiro">Financeiro</button>
+      <button class="tab" data-tab="documentos">Documentos</button>
+      <button class="tab" data-tab="arquivos">Arquivos</button>
+      <button class="tab" data-tab="consultas">Consultas</button>
+    </nav>
+
+    <section class="tab-panel active" id="tab-ficha">
+      <div class="panel-header">
+        <div class="panel-header-main">
+          <div class="panel-title-block">
+            <h3>Odontograma</h3>
+            <p id="odontograma-mode-subtitle" class="odontograma-mode-subtitle">Permanente</p>
+          </div>
+          <div class="odonto-mode-toggle" role="tablist" aria-label="Visualizacao do odontograma">
+            <button type="button" class="odonto-mode-btn active" data-odonto-mode="permanente" role="tab" aria-selected="true">Permanente</button>
+            <button type="button" class="odonto-mode-btn" data-odonto-mode="deciduo" role="tab" aria-selected="false">Deciduo</button>
+          </div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn primary" data-action="novo-servico">Novo procedimento</button>
+          <button class="btn outline" type="button" data-action="nova-evolucao">Adicionar anotacao</button>
+        </div>
+      </div>
+      <div class="odontograma-box">
+        <div class="odontograma-wrap">
+          <iframe src="odontograma.html" title="Odontograma" class="odontograma-frame"></iframe>
+          <div class="odontograma-summary">
+            <h4>Resumo do dente</h4>
+            <div class="summary-row"><span class="label">Dentes selecionados:</span><span id="resumo-dentes">Nenhum</span></div>
+            <div class="summary-row"><span class="label">Dente:</span><span id="resumo-dente">-</span></div>
+            <div class="summary-row"><span class="label">Faces:</span><span id="resumo-faces">-</span></div>
+            <div class="summary-legend">
+              <span class="legend-chip face-select" data-face="D">D</span>
+              <span class="legend-chip face-select" data-face="L">L</span>
+              <span class="legend-chip face-select" data-face="M">M</span>
+              <span class="legend-chip face-select" data-face="O">O</span>
+              <span class="legend-chip face-select" data-face="V">V</span>
+            </div>
+          </div>
+        </div>
+        <div class="odontograma-aside">
+          <h4>Anotacoes</h4>
+          <p id="anotacoes-empty">O paciente nao possui anotacoes adicionadas.</p>
+          <div id="anotacoes-list" class="anotacoes-list"></div>
+          <button class="btn outline anotacao-cta" type="button" data-action="nova-evolucao">
+            <span class="anotacao-cta-plus" aria-hidden="true">+</span>
+            Adicionar anotacao
+          </button>
+        </div>
+      </div>
+
+      <section class="procedimentos">
+        <div class="procedimentos-header">
+          <div>
+            <h3>Procedimentos</h3>
+            <p>Acompanhe os procedimentos planejados e realizados.</p>
+          </div>
+          <button class="btn primary" data-action="novo-orcamento">Novo orcamento</button>
+        </div>
+        <div class="procedimentos-filtros">
+          <button class="pill-btn active">Ficha geral</button>
+          <button class="pill-btn">A realizar</button>
+          <button class="pill-btn">Realizado</button>
+          <button class="pill-btn">Pre-existente</button>
+        </div>
+        <div class="timer-banner hidden" id="timer-running-banner">
+          <div>
+            <strong>Cronometro em andamento</strong>
+            <p id="timer-running-text">Existe um procedimento com cronometro ativo.</p>
+          </div>
+          <div class="timer-banner-actions">
+            <button class="btn outline" type="button" data-action="timer-banner-continue">Continuar</button>
+            <button class="btn ghost" type="button" data-action="timer-banner-adjust">Ajustar tempo</button>
+            <button class="btn primary" type="button" data-action="timer-banner-finalize">Finalizar agora</button>
+          </div>
+        </div>
+        <div class="procedimentos-table">
+          <div class="procedimentos-row head">
+            <span>Procedimento</span>
+            <span>Dente</span>
+            <span>Status</span>
+            <span>Acoes</span>
+          </div>
+          <div id="procedimentos-body"></div>
+          <div class="procedimentos-row empty" id="procedimentos-empty">
+            <span>Nenhum procedimento registrado.</span>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <section class="tab-panel" id="tab-anamnese">
+      <div class="docs-list" id="anamnese-list"></div>
+      <div class="panel-empty" id="anamnese-empty">
+        <h3>Nenhuma anamnese feita</h3>
+        <p>Crie a anamnese do paciente para manter o prontuario atualizado.</p>
+        <button class="btn primary" data-action="nova-anamnese">Nova anamnese</button>
+        <button class="btn outline" data-action="nova-receita">Nova receita</button>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-evolucao">
+      <div class="panel-empty">
+        <h3>Sem evolucoes registradas</h3>
+        <p>Registre a evolucao do tratamento para manter o historico clinico.</p>
+        <button class="btn primary" type="button" data-action="nova-evolucao">Nova evolucao</button>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-orcamentos">
+      <div class="panel-empty">
+        <h3>Orcamentos</h3>
+        <p>Crie orcamentos com base nos procedimentos planejados.</p>
+        <button class="btn primary" data-action="novo-orcamento">Novo orcamento</button>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-financeiro">
+      <div class="patient-finance-toolbar">
+        <div>
+          <h3>Financeiro do paciente</h3>
+          <p>Registre cobrancas e acompanhe recebimentos vinculados ao prontuario.</p>
+        </div>
+        <button class="btn primary" type="button" data-action="open-patient-payment-modal">+ Adicionar pagamento</button>
+      </div>
+      <div class="panel-grid">
+        <div class="metric-card">
+          <span>Total previsto</span>
+          <strong id="finance-total-previsto">R$ 0,00</strong>
+        </div>
+        <div class="metric-card">
+          <span>Total recebido</span>
+          <strong id="finance-total-recebido">R$ 0,00</strong>
+        </div>
+        <div class="metric-card">
+          <span>Saldo a receber</span>
+          <strong id="finance-saldo">R$ 0,00</strong>
+        </div>
+      </div>
+      <div class="panel-grid patient-finance-kpis">
+        <div class="metric-card">
+          <span>Total pago</span>
+          <strong id="patient-finance-total-paid">R$ 0,00</strong>
+        </div>
+        <div class="metric-card">
+          <span>Total pendente</span>
+          <strong id="patient-finance-total-pending">R$ 0,00</strong>
+        </div>
+        <div class="metric-card">
+          <span>Em atraso</span>
+          <strong id="patient-finance-total-overdue">R$ 0,00</strong>
+        </div>
+      </div>
+      <div class="procedimentos-table patient-finance-table">
+        <div class="procedimentos-row head">
+          <span>Data</span>
+          <span>Descricao</span>
+          <span>Valor</span>
+          <span>Forma</span>
+          <span>Status</span>
+          <span>Acoes</span>
+        </div>
+        <div id="patient-finance-body"></div>
+        <div class="procedimentos-row empty" id="patient-finance-empty">
+          <span>Nenhum lancamento financeiro vinculado ao paciente.</span>
+        </div>
+      </div>
+      <div class="panel-footer">
+        <button class="btn primary" data-action="abrir-financeiro">Abrir financeiro</button>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-documentos">
+      <div class="docs-header">
+        <div>
+          <h3>Documentos clinicos</h3>
+          <p>Centralize receitas, atestados e demais documentos gerados no prontuario.</p>
+        </div>
+        <div class="docs-toolbar">
+          <button class="btn outline" type="button" id="btn-docs-dossie" data-action="generate-dossie">Gerar dossie completo</button>
+        </div>
+      </div>
+      <div id="docs-list" class="docs-list"></div>
+      <div id="docs-empty" class="docs-empty">
+        <h4>Voce ainda nao gerou nenhum documento</h4>
+        <div class="docs-empty-actions">
+          <button class="btn outline" type="button" data-action="generate-dossie">Gerar dossie completo</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-arquivos">
+      <div class="docs-header">
+        <div>
+          <h3>Arquivos do paciente</h3>
+          <p>Anexe documentos pessoais, exames, imagens e outros arquivos vinculados a este paciente.</p>
+        </div>
+        <button class="btn primary" type="button" data-action="open-upload-drawer">Adicionar arquivos</button>
+      </div>
+      <p class="files-helper">Os anexos ficam vinculados somente a esta clinica e a este paciente, com recuperacao central quando o cache local nao existir.</p>
+      <div id="arquivos-list" class="docs-list"></div>
+      <div id="arquivos-empty" class="docs-empty">
+        <h4>Voce ainda nao adicionou nenhum arquivo</h4>
+        <div class="docs-empty-actions">
+          <button class="btn primary" type="button" data-action="open-upload-drawer">Adicionar arquivos</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-consultas">
+      <div class="consultas-header">
+        <div>
+          <h3>Consultas e agenda</h3>
+          <p>Consulte e crie novos agendamentos para este paciente.</p>
+        </div>
+        <button class="btn primary" data-action="abrir-agenda">Abrir agenda</button>
+      </div>
+      <div class="consultas-kpis">
+        <div class="consulta-kpi-card">
+          <span>Agendadas</span>
+          <strong id="consultas-kpi-agendadas">0</strong>
+        </div>
+        <div class="consulta-kpi-card">
+          <span>Compareceu</span>
+          <strong id="consultas-kpi-realizadas">0</strong>
+        </div>
+        <div class="consulta-kpi-card">
+          <span>Não compareceu</span>
+          <strong id="consultas-kpi-faltas">0</strong>
+        </div>
+      </div>
+      <div id="consultas-list" class="consultas-list"></div>
+      <div id="consultas-empty" class="consultas-empty">Nenhuma consulta agendada para este paciente.</div>
+    </section>
+  </main>
+
+  <div class="anotacao-modal patient-payment-modal" id="patient-payment-modal" aria-hidden="true">
+    <div class="anotacao-modal-backdrop" data-action="close-patient-payment-modal"></div>
+    <aside class="anotacao-modal-panel patient-payment-modal-panel" role="dialog" aria-modal="true" aria-labelledby="patient-payment-modal-title">
+      <div class="anotacao-modal-header">
+        <h3 id="patient-payment-modal-title">Adicionar novo pagamento</h3>
+        <button class="icon-btn" type="button" data-action="close-patient-payment-modal" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="patient-payment-form" class="patient-payment-form">
+        <div class="patient-payment-field">
+          <label for="patient-payment-description">Descricao</label>
+          <input id="patient-payment-description" name="descricao" type="text" maxlength="140" placeholder="Digite a descricao do lancamento" required>
+        </div>
+
+        <div class="patient-payment-field">
+          <span class="patient-payment-label">Tipo de cobranca</span>
+          <div class="patient-payment-segment" role="tablist" aria-label="Tipo de cobranca">
+            <button type="button" class="patient-payment-segment-btn active" data-action="patient-payment-mode" data-mode="single" aria-pressed="true">A vista</button>
+            <button type="button" class="patient-payment-segment-btn" data-action="patient-payment-mode" data-mode="installment" aria-pressed="false">Parcelado</button>
+          </div>
+          <input type="hidden" id="patient-payment-mode" value="single">
+        </div>
+
+        <div class="patient-payment-grid">
+          <div class="patient-payment-field">
+            <label for="patient-payment-value">Valor</label>
+            <input id="patient-payment-value" name="valor" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,00" required>
+            <small>Valor total da cobranca.</small>
+          </div>
+
+          <div class="patient-payment-field">
+            <label for="patient-payment-method">Meio de pagamento</label>
+            <select id="patient-payment-method" name="metodo">
+              <option value="OTHER">Outros</option>
+              <option value="PIX">Pix</option>
+              <option value="CREDIT">Cartao credito</option>
+              <option value="DEBIT">Cartao debito</option>
+              <option value="CASH">Dinheiro</option>
+              <option value="BOLETO">Boleto</option>
+              <option value="TRANSFER">Transferencia</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="patient-payment-grid">
+          <div class="patient-payment-field">
+            <label for="patient-payment-due-date">Data de vencimento</label>
+            <input id="patient-payment-due-date" name="vencimento" type="date">
+          </div>
+
+          <div class="patient-payment-field" id="patient-payment-installments-wrap">
+            <label for="patient-payment-installments">Numero de parcelas</label>
+            <select id="patient-payment-installments" name="parcelas">
+              <option value="2">2 parcelas</option>
+              <option value="3">3 parcelas</option>
+              <option value="4">4 parcelas</option>
+              <option value="5">5 parcelas</option>
+              <option value="6">6 parcelas</option>
+              <option value="8">8 parcelas</option>
+              <option value="10">10 parcelas</option>
+              <option value="12">12 parcelas</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="patient-payment-status" id="patient-payment-status" aria-live="polite"></p>
+
+        <div class="anotacao-modal-footer">
+          <button class="btn ghost" type="button" data-action="close-patient-payment-modal">Cancelar</button>
+          <button class="btn primary" type="submit" id="patient-payment-submit">Salvar</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+
+
+  <div class="service-drawer" id="service-drawer" aria-hidden="true">
+    <div class="service-drawer-backdrop" data-action="close-service-drawer"></div>
+    <aside class="service-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="service-drawer-title">
+      <div class="service-drawer-header">
+        <h3 id="service-drawer-title">Adicionar procedimento</h3>
+        <button class="icon-btn" type="button" data-action="close-service-drawer" aria-label="Fechar">&times;</button>
+      </div>
+      <form class="service-drawer-form" id="service-drawer-form">
+        <label class="field">
+          <span>Procedimento</span>
+          <select id="drawer-proc-name" required>
+            <option value="">Selecione o procedimento</option>
+          </select>
+          <div class="service-drawer-proc-meta">
+            <small id="drawer-proc-code">Codigo: -</small>
+            <button class="btn ghost" type="button" data-action="refresh-procedure-catalog">Atualizar lista</button>
+          </div>
+        </label>
+        <label class="field">
+          <span>Valor do procedimento</span>
+          <input type="text" id="drawer-proc-value" placeholder="R$ 0,00">
+        </label>
+        <label class="field">
+          <span>Dentes selecionados</span>
+          <input type="text" id="drawer-dentes" placeholder="Selecione no odontograma" readonly>
+          <div class="service-drawer-dente-picker">
+            <select id="drawer-dentes-select" aria-label="Selecionar dente">
+              <option value="">Selecionar dente...</option>
+            </select>
+            <button class="btn outline" type="button" data-action="add-drawer-dente">Adicionar</button>
+            <button class="btn ghost" type="button" data-action="remove-last-drawer-dente">Remover ultimo</button>
+            <button class="btn ghost" type="button" data-action="clear-drawer-dentes">Limpar</button>
+          </div>
+          <em class="drawer-help" id="drawer-dentes-help">Selecione no odontograma ou use o dropdown para adicionar dentes manualmente. Dica: apos salvar, a selecao e limpa para lancar o proximo procedimento.</em>
+        </label>
+        <div class="field">
+          <span>Faces</span>
+          <div class="drawer-face-grid">
+            <button class="legend-chip drawer-face-chip" type="button" data-face="D">D</button>
+            <button class="legend-chip drawer-face-chip" type="button" data-face="L">L</button>
+            <button class="legend-chip drawer-face-chip" type="button" data-face="M">M</button>
+            <button class="legend-chip drawer-face-chip" type="button" data-face="O">O</button>
+            <button class="legend-chip drawer-face-chip" type="button" data-face="V">V</button>
+          </div>
+        </div>
+        <label class="field">
+          <span>Observacoes</span>
+          <textarea id="drawer-obs" rows="3" placeholder="Observacoes do procedimento"></textarea>
+        </label>
+        <div class="service-drawer-actions">
+          <button class="btn ghost" type="button" data-action="close-service-drawer">Cancelar</button>
+          <button class="btn primary" id="drawer-save" type="submit">Salvar</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+  <div class="proc-modal" id="proc-modal" aria-hidden="true">
+    <div class="proc-modal-backdrop" data-action="close-proc-modal"></div>
+    <aside class="proc-modal-panel" role="dialog" aria-modal="true" aria-labelledby="proc-modal-title">
+      <div class="proc-modal-header">
+        <h3>Detalhes do procedimento</h3>
+        <button class="icon-btn" type="button" data-action="close-proc-modal" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="proc-modal-card">
+        <div class="proc-modal-title" id="proc-modal-title">Procedimento</div>
+        <div class="proc-modal-status" id="proc-modal-status"></div>
+        <div class="proc-modal-info">
+          <div><span>Dentista:</span><strong id="proc-modal-dentista">-</strong></div>
+          <div><span>Valor:</span><strong id="proc-modal-valor">-</strong></div>
+          <div><span>Adicionado em:</span><strong id="proc-modal-add">-</strong></div>
+          <div><span>Finalizado em:</span><strong id="proc-modal-final">-</strong></div>
+        </div>
+        <div class="proc-modal-meta-grid">
+          <div class="proc-modal-meta-card">
+            <h4>Dados clinicos</h4>
+            <div class="proc-modal-info compact">
+              <div><span>Dentes:</span><strong id="proc-modal-dentes">-</strong></div>
+              <div><span>Faces:</span><strong id="proc-modal-faces">-</strong></div>
+              <div><span>Tempo:</span><strong id="proc-modal-tempo">-</strong></div>
+              <div><span>Codigo:</span><strong id="proc-modal-codigo">-</strong></div>
+            </div>
+          </div>
+          <div class="proc-modal-meta-card">
+            <h4>Financeiro</h4>
+            <div class="proc-modal-info compact">
+              <div><span>Status financeiro:</span><strong id="proc-modal-fin-status">-</strong></div>
+              <div><span>Forma pagto:</span><strong id="proc-modal-fin-method">-</strong></div>
+              <div><span>Parcelas:</span><strong id="proc-modal-fin-installments">-</strong></div>
+              <div><span>Vencimento:</span><strong id="proc-modal-fin-due">-</strong></div>
+              <div><span>Recebido em:</span><strong id="proc-modal-fin-paid-at">-</strong></div>
+            </div>
+          </div>
+        </div>
+        <div class="proc-modal-meta-card">
+          <h4>Custos e resultado</h4>
+          <div class="proc-modal-info compact two-cols">
+            <div><span>Custo total:</span><strong id="proc-modal-custo-total">-</strong></div>
+            <div><span>Laboratorio:</span><strong id="proc-modal-custo-lab">-</strong></div>
+            <div><span>Materiais:</span><strong id="proc-modal-custo-materiais">-</strong></div>
+            <div><span>Outros custos:</span><strong id="proc-modal-custo-outros">-</strong></div>
+            <div><span>Lucro:</span><strong id="proc-modal-lucro">-</strong></div>
+            <div><span>Lucro/hora:</span><strong id="proc-modal-lucro-hora">-</strong></div>
+          </div>
+        </div>
+        <div class="proc-modal-obs" id="proc-modal-obs"></div>
+        <div class="proc-modal-actions">
+          <button class="btn ghost" type="button" data-action="proc-edit-costs-time" data-service-id="">Editar completo</button>
+          <button class="btn primary" type="button" data-action="proc-view-debt" data-service-id="">Visualizar debito</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="proc-modal proc-edit-modal" id="proc-edit-modal" aria-hidden="true">
+    <div class="proc-modal-backdrop" data-action="close-proc-edit"></div>
+    <aside class="proc-modal-panel" role="dialog" aria-modal="true" aria-labelledby="proc-edit-title">
+      <div class="proc-modal-header">
+        <h3 id="proc-edit-title">Editar procedimento</h3>
+        <button class="icon-btn" type="button" data-action="close-proc-edit" aria-label="Fechar">&times;</button>
+      </div>
+      <form class="proc-edit-form" id="proc-edit-form">
+        <input type="hidden" id="proc-edit-id">
+        <label class="field">
+          <span>Procedimento</span>
+          <input type="text" id="proc-edit-name" list="proc-edit-procedures" autocomplete="off" placeholder="Procedimento">
+        </label>
+        <datalist id="proc-edit-procedures"></datalist>
+
+        <label class="field">
+          <span>Valor do procedimento <em>Opcional</em></span>
+          <input type="text" id="proc-edit-valor" placeholder="R$ 0,00">
+        </label>
+
+        <label class="field">
+          <span>Dentes <em>Opcional</em></span>
+          <input type="text" id="proc-edit-dentes" placeholder="Ex: 11, 12, 21">
+        </label>
+
+        <div class="field">
+          <span>Faces do dente <em>Opcional</em></span>
+          <div class="face-grid">
+            <label><input type="checkbox" name="proc-edit-faces" value="C"> C</label>
+            <label><input type="checkbox" name="proc-edit-faces" value="D"> D</label>
+            <label><input type="checkbox" name="proc-edit-faces" value="L"> L</label>
+            <label><input type="checkbox" name="proc-edit-faces" value="M"> M</label>
+            <label><input type="checkbox" name="proc-edit-faces" value="O"> O</label>
+            <label><input type="checkbox" name="proc-edit-faces" value="V"> V</label>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Profissional <em>Opcional</em></span>
+          <input type="text" id="proc-edit-profissional" placeholder="Nome do profissional">
+        </label>
+
+        <div class="field">
+          <span>Status do procedimento</span>
+          <div class="radio-row">
+            <label><input type="radio" name="proc-edit-status" value="a-realizar"> A realizar</label>
+            <label><input type="radio" name="proc-edit-status" value="realizado"> Realizado</label>
+            <label><input type="radio" name="proc-edit-status" value="pre-existente"> Pre-existente</label>
+          </div>
+        </div>
+
+        <label class="field">
+          <span>Realizado em <em>Opcional</em></span>
+          <input type="date" id="proc-edit-realizado">
+        </label>
+
+        <label class="checkbox-card">
+          <input type="checkbox" id="proc-edit-financeiro">
+          <div>
+            <strong>Gerar informacao de pagamento na aba "Financeiro"</strong>
+            <p>Ao selecionar essa opcao, as informacoes serao vinculadas a aba Financeiro.</p>
+          </div>
+        </label>
+
+        <label class="field">
+          <span>Observacoes <em>Opcional</em></span>
+          <textarea id="proc-edit-obs" rows="4" placeholder="Observacoes do procedimento"></textarea>
+        </label>
+
+        <div class="proc-edit-actions">
+          <button class="btn ghost" type="button" data-action="close-proc-edit">Cancelar</button>
+          <button class="btn primary" type="submit">Salvar</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+  <div class="proc-modal proc-finalize-modal" id="proc-finalize-modal" aria-hidden="true">
+    <div class="proc-modal-backdrop" data-action="close-proc-finalize"></div>
+    <aside class="proc-modal-panel" role="dialog" aria-modal="true" aria-labelledby="proc-finalize-title">
+      <div class="proc-modal-header">
+        <h3 id="proc-finalize-title">Finalizar procedimento</h3>
+        <button class="icon-btn" type="button" data-action="close-proc-finalize" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="proc-editor-sticky" id="proc-editor-sticky">
+        <div><span>Situacao</span><strong id="proc-sticky-workflow">Pendente</strong></div>
+        <div><span>Cobrado</span><strong id="proc-sticky-valor">R$ 0,00</strong></div>
+        <div><span>Custo</span><strong id="proc-sticky-custo">R$ 0,00</strong></div>
+        <div><span>Lucro</span><strong id="proc-sticky-lucro">R$ 0,00</strong></div>
+      </div>
+      <form class="proc-edit-form proc-finalize-form" id="proc-finalize-form">
+        <input type="hidden" id="proc-finalize-id">
+        <div class="proc-finalize-block" data-collapsible>
+          <h4>0) Dados do procedimento</h4>
+          <label class="field">
+            <span>Situacao rapida <em>Atalho (nao substitui os campos abaixo)</em></span>
+            <select id="proc-quick-status">
+              <option value="PENDENTE">Pendente (nao pago / nao realizado)</option>
+              <option value="PAGO">Pago (aguardando realizacao)</option>
+              <option value="REALIZADO">Realizado</option>
+              <option value="CUSTOM">Personalizado</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Procedimento</span>
+            <input type="text" id="proc-full-name" list="proc-edit-procedures" autocomplete="off" placeholder="Procedimento">
+          </label>
+          <div class="proc-finalize-grid">
+            <label class="field">
+              <span>Dentes</span>
+              <input type="text" id="proc-full-dentes" placeholder="Ex: 11, 12, 21">
+            </label>
+            <label class="field">
+              <span>Profissional</span>
+              <input type="text" id="proc-full-profissional" placeholder="Nome do profissional">
+            </label>
+          </div>
+          <div class="field">
+            <span>Faces do dente</span>
+            <div class="face-grid">
+              <label><input type="checkbox" name="proc-full-faces" value="C"> C</label>
+              <label><input type="checkbox" name="proc-full-faces" value="D"> D</label>
+              <label><input type="checkbox" name="proc-full-faces" value="L"> L</label>
+              <label><input type="checkbox" name="proc-full-faces" value="M"> M</label>
+              <label><input type="checkbox" name="proc-full-faces" value="O"> O</label>
+              <label><input type="checkbox" name="proc-full-faces" value="V"> V</label>
+            </div>
+          </div>
+          <div class="field">
+            <span>Status do procedimento</span>
+            <div class="radio-row">
+              <label><input type="radio" name="proc-full-status" value="a-realizar"> A realizar</label>
+              <label><input type="radio" name="proc-full-status" value="realizado"> Realizado</label>
+              <label><input type="radio" name="proc-full-status" value="pre-existente"> Pre-existente</label>
+            </div>
+          </div>
+          <div class="proc-finalize-grid">
+            <label class="field">
+              <span>Data adicionado em</span>
+              <input type="date" id="proc-full-registered-at">
+            </label>
+            <label class="field">
+              <span>Data finalizado em</span>
+              <input type="date" id="proc-full-finished-at">
+            </label>
+          </div>
+          <label class="checkbox-card">
+            <input type="checkbox" id="proc-full-gerar-financeiro">
+            <div>
+              <strong>Gerar informacao de pagamento na aba "Financeiro"</strong>
+              <p>Ao selecionar essa opcao, as informacoes serao vinculadas a aba Financeiro.</p>
+            </div>
+          </label>
+          <label class="field">
+            <span>Observacoes</span>
+            <textarea id="proc-full-obs" rows="3" placeholder="Observacoes do procedimento"></textarea>
+          </label>
+        </div>
+
+        <div class="proc-finalize-block" data-collapsible>
+          <h4>1) Valor cobrado</h4>
+          <label class="field">
+            <span>Valor cobrado</span>
+            <input type="text" id="proc-finalize-valor" placeholder="R$ 0,00">
+          </label>
+        </div>
+
+        <div class="proc-finalize-block" id="proc-finalize-timer-block" data-collapsible>
+          <h4>2) Tempo</h4>
+          <div class="proc-timer-row">
+            <div class="proc-timer-display" id="proc-timer-display">00:00:00</div>
+            <div class="proc-timer-actions">
+              <button class="btn outline" type="button" data-action="timer-start">Iniciar cronometro</button>
+              <button class="btn outline" type="button" data-action="timer-pause">Pausar</button>
+              <button class="btn outline" type="button" data-action="timer-resume">Retomar</button>
+              <button class="btn ghost" type="button" data-action="timer-stop">Parar</button>
+            </div>
+          </div>
+          <label class="field">
+            <span>Tempo (minutos)</span>
+            <input type="number" id="proc-finalize-tempo" min="0" step="1" placeholder="0">
+          </label>
+          <button class="btn ghost" type="button" data-action="timer-use-clock">Usar tempo do cronometro</button>
+          <small class="proc-timer-status-hint hidden" id="proc-timer-status-hint">Cronometro e tempo habilitados apenas quando o status do procedimento estiver como Realizado.</small>
+        </div>
+
+        <div class="proc-finalize-block" data-collapsible>
+          <h4>3) Custos</h4>
+          <div class="proc-costs-grid">
+            <div class="proc-costs-col">
+              <div class="proc-costs-header">
+                <strong>Materiais</strong>
+                <button class="btn outline" type="button" data-action="add-material">+ Adicionar material</button>
+              </div>
+              <div id="proc-materiais-list" class="proc-dynamic-list"></div>
+            </div>
+            <div class="proc-costs-col">
+              <label class="field">
+                <span>Laboratorio (descricao)</span>
+                <input type="text" id="proc-lab-descricao" placeholder="Descricao do laboratorio">
+              </label>
+              <label class="field">
+                <span>Laboratorio (valor)</span>
+                <input type="number" id="proc-lab-valor" min="0" step="0.01" placeholder="0,00">
+              </label>
+              <div class="proc-costs-header">
+                <strong>Outros custos</strong>
+                <button class="btn outline" type="button" data-action="add-outro-custo">+ Adicionar</button>
+              </div>
+              <div id="proc-outros-list" class="proc-dynamic-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="proc-finalize-block proc-resumo" data-collapsible>
+          <h4>4) Pagamento</h4>
+          <div class="proc-finalize-grid">
+            <label class="field">
+              <span>Forma de pagamento</span>
+              <select id="proc-payment-method">
+                <option value="PIX">Pix</option>
+                <option value="CREDIT">Cartao credito</option>
+                <option value="DEBIT">Cartao debito</option>
+                <option value="CASH">Dinheiro</option>
+                <option value="BOLETO">Boleto</option>
+                <option value="TRANSFER">Transferencia</option>
+                <option value="OTHER">Outro</option>
+              </select>
+            </label>
+            <div class="field">
+              <span>Status do pagamento</span>
+              <div class="radio-row">
+                <label><input type="radio" name="proc-payment-status" id="proc-payment-status-paid" value="PAID" checked> Pago agora</label>
+                <label><input type="radio" name="proc-payment-status" id="proc-payment-status-pending" value="PENDING"> Pendente</label>
+              </div>
+            </div>
+          </div>
+          <label class="field hidden" id="proc-payment-due-wrap">
+            <span>Vencimento (opcional)</span>
+            <input type="date" id="proc-payment-due-date">
+            <small>Voce podera confirmar no Financeiro ou no prontuario do paciente.</small>
+          </label>
+          <label class="field hidden" id="proc-payment-installments-wrap">
+            <span id="proc-payment-installments-label">Numero de parcelas</span>
+            <select id="proc-payment-installments">
+              <option value="1">1 parcela</option>
+              <option value="2">2 parcelas</option>
+              <option value="3">3 parcelas</option>
+              <option value="4">4 parcelas</option>
+              <option value="5">5 parcelas</option>
+              <option value="6">6 parcelas</option>
+              <option value="8">8 parcelas</option>
+              <option value="10">10 parcelas</option>
+              <option value="12">12 parcelas</option>
+            </select>
+          </label>
+          <label class="field hidden" id="proc-payment-paid-at-wrap">
+            <span>Recebido em (opcional)</span>
+            <input type="datetime-local" id="proc-payment-paid-at">
+          </label>
+        </div>
+
+        <div class="proc-finalize-block proc-resumo" data-collapsible>
+          <h4>5) Resumo</h4>
+          <div class="proc-resumo-grid">
+            <div><span>Valor cobrado</span><strong id="proc-resumo-valor">R$ 0,00</strong></div>
+            <div><span>Custo total</span><strong id="proc-resumo-custo">R$ 0,00</strong></div>
+            <div><span>Lucro</span><strong id="proc-resumo-lucro">R$ 0,00</strong></div>
+            <div><span>Lucro por hora</span><strong id="proc-resumo-lucro-hora">R$ 0,00</strong></div>
+            <div><span>Status pagamento</span><strong id="proc-resumo-payment-status">Pago</strong></div>
+          </div>
+        </div>
+
+        <div class="proc-edit-actions">
+          <button class="btn ghost" type="button" data-action="close-proc-finalize">Cancelar</button>
+          <button class="btn outline" type="button" data-action="save-proc-draft" id="proc-finalize-draft-btn">Salvar como rascunho</button>
+          <button class="btn primary" type="submit" id="proc-finalize-submit">Finalizar procedimento</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+  <div class="upload-drawer" id="upload-drawer" aria-hidden="true">
+    <div class="upload-drawer-backdrop" data-action="close-upload-drawer"></div>
+    <aside class="upload-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="upload-drawer-title">
+      <div class="upload-drawer-header">
+        <h3 id="upload-drawer-title">Adicionar arquivo do paciente</h3>
+        <button class="icon-btn" type="button" data-action="close-upload-drawer" aria-label="Fechar">&times;</button>
+      </div>
+      <form id="upload-drawer-form" class="upload-drawer-form">
+        <div class="field">
+          <span>Arquivo</span>
+          <div class="upload-actions">
+            <button class="btn outline" type="button" data-action="select-upload-file">Selecionar arquivos</button>
+            <button class="btn ghost" type="button" data-action="capture-upload-file">Tirar foto</button>
+          </div>
+          <input type="file" id="upload-file-input" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.heic,.doc,.docx,.txt,.rtf,.xls,.xlsx,.csv,.ppt,.pptx,.stl,.dcm">
+          <input type="file" id="upload-photo-input" hidden accept="image/*" capture="environment">
+          <p id="upload-file-name" class="upload-file-name">Nenhum arquivo selecionado.</p>
+        </div>
+
+        <label class="field">
+          <span>Paciente</span>
+          <input type="text" id="upload-patient-name" readonly>
+        </label>
+
+        <label class="field">
+          <span>Pasta (opcional)</span>
+          <input type="text" id="upload-folder" placeholder="Ex.: exames, documentos pessoais">
+        </label>
+
+        <label class="field">
+          <span>Titulo (opcional)</span>
+          <input type="text" id="upload-title" placeholder="Titulo do arquivo">
+        </label>
+
+        <p class="files-helper">Aceita PDF, imagens, exames e documentos de escritorio de ate 25MB.</p>
+        <p id="upload-status" class="upload-status"></p>
+
+        <div class="upload-drawer-footer">
+          <button class="btn ghost" type="button" data-action="close-upload-drawer">Cancelar</button>
+          <button class="btn primary" type="submit">Adicionar</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+
+  <div class="info-drawer" id="info-drawer" aria-hidden="true">
+    <div class="info-drawer-backdrop" data-action="close-info-drawer"></div>
+    <aside class="info-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="info-drawer-title">
+      <div class="info-drawer-header">
+        <h3 id="info-drawer-title">Informacoes gerais do paciente</h3>
+        <button class="icon-btn" type="button" data-action="close-info-drawer" aria-label="Fechar">&times;</button>
+      </div>
+
+      <div class="info-drawer-content">
+        <section class="info-section">
+          <button type="button" class="info-section-toggle" data-action="toggle-info-section" data-section="pessoais" aria-expanded="true">
+            <span>Dados pessoais</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+          <div class="info-section-body" id="info-section-pessoais">
+            <div class="info-grid">
+              <div class="info-item"><span>Nome</span><strong id="info-nome">-</strong></div>
+              <div class="info-item"><span>Sexo</span><strong id="info-sexo">-</strong></div>
+              <div class="info-item"><span>Estado civil</span><strong id="info-estado-civil">-</strong></div>
+              <div class="info-item"><span>Situacao profissional</span><strong id="info-situacao-profissional">-</strong></div>
+              <div class="info-item"><span>CPF</span><strong id="info-cpf">-</strong></div>
+              <div class="info-item"><span>RG</span><strong id="info-rg">-</strong></div>
+              <div class="info-item"><span>Data de nascimento</span><strong id="info-data-nascimento">-</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="info-section">
+          <button type="button" class="info-section-toggle" data-action="toggle-info-section" data-section="contato" aria-expanded="true">
+            <span>Contato</span>
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+          </button>
+          <div class="info-section-body" id="info-section-contato">
+            <div class="info-grid">
+              <div class="info-item"><span>Telefone</span><strong id="info-telefone">-</strong></div>
+              <div class="info-item"><span>Email</span><strong id="info-email">-</strong></div>
+              <div class="info-item full"><span>Endereco</span><strong id="info-endereco">-</strong></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <div class="anotacao-modal" id="anotacao-modal" aria-hidden="true">
+    <div class="anotacao-modal-backdrop" data-action="close-anotacao-modal"></div>
+    <aside class="anotacao-modal-panel" role="dialog" aria-modal="true" aria-labelledby="anotacao-modal-title">
+      <div class="anotacao-modal-header">
+        <h3 id="anotacao-modal-title">Adicionar anotacao</h3>
+        <button class="icon-btn" type="button" data-action="close-anotacao-modal" aria-label="Fechar">&times;</button>
+      </div>
+      <p class="anotacao-modal-helper">Escreva no campo abaixo observacoes gerais ou anotacoes sobre a evolucao dos tratamentos de seus pacientes.</p>
+      <form id="anotacao-form" class="anotacao-form">
+        <label class="field">
+          <span>Anotacao</span>
+          <textarea id="anotacao-texto" rows="6" placeholder="Escreva aqui as anotacoes do paciente." required></textarea>
+        </label>
+        <p id="anotacao-status" class="anotacao-status"></p>
+        <div class="anotacao-modal-footer">
+          <button class="btn ghost" type="button" data-action="close-anotacao-modal">Cancelar</button>
+          <button class="btn primary" id="anotacao-submit" type="submit" disabled>Adicionar anotacao</button>
+        </div>
+      </form>
+    </aside>
+  </div>
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="prontuario.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+

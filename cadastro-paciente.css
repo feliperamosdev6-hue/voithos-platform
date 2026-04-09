@@ -1,0 +1,331 @@
+/* Importando a fonte Poppins do Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap');
+
+/* Estilos Globais */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    background-color: #f0f4f8;
+    color: #333;
+}
+
+/* Cabeçalho da Página (reutilizado de outros CSS) */
+.page-header {
+    background: linear-gradient(to right, #2a9d8f, #83eca6);
+    color: white;
+    padding: 15px 40px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    margin: 0 auto;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.back-button {
+    color: white;
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: opacity 0.3s;
+}
+
+.back-button:hover {
+    opacity: 0.8;
+}
+
+/* Container Principal */
+.container {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 0 20px;
+}
+
+/* Estilo do Container do Formulário */
+.form-container {
+    background-color: #ffffff;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
+    padding: 30px 40px;
+    border-left: 5px solid #2a9d8f;
+}
+
+.form-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 30px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 20px;
+}
+
+.icon-header {
+    font-size: 2.2rem;
+    color: #2a9d8f;
+    margin-right: 20px;
+}
+
+.form-header h2 {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Grid para os campos do formulário */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 30px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1; /* Ocupa a largura total */
+}
+
+.form-group label {
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    padding: 12px 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-family: 'Poppins', sans-serif;
+    font-size: 1rem;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    background-color: #fff;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #2a9d8f;
+    box-shadow: 0 0 0 3px rgba(42, 157, 143, 0.2);
+}
+
+.form-group select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding-right: 40px;
+    background-image: linear-gradient(45deg, transparent 50%, #6b7280 50%), linear-gradient(135deg, #6b7280 50%, transparent 50%);
+    background-position: calc(100% - 18px) calc(50% - 2px), calc(100% - 12px) calc(50% - 2px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    cursor: pointer;
+    min-height: 48px;
+}
+
+.submit-button {
+    display: block;
+    width: 100%;
+    padding: 15px;
+    margin-top: 30px;
+    background-color: #e76f51;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.2s;
+}
+
+.submit-button:hover {
+    background-color: #d85e40;
+    transform: translateY(-2px);
+}
+
+/* Responsividade */
+@media (max-width: 600px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- Estilos para a lista de itens selecionados --- */
+.selected-items-list {
+  list-style-type: none;
+  padding: 0;
+  margin-top: 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.selected-items-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.selected-items-list li:last-child {
+  border-bottom: none;
+}
+
+.remove-item-btn {
+  background: none;
+  border: none;
+  color: #e76f51;
+  cursor: pointer;
+  font-size: 1.2rem;
+}
+
+/* --- ESTILOS CORRIGIDOS PARA O CAMPO DE BUSCA DE SERVIÇOS --- */
+
+/* 1. Container que agrupa o input, o ícone e a lista de sugestões.
+   A position: relative é essencial para posicionar os filhos (ícone e sugestões). */
+.input-container {
+    position: relative;
+    width: 100%;
+}
+
+/* 2. Estilo do input principal.
+   O padding-right cria um espaço interno à direita para que o texto não passe por baixo do ícone. */
+.input-container input#serviceName {
+    width: 100%;
+    padding-right: 40px; /* Espaço para o ícone */
+    box-sizing: border-box; /* Garante que o padding não aumente a largura total */
+}
+
+/* 3. Wrapper do ícone (seta).
+   Posicionado de forma absoluta em relação ao .input-container. */
+.input-container .icon-wrapper {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 100%;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #888;
+    transition: color 0.2s;
+}
+
+.input-container .icon-wrapper:hover {
+    color: #2a9d8f; /* Cor de destaque ao passar o mouse */
+}
+
+/* 4. Container da lista de sugestões. */
+.suggestions-container {
+    display: none; /* Começa escondido */
+    position: absolute; /* Posicionado em relação ao .input-container */
+    top: 100%; /* Aparece logo abaixo do input */
+    left: 0;
+    right: 0; /* Garante que a largura seja proporcional ao pai */
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.suggestions-container ul { list-style: none; margin: 0; padding: 0; }
+.suggestions-container li { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #eee; }
+.suggestions-container li:last-child { border-bottom: none; }
+.suggestions-container li:hover { background-color: #f0f4f8; }
+.suggestions-container li strong { color: #2a9d8f; font-weight: bold; }
+
+.selfie-upload {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.form-group input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.selfie-card {
+  width: 124px;
+  height: 124px;
+  border: 1px dashed #9cc9bf;
+  border-radius: 14px;
+  background: #f8fcfb;
+  color: #2a9d8f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.selfie-card:hover {
+  border-color: #2a9d8f;
+}
+
+.selfie-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.selfie-placeholder {
+  font-size: 2.4rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.selfie-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.selfie-meta p {
+  margin: 0;
+  color: #5a6575;
+  font-size: 0.92rem;
+}
+
+.selfie-remove-btn {
+  border: 1px solid #c7d2e3;
+  background: #fff;
+  color: #50607a;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.selfie-remove-btn:hover {
+  background: #f5f8fc;
+}
+
+@media (max-width: 600px) {
+  .selfie-upload {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

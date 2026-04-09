@@ -1,0 +1,375 @@
+﻿:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  font-family: 'Poppins', 'Roboto', sans-serif;
+  background: #e6f7ec;
+  color: #0f172a;
+}
+
+.atest-main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 32px 24px 60px;
+}
+
+.atest-card {
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.atest-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.8rem;
+}
+
+.atest-header p {
+  margin: 0;
+  color: #475569;
+}
+
+.atest-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-block label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.field-block input,
+.field-block select,
+.field-block textarea {
+  border-radius: 12px;
+  border: 1px solid #d1d9e6;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #f8fafc;
+}
+
+.receita-item-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.8fr auto;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.receita-item-row .stepper-btn {
+  align-self: center;
+}
+
+.receita-favorites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.receita-favorite-btn {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.receita-favorite-btn:hover {
+  background: #e0e7ff;
+}
+
+.patient-search {
+  width: 100%;
+}
+
+.patient-dropdown {
+  position: relative;
+}
+
+.patient-toggle {
+  width: 100%;
+  text-align: left;
+  border-radius: 12px;
+  border: 1px solid #d1d9e6;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.patient-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #d1d9e6;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  padding: 8px;
+  z-index: 12;
+}
+
+.patient-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.patient-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: #f8fafc;
+}
+
+.patient-item:hover,
+.patient-item.active {
+  border-color: #b2dfd3;
+  background: #eef9f3;
+}
+
+.patient-item-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.patient-item-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+#atest-dias {
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  margin-top: 0;
+}
+
+.field-narrow {
+  max-width: 260px;
+}
+
+.cid-block {
+  width: min(520px, 100%);
+  justify-self: end;
+}
+
+.cid-field {
+  position: relative;
+}
+
+.cid-field input {
+  width: 100%;
+}
+
+.cid-suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #d1d9e6;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  padding: 6px;
+  z-index: 10;
+}
+
+.cid-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  font-size: 0.9rem;
+}
+
+.cid-item:hover,
+.cid-item.active {
+  background: #eef9f3;
+}
+
+.cid-code {
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.cid-desc {
+  color: #475569;
+  font-size: 0.85rem;
+}
+
+.cid-highlight {
+  background: #fde68a;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.toggle-group {
+  display: inline-flex;
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 4px;
+  gap: 6px;
+}
+
+.toggle-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-weight: 600;
+  background: transparent;
+  cursor: pointer;
+  color: #475569;
+}
+
+.toggle-btn.active {
+  background: #0f766e;
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(15, 118, 110, 0.25);
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #d1d9e6;
+  padding: 6px 8px 6px 6px;
+  width: fit-content;
+}
+
+.stepper input {
+  width: 48px;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-weight: 600;
+  margin: 0;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+
+.stepper input::-webkit-outer-spin-button,
+.stepper input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.stepper-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #e2f3ec;
+  color: #0f766e;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.95rem;
+  color: #334155;
+}
+
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.btn-link {
+  text-decoration: none;
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 999px;
+  padding: 10px 18px;
+  background: #0f766e;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.btn-primary:disabled {
+  background: #cbd5f5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.form-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .atest-card {
+    padding: 24px;
+  }
+
+  .form-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .cid-block {
+    width: 100%;
+    justify-self: start;
+  }
+
+  .receita-item-row {
+    grid-template-columns: 1fr;
+  }
+}

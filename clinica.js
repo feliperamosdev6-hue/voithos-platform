@@ -1,0 +1,962 @@
+document.addEventListener('DOMContentLoaded', () => {
+  const appApi = window.appApi || {};
+  const clinicApi = appApi.clinic || {};
+  const form = document.getElementById('clinic-form');
+  const statusEl = document.getElementById('clinic-status');
+  const logoInput = document.getElementById('clinic-logo');
+  const logoPreview = document.getElementById('logo-preview');
+  const logoImage = document.getElementById('logo-image');
+  const logoRemove = document.getElementById('logo-remove');
+
+  const fields = {
+    cnpjCpf: document.getElementById('clinic-cnpj'),
+    razaoSocial: document.getElementById('clinic-razao'),
+    nomeClinica: document.getElementById('clinic-nome'),
+    telefone: document.getElementById('clinic-telefone'),
+    email: document.getElementById('clinic-email'),
+    cro: document.getElementById('clinic-cro'),
+    responsavelTecnico: document.getElementById('clinic-responsavel'),
+    cep: document.getElementById('clinic-cep'),
+    rua: document.getElementById('clinic-rua'),
+    numero: document.getElementById('clinic-numero'),
+    complemento: document.getElementById('clinic-complemento'),
+    bairro: document.getElementById('clinic-bairro'),
+    cidade: document.getElementById('clinic-cidade'),
+    estado: document.getElementById('clinic-estado'),
+  };
+
+  const birthdayFields = {
+    enabled: document.getElementById('birthday-enabled'),
+    draftMode: document.getElementById('birthday-draft-mode'),
+    sendTime: document.getElementById('birthday-send-time'),
+    dailyLimit: document.getElementById('birthday-daily-limit'),
+    throttleMs: document.getElementById('birthday-throttle-ms'),
+    template: document.getElementById('birthday-template'),
+  };
+
+  const whatsAppFields = {
+    countryCode: document.getElementById('whatsapp-country-code'),
+    phoneNumber: document.getElementById('whatsapp-phone-number'),
+  };
+  const whatsAppConnection = {
+    badge: document.getElementById('clinic-whatsapp-badge'),
+    statusText: document.getElementById('clinic-whatsapp-status-text'),
+    phone: document.getElementById('clinic-whatsapp-phone'),
+    lastSeen: document.getElementById('clinic-whatsapp-last-seen'),
+    instance: document.getElementById('clinic-whatsapp-instance'),
+    feedback: document.getElementById('clinic-whatsapp-feedback'),
+    connectButton: document.getElementById('clinic-whatsapp-connect'),
+    refreshButton: document.getElementById('clinic-whatsapp-refresh'),
+    disconnectButton: document.getElementById('clinic-whatsapp-disconnect'),
+    deleteButton: document.getElementById('clinic-whatsapp-delete'),
+    qrImage: document.getElementById('clinic-whatsapp-qr-image'),
+    qrPlaceholder: document.getElementById('clinic-whatsapp-qr-placeholder'),
+    qrPairingCode: document.getElementById('clinic-whatsapp-pairing-code'),
+    engineHealth: document.getElementById('clinic-whatsapp-engine-health'),
+    diagnostics: document.getElementById('clinic-whatsapp-diagnostics'),
+  };
+
+  let logoData = '';
+  let logoFile = '';
+  let logoRemoved = false;
+  let whatsAppPollTimer = null;
+  let whatsAppQrState = {
+    qrDataUrl: '',
+    pairingCode: '',
+    qrMessage: '',
+    status: '',
+  };
+  const CRO_PREFIX = 'CRO-';
+
+  const onlyDigits = (value) => String(value || '').replace(/\D/g, '');
+  const formatCroValue = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return CRO_PREFIX;
+    if (raw.toUpperCase().startsWith(CRO_PREFIX)) return `${CRO_PREFIX}${raw.slice(CRO_PREFIX.length)}`;
+    return `${CRO_PREFIX}${raw}`;
+  };
+  const cleanCroValue = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw || raw.toUpperCase() === CRO_PREFIX) return '';
+    return formatCroValue(raw);
+  };
+
+  const setFieldError = (input, message) => {
+    if (!input || !input.parentElement) return;
+    const field = input.parentElement;
+    field.classList.toggle('error', !!message);
+    let errorEl = field.querySelector('.error-text');
+    if (message) {
+      if (!errorEl) {
+        errorEl = document.createElement('span');
+        errorEl.className = 'error-text';
+        field.appendChild(errorEl);
+      }
+      errorEl.textContent = message;
+    } else if (errorEl) {
+      errorEl.remove();
+    }
+  };
+
+  const clearFieldErrors = () => {
+    Object.values(fields).forEach((input) => setFieldError(input, ''));
+  };
+
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
+  const isValidCpf = (value) => {
+    const cpf = onlyDigits(value);
+    if (cpf.length !== 11) return false;
+    if (/^(\d)\1+$/.test(cpf)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i += 1) sum += Number(cpf[i]) * (10 - i);
+    let check = (sum * 10) % 11;
+    if (check === 10) check = 0;
+    if (check !== Number(cpf[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i += 1) sum += Number(cpf[i]) * (11 - i);
+    check = (sum * 10) % 11;
+    if (check === 10) check = 0;
+    return check === Number(cpf[10]);
+  };
+
+  const isValidCnpj = (value) => {
+    const cnpj = onlyDigits(value);
+    if (cnpj.length !== 14) return false;
+    if (/^(\d)\1+$/.test(cnpj)) return false;
+    const calc = (base) => {
+      const weights = base.length === 12
+        ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+        : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+      const sum = base.split('').reduce((acc, num, idx) => acc + Number(num) * weights[idx], 0);
+      const mod = sum % 11;
+      return mod < 2 ? 0 : 11 - mod;
+    };
+    const base = cnpj.slice(0, 12);
+    const dig1 = calc(base);
+    const dig2 = calc(base + dig1);
+    return cnpj === base + String(dig1) + String(dig2);
+  };
+
+  const formatCpfCnpj = (value) => {
+    const digits = onlyDigits(value);
+    if (digits.length <= 11) {
+      return digits
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
+    }
+    return digits
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4')
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d{1,2})$/, '$1.$2.$3/$4-$5');
+  };
+
+  const formatPhone = (value) => {
+    const digits = onlyDigits(value).slice(0, 11);
+    if (digits.length <= 10) {
+      return digits
+        .replace(/^(\d{2})(\d)/, '($1) $2')
+        .replace(/^(\d{2})\s(\d{4})(\d)/, '($1) $2-$3');
+    }
+    return digits
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/^(\d{2})\s(\d{5})(\d)/, '($1) $2-$3');
+  };
+
+  const formatCep = (value) => {
+    const digits = onlyDigits(value).slice(0, 8);
+    return digits.replace(/^(\d{5})(\d)/, '$1-$2');
+  };
+
+  const setStatus = (text, muted = true) => {
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.style.color = muted ? '#64748b' : '#16a34a';
+  };
+
+  const clearWhatsAppPoll = () => {
+    if (whatsAppPollTimer) {
+      window.clearTimeout(whatsAppPollTimer);
+      whatsAppPollTimer = null;
+    }
+  };
+
+  const scheduleWhatsAppPoll = (status) => {
+    clearWhatsAppPoll();
+    const normalized = String(status || '').trim().toUpperCase();
+    if (!clinicApi.refreshWhatsAppConnection) return;
+    if (normalized === 'CONNECTED' || normalized === 'ERROR' || normalized === 'NOT_CONFIGURED') return;
+    whatsAppPollTimer = window.setTimeout(() => {
+      void loadWhatsAppConnection(true);
+      void loadWhatsAppEngineHealth(true);
+      void loadWhatsAppDiagnostics();
+    }, 5000);
+  };
+
+  const formatDateTime = (value, fallback) => {
+    if (!value) return fallback;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(date);
+  };
+
+  const formatWhatsAppStatus = (status) => {
+    const normalized = String(status || '').trim().toUpperCase();
+    switch (normalized) {
+      case 'CONNECTED':
+        return 'Conectado';
+      case 'CONNECTING':
+        return 'Conectando';
+      case 'DISCONNECTED':
+        return 'Desconectado';
+      case 'ERROR':
+        return 'Com erro';
+      case 'QR_REQUIRED':
+        return 'QR necessario';
+      case 'SESSION_INVALID':
+        return 'Sessao invalida';
+      case 'CREATED':
+        return 'Pronto para conectar';
+      case 'NOT_CONFIGURED':
+        return 'Nao configurado';
+      default:
+        return normalized || 'Indisponivel';
+    }
+  };
+
+  const badgeClassForStatus = (status) => {
+    const normalized = String(status || '').trim().toUpperCase();
+    switch (normalized) {
+      case 'CONNECTED':
+        return 'status-connected';
+      case 'CONNECTING':
+        return 'status-connecting';
+      case 'DISCONNECTED':
+        return 'status-disconnected';
+      case 'QR_REQUIRED':
+      case 'SESSION_INVALID':
+      case 'ERROR':
+        return 'status-error';
+      case 'CREATED':
+      case 'NOT_CONFIGURED':
+      default:
+        return 'status-created';
+    }
+  };
+
+  const setWhatsAppFeedback = (text, tone = 'muted') => {
+    if (!whatsAppConnection.feedback) return;
+    whatsAppConnection.feedback.textContent = text;
+    whatsAppConnection.feedback.dataset.tone = tone;
+  };
+
+  const renderWhatsAppDiagnostics = (items = []) => {
+    if (!whatsAppConnection.diagnostics) return;
+    if (!Array.isArray(items) || !items.length) {
+      whatsAppConnection.diagnostics.innerHTML = '<div class="whatsapp-diagnostics-empty">Sem diagnostico recente desta clinica.</div>';
+      return;
+    }
+
+    const relevant = items
+      .filter((item) => String(item?.channel || '').trim().toLowerCase() === 'whatsapp')
+      .slice(0, 6);
+
+    if (!relevant.length) {
+      whatsAppConnection.diagnostics.innerHTML = '<div class="whatsapp-diagnostics-empty">Sem diagnostico recente desta clinica.</div>';
+      return;
+    }
+
+    whatsAppConnection.diagnostics.innerHTML = relevant.map((item) => {
+      const tone = ['success', 'warning', 'error'].includes(String(item?.status || '').trim().toLowerCase())
+        ? String(item.status).trim().toLowerCase()
+        : 'muted';
+      const type = String(item?.type || '').trim();
+      const title = type === 'engine_health'
+        ? 'Saude do motor NG'
+        : type === 'pending_queue'
+          ? 'Acao pendente'
+          : 'Evento de envio';
+      const summary = item?.message || item?.error || 'Sem resumo disponivel.';
+      const meta = [];
+      if (item?.instanceId) meta.push(`Instancia ${item.instanceId}`);
+      if (item?.meta?.operationalStatus) meta.push(`Status ${item.meta.operationalStatus}`);
+      if (item?.meta?.runtimeSocketState) meta.push(`Runtime ${item.meta.runtimeSocketState}`);
+      return `
+        <article class="whatsapp-diagnostic-item" data-tone="${tone}">
+          <div class="whatsapp-diagnostic-head">
+            <strong>${title}</strong>
+            <span>${formatDateTime(item?.createdAt, 'agora')}</span>
+          </div>
+          <p>${summary}</p>
+          ${meta.length ? `<div class="whatsapp-diagnostic-meta">${meta.join(' · ')}</div>` : ''}
+        </article>
+      `;
+    }).join('');
+  };
+
+  const loadWhatsAppDiagnostics = async () => {
+    if (!clinicApi.listMessagingLogs) return;
+    try {
+      const [logData, pendingData] = await Promise.all([
+        clinicApi.listMessagingLogs({ limit: 8 }),
+        clinicApi.listWhatsAppPending
+          ? clinicApi.listWhatsAppPending({ limit: 6 }).catch(() => ({ items: [] }))
+          : Promise.resolve({ items: [] }),
+      ]);
+      const logs = Array.isArray(logData?.items) ? logData.items : [];
+      const summary = pendingData?.summary || {};
+      const pending = (Array.isArray(pendingData?.items) ? pendingData.items : []).map((item) => ({
+        channel: 'whatsapp',
+        type: 'pending_queue',
+        status: 'warning',
+        createdAt: item?.createdAt || item?.updatedAt || '',
+        instanceId: item?.instanceId || '',
+        message: `Envio ${String(item?.type || 'MANUAL').trim()} pendente para ${item?.phone || 'destino desconhecido'}.`,
+        meta: {
+          operationalStatus: `tentativa ${Number(item?.retryCount || 0) + 1}`,
+          runtimeSocketState: item?.nextRetryAt ? `proxima tentativa ${formatDateTime(item.nextRetryAt, '-')}` : '',
+        },
+      }));
+      const queueSummary = summary?.pendingTotal > 0 ? [{
+        channel: 'whatsapp',
+        type: 'pending_queue',
+        status: summary?.queuePressure || summary?.campaignPressure ? 'warning' : 'success',
+        createdAt: new Date().toISOString(),
+        message: `Fila local com ${summary.pendingTotal} pendencia(s): ${summary.pendingConfirmations || 0} confirmacao(oes), ${summary.pendingReminders || 0} lembrete(s), ${summary.pendingManual || 0} manual(is), ${summary.pendingCampaigns || 0} campanha(s).`,
+        meta: {
+          operationalStatus: summary?.queuePressure ? 'pressao operacional' : 'estavel',
+          runtimeSocketState: summary?.campaignPressure ? 'campanhas limitadas para proteger a clinica' : '',
+        },
+      }] : [];
+      renderWhatsAppDiagnostics([...queueSummary, ...pending, ...logs]);
+    } catch (_error) {
+      renderWhatsAppDiagnostics([]);
+    }
+  };
+
+  const renderWhatsAppEngineHealth = (health = {}, silent = false) => {
+    if (!whatsAppConnection.engineHealth) return;
+    const ready = health?.ready === true;
+    const status = String(health?.status || '').trim().toLowerCase();
+    let text = 'Motor NG aguardando verificacao.';
+    let tone = 'muted';
+
+    if (ready) {
+      text = 'Motor NG online e pronto para atender a clinica.';
+      tone = 'success';
+    } else if (status === 'starting') {
+      text = 'Motor NG iniciando e recuperando sessoes. Aguarde alguns segundos.';
+      tone = 'warning';
+    } else if (status === 'warning') {
+      text = health?.message || 'Motor NG em modo degradado. O sistema seguira usando o status da conexao da clinica.';
+      tone = 'warning';
+    } else if (status === 'timeout') {
+      text = 'Motor NG respondeu com lentidao. O sistema vai tentar novamente automaticamente.';
+      tone = 'warning';
+    } else if (health?.message) {
+      text = health.message;
+      tone = 'error';
+    }
+
+    whatsAppConnection.engineHealth.textContent = text;
+    whatsAppConnection.engineHealth.dataset.tone = tone;
+    if (!silent && !ready && tone === 'error') {
+      setWhatsAppFeedback('O motor NG esta indisponivel. Assim que voltar, a clinica podera retomar o WhatsApp sem reconfigurar tudo.', 'error');
+    }
+  };
+
+  const loadWhatsAppEngineHealth = async (silent = false) => {
+    if (!clinicApi.getWhatsAppEngineHealth) {
+      try {
+        if (clinicApi.getWhatsAppConnection) {
+          const connection = await clinicApi.getWhatsAppConnection();
+          renderWhatsAppEngineHealth({
+            status: connection?.exists ? 'warning' : 'offline',
+            message: connection?.exists
+              ? 'Health dedicado do motor NG indisponivel nesta versao do app. Usando o status da conexao da clinica.'
+              : 'Integracao de health do motor NG indisponivel nesta versao do app.',
+          }, true);
+          return;
+        }
+      } catch (_fallbackError) {
+        // keep default message below when even the connection status cannot be read
+      }
+      renderWhatsAppEngineHealth({ message: 'Integracao de health do motor NG indisponivel.', status: 'offline' }, silent);
+      return;
+    }
+    try {
+      const health = await clinicApi.getWhatsAppEngineHealth();
+      renderWhatsAppEngineHealth(health, silent);
+    } catch (error) {
+      try {
+        if (clinicApi.getWhatsAppConnection) {
+          const connection = await clinicApi.getWhatsAppConnection();
+          if (connection?.exists) {
+            renderWhatsAppEngineHealth({
+              status: 'warning',
+              message: error?.message || 'Health do motor NG indisponivel no momento. Usando o status da conexao da clinica.',
+            }, true);
+            return;
+          }
+        }
+      } catch (_fallbackError) {
+        // ignore fallback failure and render the original health error
+      }
+      renderWhatsAppEngineHealth({
+        status: 'offline',
+        message: error?.message || 'Nao foi possivel verificar a saude do motor NG.',
+      }, silent);
+    }
+  };
+
+  const setWhatsAppLoading = (loading) => {
+    if (whatsAppConnection.connectButton) whatsAppConnection.connectButton.disabled = loading;
+    if (whatsAppConnection.refreshButton) whatsAppConnection.refreshButton.disabled = loading;
+    if (whatsAppConnection.disconnectButton) whatsAppConnection.disconnectButton.disabled = loading;
+    if (whatsAppConnection.deleteButton) whatsAppConnection.deleteButton.disabled = loading;
+  };
+
+  const mapWhatsAppError = (error) => {
+    const code = String(error?.code || '').trim().toUpperCase();
+    if (code === 'ENGINE_DATABASE_UNAVAILABLE') {
+      return {
+        feedback: 'O WhatsApp Engine esta sem acesso ao banco de dados. Inicie o ambiente completo do engine e tente novamente.',
+        qrMessage: 'O QR Code ficara disponivel assim que o banco de dados do WhatsApp Engine estiver ativo.',
+      };
+    }
+    if (code === 'ENGINE_INVALID_TOKEN') {
+      return {
+        feedback: 'A integracao interna com o WhatsApp Engine esta com token invalido. Ajuste a configuracao do ambiente.',
+        qrMessage: 'A conexao da clinica depende da autenticacao interna do WhatsApp Engine.',
+      };
+    }
+    if (code === 'ENGINE_UNAVAILABLE') {
+      return {
+        feedback: 'O WhatsApp Engine nao esta online neste momento. Inicie o engine e tente novamente.',
+        qrMessage: 'Quando o WhatsApp Engine estiver online, o QR Code podera ser gerado aqui.',
+      };
+    }
+    if (code === 'ENGINE_STARTING') {
+      return {
+        feedback: 'O WhatsApp Engine esta iniciando e recuperando as instancias. Aguarde alguns segundos.',
+        qrMessage: 'O QR Code sera liberado assim que o motor NG concluir a inicializacao.',
+      };
+    }
+    if (code === 'ENGINE_RECONNECTING') {
+      return {
+        feedback: 'O WhatsApp da clinica esta reconectando no engine. Aguarde alguns segundos para gerar um novo QR Code.',
+        qrMessage: 'A instancia esta reconectando. Assim que o runtime estabilizar, o QR Code ou codigo de pareamento sera exibido aqui.',
+      };
+    }
+    return {
+      feedback: error?.message || 'Nao foi possivel comunicar com o WhatsApp da clinica.',
+      qrMessage: 'Nao foi possivel preparar o QR Code neste momento.',
+    };
+  };
+
+  const renderWhatsAppConnection = (connection = {}) => {
+    const persistedStatus = String(connection?.persistedStatus || '').trim().toUpperCase();
+    const runtimeSocketState = String(connection?.runtimeSocketState || '').trim().toUpperCase();
+    const runtimeReady = connection?.connectedInRuntime === true;
+    let status = String(connection?.operationalStatus || connection?.status || 'NOT_CONFIGURED').trim().toUpperCase();
+    if (!runtimeReady && status === 'CONNECTED') {
+      status = runtimeSocketState === 'CONNECTING' ? 'CONNECTING' : 'DISCONNECTED';
+    }
+    const statusLabel = formatWhatsAppStatus(status);
+    const hasDivergence = persistedStatus === 'CONNECTED' && !runtimeReady;
+
+    console.info('[CLINICA_UI] whatsapp_status_render', JSON.stringify({
+      clinicId: connection?.clinicId || '',
+      instanceId: connection?.instanceId || '',
+      displayedStatus: status,
+      operationalStatus: String(connection?.operationalStatus || connection?.status || '').trim().toUpperCase(),
+      persistedStatus,
+      connectedInRuntime: runtimeReady,
+      runtimeSocketState,
+      divergence: hasDivergence,
+      syncedAt: new Date().toISOString(),
+    }));
+
+    if (whatsAppConnection.badge) {
+      whatsAppConnection.badge.textContent = statusLabel;
+      whatsAppConnection.badge.className = `whatsapp-badge ${badgeClassForStatus(status)}`;
+    }
+    if (whatsAppConnection.statusText) {
+      const runtimeText = runtimeReady ? ' ativo no sistema' : runtimeSocketState ? ` runtime ${runtimeSocketState}` : '';
+      whatsAppConnection.statusText.textContent = `${statusLabel}${runtimeText}`;
+    }
+    if (whatsAppConnection.phone) {
+      whatsAppConnection.phone.textContent = connection?.phoneNumber || 'Ainda nao conectado';
+    }
+    if (whatsAppConnection.lastSeen) {
+      whatsAppConnection.lastSeen.textContent = formatDateTime(connection?.lastSeenAt, 'Sem atividade recente');
+    }
+    if (whatsAppConnection.instance) {
+      whatsAppConnection.instance.textContent = connection?.instanceId || 'Sera criada ao conectar';
+    }
+    if (whatsAppConnection.connectButton) {
+      whatsAppConnection.connectButton.textContent = status === 'CONNECTED' ? 'Conectado' : 'Conectar WhatsApp';
+      whatsAppConnection.connectButton.disabled = status === 'CONNECTED';
+    }
+    if (whatsAppConnection.disconnectButton) {
+      const canDisconnect = Boolean(connection?.instanceId) && status !== 'NOT_CONFIGURED';
+      whatsAppConnection.disconnectButton.disabled = !canDisconnect;
+    }
+    if (whatsAppConnection.deleteButton) {
+      const canDelete = Boolean(connection?.instanceId);
+      whatsAppConnection.deleteButton.disabled = !canDelete;
+    }
+
+    const incomingQrDataUrl = String(connection?.qrDataUrl || '').trim();
+    const incomingPairingCode = String(connection?.pairingCode || '').trim();
+    const incomingQrMessage = String(connection?.qrMessage || '').trim();
+    const qrPending = connection?.qrPending === true;
+    if (incomingQrDataUrl) {
+      whatsAppQrState = {
+        qrDataUrl: incomingQrDataUrl,
+        pairingCode: incomingPairingCode,
+        qrMessage: incomingQrMessage,
+        status,
+      };
+    } else if (status === 'CONNECTED' || status === 'ERROR' || status === 'NOT_CONFIGURED') {
+      whatsAppQrState = {
+        qrDataUrl: '',
+        pairingCode: '',
+        qrMessage: '',
+        status,
+      };
+    }
+
+    const qrDataUrl = incomingQrDataUrl || whatsAppQrState.qrDataUrl;
+    const pairingCode = incomingPairingCode || whatsAppQrState.pairingCode;
+    if (whatsAppConnection.qrImage) {
+      whatsAppConnection.qrImage.src = qrDataUrl;
+      whatsAppConnection.qrImage.style.display = qrDataUrl ? 'block' : 'none';
+    }
+    if (whatsAppConnection.qrPlaceholder) {
+      const defaultText = status === 'CONNECTED'
+        ? 'WhatsApp conectado com sucesso. Nao e necessario gerar um novo QR Code.'
+        : status === 'CONNECTING'
+          ? 'A instancia esta sendo preparada. Aguarde alguns segundos ou atualize o status para carregar o QR Code.'
+          : 'Clique em "Conectar WhatsApp" para gerar o QR Code da sua clinica.';
+      const pendingText = qrPending
+        ? 'A instancia esta reconectando e preparando novo QR Code. Aguarde alguns segundos e atualize o status.'
+        : '';
+      const divergenceText = hasDivergence
+        ? 'A ultima sessao salva parecia conectada, mas o runtime real do WhatsApp esta indisponivel. Gere um novo QR Code ou reconecte a instancia.'
+        : '';
+      whatsAppConnection.qrPlaceholder.textContent = incomingQrMessage || whatsAppQrState.qrMessage || pendingText || divergenceText || defaultText;
+      whatsAppConnection.qrPlaceholder.style.display = qrDataUrl ? 'none' : 'grid';
+    }
+    if (whatsAppConnection.qrPairingCode) {
+      whatsAppConnection.qrPairingCode.textContent = pairingCode ? `Codigo de pareamento: ${pairingCode}` : '';
+      whatsAppConnection.qrPairingCode.style.display = pairingCode ? 'block' : 'none';
+    }
+
+    scheduleWhatsAppPoll(status);
+  };
+
+  const loadWhatsAppConnection = async (silent = false) => {
+    if (!clinicApi.getWhatsAppConnection) {
+      setWhatsAppFeedback('Integracao do WhatsApp Engine indisponivel neste ambiente.', 'error');
+      return;
+    }
+
+    if (!silent) setWhatsAppLoading(true);
+    try {
+      const data = await clinicApi.getWhatsAppConnection();
+      renderWhatsAppEngineHealth(data?.engineHealth || {}, true);
+      renderWhatsAppConnection(data);
+      await loadWhatsAppDiagnostics();
+      if (!silent) {
+        const status = String(data?.operationalStatus || data?.status || '').trim().toUpperCase();
+        if (status === 'CONNECTED') {
+          setWhatsAppFeedback('WhatsApp da clinica conectado e pronto para uso.', 'success');
+        } else if (String(data?.persistedStatus || '').trim().toUpperCase() === 'CONNECTED' && data?.connectedInRuntime !== true) {
+          setWhatsAppFeedback('O WhatsApp salvo anteriormente nao esta operacional agora. Reconecte a instancia para voltar a enviar mensagens.', 'error');
+        } else if (status === 'NOT_CONFIGURED') {
+          setWhatsAppFeedback('Clique em "Conectar WhatsApp" para criar a instancia e gerar o QR Code.', 'muted');
+        } else {
+          setWhatsAppFeedback('Acompanhe o status abaixo. Se necessario, gere um novo QR Code.', 'muted');
+        }
+      }
+    } catch (err) {
+      const mapped = mapWhatsAppError(err);
+      renderWhatsAppConnection({ status: 'ERROR', qrMessage: mapped.qrMessage });
+      await loadWhatsAppEngineHealth(true);
+      await loadWhatsAppDiagnostics();
+      setWhatsAppFeedback(mapped.feedback, 'error');
+    } finally {
+      if (!silent) setWhatsAppLoading(false);
+    }
+  };
+
+  const connectWhatsApp = async () => {
+    if (!clinicApi.connectWhatsApp) {
+      setWhatsAppFeedback('Integracao do WhatsApp Engine indisponivel neste ambiente.', 'error');
+      return;
+    }
+
+    setWhatsAppLoading(true);
+    setWhatsAppFeedback('Gerando QR Code da clinica...', 'muted');
+    try {
+      const data = await clinicApi.connectWhatsApp();
+      renderWhatsAppEngineHealth(data?.engineHealth || {}, true);
+      renderWhatsAppConnection({
+        ...data,
+        qrMessage: data?.qrDataUrl
+          ? 'Escaneie o QR Code no WhatsApp da clinica para concluir a conexao.'
+          : 'A instancia foi preparada. Atualize o status se o QR ainda nao apareceu.',
+      });
+      if (String(data?.status || '').trim().toUpperCase() === 'CONNECTED') {
+        setWhatsAppFeedback('WhatsApp da clinica ja estava conectado.', 'success');
+      } else if (data?.qrDataUrl) {
+        setWhatsAppFeedback('QR Code atualizado. Escaneie no celular da clinica.', 'success');
+      } else {
+        setWhatsAppFeedback('Instancia preparada. O sistema vai continuar buscando o QR automaticamente por alguns segundos.', 'muted');
+      }
+      await loadWhatsAppDiagnostics();
+    } catch (err) {
+      const mapped = mapWhatsAppError(err);
+      renderWhatsAppConnection({ status: 'ERROR', qrMessage: mapped.qrMessage });
+      await loadWhatsAppEngineHealth(true);
+      await loadWhatsAppDiagnostics();
+      setWhatsAppFeedback(mapped.feedback, 'error');
+    } finally {
+      setWhatsAppLoading(false);
+    }
+  };
+
+  const disconnectWhatsApp = async () => {
+    if (!clinicApi.disconnectWhatsApp) {
+      setWhatsAppFeedback('A rotina de desconectar o WhatsApp ainda nao esta disponivel neste ambiente.', 'error');
+      return;
+    }
+    if (!window.confirm('Deseja desconectar o WhatsApp da clinica e limpar a sessao atual?')) return;
+
+    setWhatsAppLoading(true);
+    try {
+      await clinicApi.disconnectWhatsApp();
+      await loadWhatsAppEngineHealth(true);
+      whatsAppQrState = {
+        qrDataUrl: '',
+        pairingCode: '',
+        qrMessage: '',
+        status: 'CREATED',
+      };
+      renderWhatsAppConnection({
+        status: 'CREATED',
+        connectedInRuntime: false,
+        phoneNumber: '',
+        instanceId: '',
+      });
+      setWhatsAppFeedback('WhatsApp desconectado. Gere um novo QR Code para parear novamente.', 'success');
+      await loadWhatsAppDiagnostics();
+      await loadWhatsAppConnection(true);
+    } catch (error) {
+      const mapped = mapWhatsAppError(error);
+      await loadWhatsAppEngineHealth(true);
+      await loadWhatsAppDiagnostics();
+      setWhatsAppFeedback(mapped.feedback, 'error');
+    } finally {
+      setWhatsAppLoading(false);
+    }
+  };
+
+  const deleteWhatsAppInstance = async () => {
+    if (!clinicApi.deleteWhatsAppInstance) {
+      setWhatsAppFeedback('A rotina de exclusao da instancia ainda nao esta disponivel neste ambiente.', 'error');
+      return;
+    }
+    if (!window.confirm('Deseja excluir a instancia WhatsApp desta clinica? Uma nova instancia sera criada no proximo pareamento.')) return;
+
+    setWhatsAppLoading(true);
+    try {
+      await clinicApi.deleteWhatsAppInstance();
+      await loadWhatsAppEngineHealth(true);
+      whatsAppQrState = {
+        qrDataUrl: '',
+        pairingCode: '',
+        qrMessage: '',
+        status: 'NOT_CONFIGURED',
+      };
+      renderWhatsAppConnection({
+        status: 'NOT_CONFIGURED',
+        connectedInRuntime: false,
+        phoneNumber: '',
+        instanceId: '',
+      });
+      setWhatsAppFeedback('Instancia excluida com sucesso. Clique em "Conectar WhatsApp" para criar uma nova.', 'success');
+      await loadWhatsAppDiagnostics();
+    } catch (error) {
+      const mapped = mapWhatsAppError(error);
+      await loadWhatsAppEngineHealth(true);
+      await loadWhatsAppDiagnostics();
+      setWhatsAppFeedback(mapped.feedback, 'error');
+    } finally {
+      setWhatsAppLoading(false);
+    }
+  };
+
+  const showLogo = (src) => {
+    if (!logoImage) return;
+    logoImage.src = src;
+    logoImage.style.display = src ? 'block' : 'none';
+    if (logoPreview) logoPreview.classList.toggle('is-empty', !src);
+  };
+
+  const readLogoFile = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      logoData = String(reader.result || '');
+      logoRemoved = false;
+      showLogo(logoData);
+      setStatus('Logo carregado, lembre-se de salvar.', true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const loadClinic = async () => {
+    if (!clinicApi.get) return;
+    try {
+      const data = await clinicApi.get();
+      logoFile = data.logoFile || '';
+      Object.keys(fields).forEach((key) => {
+        if (fields[key]) fields[key].value = data[key] || '';
+      });
+      if (fields.cro) fields.cro.value = formatCroValue(data?.cro || '');
+      if (birthdayFields.enabled) birthdayFields.enabled.checked = data?.messaging?.birthday?.enabled === true;
+      if (birthdayFields.draftMode) birthdayFields.draftMode.checked = data?.messaging?.birthday?.draftMode !== false;
+      if (birthdayFields.sendTime) birthdayFields.sendTime.value = data?.messaging?.birthday?.sendTime || '09:00';
+      if (birthdayFields.dailyLimit) birthdayFields.dailyLimit.value = data?.messaging?.birthday?.dailyLimit || 200;
+      if (birthdayFields.throttleMs) birthdayFields.throttleMs.value = data?.messaging?.birthday?.throttleMs || 1000;
+      if (birthdayFields.template) birthdayFields.template.value = data?.messaging?.birthday?.template || '';
+
+      if (whatsAppFields.countryCode) whatsAppFields.countryCode.value = data?.messaging?.whatsapp?.countryCode || '55';
+      if (whatsAppFields.phoneNumber) {
+        whatsAppFields.phoneNumber.value = data?.messaging?.whatsapp?.phoneNumber || data?.telefone || '';
+      }
+      showLogo(data.logoData || '');
+      setStatus('Dados carregados.', true);
+    } catch (err) {
+      console.warn('[CLINICA] Falha ao carregar dados', err);
+      setStatus('Nao foi possivel carregar os dados.', true);
+    }
+
+    void loadWhatsAppEngineHealth(true);
+    void loadWhatsAppDiagnostics();
+    void loadWhatsAppConnection();
+  };
+
+  if (logoInput) {
+    logoInput.addEventListener('change', (event) => {
+      const file = event.target.files && event.target.files[0];
+      readLogoFile(file);
+    });
+  }
+
+  if (logoRemove) {
+    logoRemove.addEventListener('click', () => {
+      logoData = '';
+      logoRemoved = true;
+      logoFile = '';
+      showLogo('');
+      setStatus('Logo removido. Salve para confirmar.', true);
+    });
+  }
+
+  Object.values(fields).forEach((input) => {
+    input?.addEventListener('input', () => {
+      setStatus('Alteracoes pendentes.', true);
+      setFieldError(input, '');
+    });
+  });
+
+  Object.values(birthdayFields).forEach((input) => {
+    if (!input) return;
+    const evt = input.type === 'checkbox' ? 'change' : 'input';
+    input.addEventListener(evt, () => setStatus('Alteracoes pendentes.', true));
+  });
+
+  Object.values(whatsAppFields).forEach((input) => {
+    if (!input) return;
+    const evt = input.type === 'checkbox' ? 'change' : 'input';
+    input.addEventListener(evt, () => setStatus('Alteracoes pendentes.', true));
+  });
+
+  if (fields.cnpjCpf) {
+    fields.cnpjCpf.addEventListener('input', () => {
+      fields.cnpjCpf.value = formatCpfCnpj(fields.cnpjCpf.value);
+    });
+  }
+
+  if (fields.telefone) {
+    fields.telefone.addEventListener('input', () => {
+      fields.telefone.value = formatPhone(fields.telefone.value);
+    });
+  }
+
+  if (fields.cro) {
+    fields.cro.value = formatCroValue(fields.cro.value);
+    fields.cro.addEventListener('focus', () => {
+      fields.cro.value = formatCroValue(fields.cro.value);
+    });
+    fields.cro.addEventListener('blur', () => {
+      fields.cro.value = formatCroValue(fields.cro.value);
+    });
+  }
+
+  if (whatsAppFields.phoneNumber) {
+    whatsAppFields.phoneNumber.addEventListener('input', () => {
+      whatsAppFields.phoneNumber.value = formatPhone(whatsAppFields.phoneNumber.value);
+    });
+  }
+
+  if (fields.cep) {
+    fields.cep.addEventListener('input', () => {
+      fields.cep.value = formatCep(fields.cep.value);
+    });
+
+    fields.cep.addEventListener('blur', async () => {
+      const cepDigits = onlyDigits(fields.cep.value);
+      if (cepDigits.length !== 8) return;
+      try {
+        setStatus('Buscando CEP...', true);
+        const resp = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('CEP nao encontrado.');
+        const data = await resp.json();
+        if (data.erro) throw new Error('CEP nao encontrado.');
+        if (fields.rua && !fields.rua.value) fields.rua.value = data.logradouro || '';
+        if (fields.bairro && !fields.bairro.value) fields.bairro.value = data.bairro || '';
+        if (fields.cidade && !fields.cidade.value) fields.cidade.value = data.localidade || '';
+        if (fields.estado && !fields.estado.value) fields.estado.value = data.uf || '';
+        setStatus('Endereco preenchido pelo CEP.', true);
+      } catch (err) {
+        console.warn('[CLINICA] CEP invalido', err);
+        setFieldError(fields.cep, 'CEP nao encontrado.');
+        setStatus('Nao foi possivel localizar o CEP.', true);
+      }
+    });
+  }
+
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!clinicApi.save) return;
+
+    clearFieldErrors();
+    let hasError = false;
+    const cpfCnpjDigits = onlyDigits(fields.cnpjCpf?.value);
+    if (cpfCnpjDigits.length > 0) {
+      const valid = cpfCnpjDigits.length <= 11
+        ? isValidCpf(cpfCnpjDigits)
+        : isValidCnpj(cpfCnpjDigits);
+      if (!valid) {
+        setFieldError(fields.cnpjCpf, 'CPF/CNPJ invalido.');
+        hasError = true;
+      }
+    }
+
+    if (fields.email?.value && !isValidEmail(fields.email.value)) {
+      setFieldError(fields.email, 'E-mail invalido.');
+      hasError = true;
+    }
+
+    if (fields.telefone?.value) {
+      const telDigits = onlyDigits(fields.telefone.value);
+      if (telDigits.length < 10) {
+        setFieldError(fields.telefone, 'Telefone incompleto.');
+        hasError = true;
+      }
+    }
+
+    if (fields.cep?.value) {
+      const cepDigits = onlyDigits(fields.cep.value);
+      if (cepDigits.length > 0 && cepDigits.length !== 8) {
+        setFieldError(fields.cep, 'CEP incompleto.');
+        hasError = true;
+      }
+    }
+
+    if (hasError) {
+      setStatus('Corrija os campos destacados.', true);
+      return;
+    }
+
+    const payload = {
+      cnpjCpf: fields.cnpjCpf?.value || '',
+      razaoSocial: fields.razaoSocial?.value || '',
+      nomeClinica: fields.nomeClinica?.value || '',
+      telefone: fields.telefone?.value || '',
+      email: fields.email?.value || '',
+      cro: cleanCroValue(fields.cro?.value || ''),
+      responsavelTecnico: fields.responsavelTecnico?.value || '',
+      cep: fields.cep?.value || '',
+      rua: fields.rua?.value || '',
+      numero: fields.numero?.value || '',
+      complemento: fields.complemento?.value || '',
+      bairro: fields.bairro?.value || '',
+      cidade: fields.cidade?.value || '',
+      estado: fields.estado?.value || '',
+      logoData,
+      logoFile,
+      logoRemove: logoRemoved,
+      messaging: {
+        birthday: {
+          enabled: !!birthdayFields.enabled?.checked,
+          draftMode: !!birthdayFields.draftMode?.checked,
+          sendTime: birthdayFields.sendTime?.value || '09:00',
+          dailyLimit: Number(birthdayFields.dailyLimit?.value || 200),
+          throttleMs: Number(birthdayFields.throttleMs?.value || 1000),
+          template: birthdayFields.template?.value || '',
+        },
+        whatsapp: {
+          countryCode: whatsAppFields.countryCode?.value || '55',
+          phoneNumber: whatsAppFields.phoneNumber?.value || '',
+        },
+      },
+    };
+
+    try {
+      await clinicApi.save(payload);
+      logoData = '';
+      logoRemoved = false;
+      setStatus('Alteracoes salvas com sucesso.', false);
+    } catch (err) {
+      console.error('[CLINICA] Erro ao salvar', err);
+      setStatus(err?.message || 'Erro ao salvar dados da clinica.', true);
+    }
+  });
+
+  whatsAppConnection.connectButton?.addEventListener('click', () => {
+    void connectWhatsApp();
+  });
+
+  whatsAppConnection.refreshButton?.addEventListener('click', () => {
+    void loadWhatsAppConnection();
+  });
+
+  whatsAppConnection.disconnectButton?.addEventListener('click', () => {
+    void disconnectWhatsApp();
+  });
+
+  whatsAppConnection.deleteButton?.addEventListener('click', () => {
+    void deleteWhatsAppInstance();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearWhatsAppPoll();
+      return;
+    }
+    void loadWhatsAppConnection(true);
+  });
+
+  loadClinic();
+});
+

@@ -1,0 +1,85 @@
+services:
+  - type: web
+    name: voithos-backend
+    runtime: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm ci && npx prisma generate
+    startCommand: npm run backend:start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: WHATSAPP_NG_BASE_URL
+        sync: false
+      - key: WHATSAPP_NG_SERVICE_TOKEN
+        sync: false
+      - key: BACKEND_INTERNAL_API_TOKEN
+        sync: false
+      - key: PUBLIC_APP_BASE_URL
+        sync: false
+      - key: APPOINTMENT_ACTION_BASE_URL
+        sync: false
+      - key: VOITHOS_SUPERADMIN_EMAIL
+        sync: false
+      - key: VOITHOS_SUPERADMIN_PASSWORD
+        sync: false
+      - key: VOITHOS_SUPERADMIN_CLINIC_EMAIL
+        sync: false
+      - key: VOITHOS_SUPERADMIN_CLINIC_NAME
+        sync: false
+      - key: CLINICAL_DOCUMENTS_STORAGE_ROOT
+        value: /var/data/patient-documents
+      - key: PLAN_MESSAGE_SCHEDULER_ENABLED
+        value: "true"
+      - key: APPOINTMENT_REMINDER_SCHEDULER_ENABLED
+        value: "true"
+
+  - type: web
+    name: voithos-whatsapp-ng
+    runtime: node
+    plan: starter
+    rootDir: whatsapp-engine
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:all:headless
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_HOST
+        sync: false
+      - key: REDIS_PORT
+        sync: false
+      - key: REDIS_PASSWORD
+        sync: false
+      - key: INTERNAL_API_TOKEN
+        sync: false
+      - key: SERVICE_INTERNAL_API_TOKEN
+        sync: false
+      - key: CENTRAL_BACKEND_BASE_URL
+        sync: false
+      - key: ADMIN_PANEL_TOKEN
+        sync: false
+      - key: ADMIN_PANEL_READONLY_TOKEN
+        sync: false
+      - key: AUTH_ENCRYPTION_KEY_HEX
+        sync: false
+      - key: SESSIONS_DIR
+        value: .sessions
+
+  - type: static
+    name: voithos-web
+    rootDir: .
+    buildCommand: node scripts/build-render-web.mjs
+    staticPublishPath: ./render-static
+    envVars:
+      - key: WEB_CENTRAL_BACKEND_BASE_URL
+        sync: false

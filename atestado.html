@@ -1,0 +1,183 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Novo atestado - Voithos</title>
+    <link rel="stylesheet" href="header.css">
+    <link rel="stylesheet" href="timepicker.css">
+    <link rel="stylesheet" href="atestado.css">
+</head>
+<body>
+    <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+            <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                </div>
+            </div>
+            <div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="atest-main">
+        <section class="atest-card">
+            <div class="atest-header">
+                <h1>Novo atestado</h1>
+                <p>Preencha os dados para emitir o atestado.</p>
+            </div>
+
+            <form id="atest-form" class="atest-form">
+                <div class="field-block">
+                    <label for="atest-paciente">Selecione o paciente</label>
+                    <div class="patient-dropdown">
+                        <button type="button" class="patient-toggle" id="patient-toggle">
+                            Selecione ou crie um(a) novo(a) paciente
+                        </button>
+                        <div class="patient-menu hidden" id="patient-menu">
+                            <input type="text" id="atest-paciente-busca" class="patient-search" placeholder="Buscar por nome ou prontuario">
+                            <div class="patient-list" id="patient-list"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="atest-paciente" value="">
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-block">
+                        <label for="atest-profissional">Selecione um profissional</label>
+                        <select id="atest-profissional">
+                            <option value="">Selecione</option>
+                        </select>
+                    </div>
+                    <div class="field-block">
+                        <label for="atest-data">Data de emissao</label>
+                        <input type="date" id="atest-data" required>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="toggle-group" role="tablist">
+                        <button type="button" class="toggle-btn active" data-type="dias">Atestado de dias</button>
+                        <button type="button" class="toggle-btn" data-type="horas">Atestado de horas</button>
+                    </div>
+                </div>
+
+                <div class="field-grid" id="atest-dias">
+                    <div class="field-block field-narrow">
+                        <label for="atest-quantidade">Quantidade de dias</label>
+                        <div class="stepper">
+                            <button type="button" class="stepper-btn" id="dias-minus">-</button>
+                            <input type="number" id="atest-quantidade" value="1" min="1">
+                            <button type="button" class="stepper-btn" id="dias-plus">+</button>
+                        </div>
+                    </div>
+                    <div class="field-block cid-block">
+                        <label for="atest-cid">CID - Classificacao Internacional de Doencas</label>
+                        <div class="cid-field">
+                            <input type="text" id="atest-cid" placeholder="Opcional" autocomplete="off">
+                            <div class="cid-suggest hidden" id="cid-suggest" role="listbox" aria-label="Sugestoes CID"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-grid hidden" id="atest-horas">
+                    <div class="field-block">
+                        <label for="atest-hora-inicio">Hora inicio</label>
+                        <input type="text" id="atest-hora-inicio" data-timepicker="true" placeholder="HH:MM" inputmode="numeric">
+                    </div>
+                    <div class="field-block">
+                        <label for="atest-hora-fim">Hora fim</label>
+                        <input type="text" id="atest-hora-fim" data-timepicker="true" placeholder="HH:MM" inputmode="numeric">
+                    </div>
+                </div>
+
+                <label class="checkbox-row">
+                    <input type="checkbox" id="atest-assinatura">
+                    <span>Local para assinatura fisica do profissional</span>
+                </label>
+
+                <div class="form-footer">
+                    <a class="btn-link" href="index.html">Voltar</a>
+                    <button type="submit" class="btn-primary" id="atest-submit" disabled>Emitir atestado</button>
+                </div>
+                <p class="form-hint" id="atest-hint">Preencha paciente, profissional e data.</p>
+            </form>
+        </section>
+    </main>
+
+    <script src="header.js"></script>
+    <script src="timepicker.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="atestado.js"></script>
+</body>
+</html>
+

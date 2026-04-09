@@ -1,0 +1,328 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha clinica - Voithos</title>
+    <link rel="stylesheet" href="clinica.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+    <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+            <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                </div>
+            </div>
+            <div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="clinic-main">
+        <aside class="clinic-sidebar">
+            <div class="sidebar-title">Configuracoes</div>
+            <nav class="sidebar-nav">
+                <div class="nav-group active">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">🏥</span>
+                        Minha clinica
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item active" href="#">Dados da clinica</a>
+                        <span class="nav-item disabled">Conexao do WhatsApp nesta pagina</span>
+                        <a class="nav-item" href="users.html">Gerenciar usuarios</a>
+                        <a class="nav-item" href="procedimentos.html">Lista de procedimentos</a>
+                        <a class="nav-item" href="migracao.html">Importacao de dados</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📅</span>
+                        Agenda
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="agenda-config.html">Fuso horario e marcadores</a>
+                        <a class="nav-item" href="disponibilidade.html">Configurar disponibilidade</a>
+                        <a class="nav-item" href="notificacoes.html">Central de notificacoes</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📄</span>
+                        Documentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="modelos-documentos.html">Modelos de documentos</a>
+                        <a class="nav-item" href="anamnese-modelos.html">Modelos de anamnese</a>
+                        <span class="nav-item disabled" aria-disabled="true">Receituarios</span>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">💳</span>
+                        Pagamentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="pagamentos.html">Pagamentos</a>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <section class="clinic-content">
+            <div class="clinic-header">
+                <h1>Dados da clinica</h1>
+                <p>Informacoes principais e identidade visual.</p>
+            </div>
+
+            <form class="clinic-card" id="clinic-form">
+                <div class="section-title">Informacoes de cadastro</div>
+                <div class="clinic-grid two">
+                    <label class="field">
+                        <span>CNPJ/CPF</span>
+                        <input type="text" id="clinic-cnpj" placeholder="00.000.000/0000-00">
+                    </label>
+                    <label class="field">
+                        <span>Razao social</span>
+                        <input type="text" id="clinic-razao" placeholder="Nome juridico da clinica">
+                    </label>
+                </div>
+
+                <div class="section-title">Identidade visual</div>
+                <div class="logo-row">
+                    <div class="logo-uploader">
+                        <input type="file" id="clinic-logo" accept="image/png,image/jpeg">
+                        <div class="logo-placeholder" id="logo-placeholder">
+                            <span>Adicionar logo</span>
+                        </div>
+                    </div>
+                    <div class="logo-preview" id="logo-preview">
+                        <img id="logo-image" alt="Logo da clinica">
+                    </div>
+                    <button type="button" class="btn-secondary" id="logo-remove">Remover logo</button>
+                </div>
+
+                <div class="section-title">Contato</div>
+                <div class="clinic-grid two">
+                    <label class="field">
+                        <span>Nome da clinica</span>
+                        <input type="text" id="clinic-nome" placeholder="Clinica Odontologica">
+                    </label>
+                    <label class="field">
+                        <span>Telefone</span>
+                        <input type="text" id="clinic-telefone" placeholder="(00) 00000-0000">
+                    </label>
+                    <label class="field">
+                        <span>E-mail</span>
+                        <input type="email" id="clinic-email" placeholder="contato@clinica.com">
+                    </label>
+                    <label class="field">
+                        <span>CRO</span>
+                        <input type="text" id="clinic-cro" placeholder="CRO-">
+                    </label>
+                    <label class="field">
+                        <span>Responsavel tecnico</span>
+                        <input type="text" id="clinic-responsavel" placeholder="Nome do responsavel tecnico">
+                    </label>
+                </div>
+
+                <div class="section-title">Mensagens de aniversario</div>
+                <div class="clinic-grid two">
+                    <label class="field">
+                        <span>Envio automatico habilitado</span>
+                        <input type="checkbox" id="birthday-enabled">
+                    </label>
+                    <label class="field">
+                        <span>Modo rascunho (confirmacao manual)</span>
+                        <input type="checkbox" id="birthday-draft-mode" checked>
+                    </label>
+                    <label class="field">
+                        <span>Horario de envio</span>
+                        <input type="time" id="birthday-send-time" value="09:00">
+                    </label>
+                    <label class="field">
+                        <span>Limite de envios por dia</span>
+                        <input type="number" id="birthday-daily-limit" min="1" max="1000" value="200">
+                    </label>
+                    <label class="field">
+                        <span>Intervalo entre envios (ms)</span>
+                        <input type="number" id="birthday-throttle-ms" min="0" max="60000" value="1000">
+                    </label>
+                </div>
+                <label class="field full-width">
+                    <span>Template da mensagem</span>
+                    <textarea id="birthday-template" rows="3" placeholder="Ola, {nome}! A equipe da {clinicaNome} deseja um feliz aniversario!"></textarea>
+                </label>
+                <div class="section-title">WhatsApp da clinica</div>
+                <section class="whatsapp-engine-card">
+                    <div class="whatsapp-engine-header">
+                        <div>
+                            <h3>Conecte o WhatsApp da sua clinica</h3>
+                            <p>Escaneie o QR Code abaixo para vincular o numero da clinica ao sistema da Voithos.</p>
+                        </div>
+                        <span class="whatsapp-badge status-created" id="clinic-whatsapp-badge">Nao configurado</span>
+                    </div>
+                    <div class="clinic-grid two whatsapp-engine-grid">
+                        <div class="whatsapp-engine-summary">
+                            <div class="whatsapp-summary-item">
+                                <span class="whatsapp-summary-label">Status atual</span>
+                                <strong id="clinic-whatsapp-status-text">Aguardando configuracao</strong>
+                            </div>
+                            <div class="whatsapp-summary-item">
+                                <span class="whatsapp-summary-label">Numero conectado</span>
+                                <strong id="clinic-whatsapp-phone">Ainda nao conectado</strong>
+                            </div>
+                            <div class="whatsapp-summary-item">
+                                <span class="whatsapp-summary-label">Ultima atividade</span>
+                                <strong id="clinic-whatsapp-last-seen">Sem atividade recente</strong>
+                            </div>
+                            <div class="whatsapp-summary-item">
+                                <span class="whatsapp-summary-label">Instancia</span>
+                                <strong id="clinic-whatsapp-instance">Sera criada ao conectar</strong>
+                            </div>
+                            <div class="whatsapp-engine-actions">
+                                <button class="btn-primary" type="button" id="clinic-whatsapp-connect">Conectar WhatsApp</button>
+                                <button class="btn-secondary" type="button" id="clinic-whatsapp-refresh">Atualizar status</button>
+                                <button class="btn-secondary" type="button" id="clinic-whatsapp-disconnect">Desconectar</button>
+                                <button class="btn-ghost" type="button" id="clinic-whatsapp-delete">Excluir instancia</button>
+                            </div>
+                            <small class="test-status" id="clinic-whatsapp-feedback">O dentista precisa apenas escanear o QR Code para concluir a conexao.</small>
+                            <small class="test-status whatsapp-engine-health" id="clinic-whatsapp-engine-health">Motor NG aguardando verificacao.</small>
+                            <div class="whatsapp-diagnostics" id="clinic-whatsapp-diagnostics">
+                                <div class="whatsapp-diagnostics-empty">Sem diagnostico recente desta clinica.</div>
+                            </div>
+                        </div>
+                        <div class="whatsapp-qr-panel">
+                            <div class="whatsapp-qr-frame" id="clinic-whatsapp-qr-frame">
+                                <img id="clinic-whatsapp-qr-image" alt="QR Code do WhatsApp da clinica">
+                                <div class="whatsapp-qr-placeholder" id="clinic-whatsapp-qr-placeholder">
+                                    Clique em "Conectar WhatsApp" para gerar o QR Code da sua clinica.
+                                </div>
+                            </div>
+                            <div class="whatsapp-pairing-code" id="clinic-whatsapp-pairing-code"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="section-title">Endereco</div>
+                <div class="clinic-grid three">
+                    <label class="field">
+                        <span>CEP</span>
+                        <input type="text" id="clinic-cep" placeholder="00000-000">
+                    </label>
+                    <label class="field">
+                        <span>Rua</span>
+                        <input type="text" id="clinic-rua" placeholder="Nome da rua">
+                    </label>
+                    <label class="field">
+                        <span>Numero</span>
+                        <input type="text" id="clinic-numero" placeholder="000">
+                    </label>
+                    <label class="field">
+                        <span>Complemento</span>
+                        <input type="text" id="clinic-complemento" placeholder="Sala / bloco">
+                    </label>
+                    <label class="field">
+                        <span>Bairro</span>
+                        <input type="text" id="clinic-bairro" placeholder="Bairro">
+                    </label>
+                    <label class="field">
+                        <span>Cidade</span>
+                        <input type="text" id="clinic-cidade" placeholder="Cidade">
+                    </label>
+                    <label class="field">
+                        <span>Estado</span>
+                        <input type="text" id="clinic-estado" placeholder="UF">
+                    </label>
+                </div>
+
+                <div class="form-actions">
+                    <span class="form-status" id="clinic-status">Nenhuma alteracao pendente</span>
+                    <button class="btn-primary" type="submit">Salvar alteracoes</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script src="settings-sidebar.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="header.js"></script>
+    <script src="clinica.js"></script>
+</body>
+</html>
+
+

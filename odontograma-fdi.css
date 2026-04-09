@@ -1,0 +1,110 @@
+﻿.odontograma-split{
+  display:grid;
+  grid-template-columns: minmax(520px, 1fr);
+  gap:18px;
+  align-items:start;
+}
+
+.odontograma-box{
+  background:#fff;
+  border:1px solid #e8eef3;
+  border-radius:14px;
+  padding:14px;
+  min-height:540px;
+}
+
+.odontograma-panel{
+  background:#fff;
+  border:1px solid #e8eef3;
+  border-radius:14px;
+  padding:14px;
+}
+
+.arc-title{
+  margin:6px 0 10px;
+  font-size:16px;
+  font-weight:700;
+  text-align:center;
+}
+
+.arc-title-bottom{
+  margin-top:16px;
+}
+
+.arc-wrap{
+  border:1px solid #edf2f6;
+  border-radius:12px;
+  padding:10px;
+  background:#fbfdff;
+  overflow:hidden;
+}
+
+.odo-svg{
+  width:100%;
+  height:auto;
+  display:block;
+}
+
+.tbox{
+  fill: rgba(16,185,129,0.18);
+  stroke: rgba(15,23,42,0.55);
+  stroke-width:2.2;
+}
+
+.tooth{
+  cursor:pointer;
+}
+
+.tooth:hover .tbox{
+  stroke:#20a37a;
+  stroke-width:3;
+}
+
+.tnum{
+  font: 700 12px Arial, sans-serif;
+  fill:#111827;
+  text-anchor:middle;
+  pointer-events:none;
+}
+
+.qtxt{
+  font: 600 14px Arial, sans-serif;
+  fill:#9aa9b8;
+  text-anchor:middle;
+}
+
+.odo-center{
+  font: 700 18px Arial, sans-serif;
+  fill:#1f2937;
+  text-anchor:middle;
+}
+
+.face{
+  fill: rgba(16,185,129,0.18);
+  stroke: rgba(15,23,42,0.55);
+  stroke-width:2;
+}
+
+.face:hover{
+  fill: rgba(32,163,122,0.18);
+  stroke:#20a37a;
+}
+
+.face.ativa{
+  fill: rgba(16,185,129,0.45);
+  stroke:#20a37a;
+}
+
+.tooth.is-selected .tbox{
+  stroke:#20a37a;
+  stroke-width:3.2;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+
+

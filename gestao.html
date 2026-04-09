@@ -1,0 +1,756 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestão - Voithos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="gestao.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+  <section id="gestao-hub" class="gestao-hub hidden">
+    <div class="gestao-hub-inner">
+      <div class="gestao-hub-header">
+        <h1>Hub Gestão</h1>
+        <p>Selecione um módulo para continuar.</p>
+      </div>
+      <div class="gestao-hub-grid">
+        <article class="hub-card">
+          <div class="hub-card-title">
+            <h2>Financeiro</h2>
+            <p>Receitas, despesas, colaboradores e relatórios.</p>
+          </div>
+          <div class="hub-card-metrics">
+            <div>
+              <span>Faturamento</span>
+              <strong id="hub-finance-faturamento">R$ 0,00</strong>
+            </div>
+            <div>
+              <span>Despesas</span>
+              <strong id="hub-finance-despesas">R$ 0,00</strong>
+            </div>
+            <div>
+              <span>Saldo</span>
+              <strong id="hub-finance-saldo">R$ 0,00</strong>
+            </div>
+          </div>
+          <button id="btn-hub-open-financeiro" class="btn-primario" type="button">Abrir</button>
+        </article>
+
+        <article class="hub-card">
+          <div class="hub-card-title">
+            <h2>Operacional</h2>
+            <p>Acesse o laboratório e o módulo de estoque.</p>
+          </div>
+          <div class="hub-card-badges">
+            <span class="hub-badge">Laboratório</span>
+            <span class="hub-badge">Estoque</span>
+          </div>
+          <button id="btn-hub-open-operacional" class="btn-secundario" type="button">Abrir</button>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="gestao-financeiro">
+  <div class="layout-gestao">
+    <aside class="sidebar-gestao">
+      <div class="logo-gestao">
+        <h2>Gestão</h2>
+        <span>Financeiro</span>
+      </div>
+      <nav class="menu-gestao">
+        <div class="menu-group">
+          <span class="menu-group-title">Financeiro</span>
+          <button class="nav-item-gestao active" data-section="overview" type="button">Visão Geral</button>
+          <button class="nav-item-gestao" data-section="receitas" type="button">Receitas</button>
+          <button class="nav-item-gestao" data-section="despesas" type="button">Despesas</button>
+          <button class="nav-item-gestao" data-section="lucratividade" type="button">Lucratividade</button>
+          <button class="nav-item-gestao" data-section="colaboradores" type="button">Colaboradores</button>
+          <button class="nav-item-gestao" data-section="relatorios" type="button">Relatórios</button>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content-gestao">
+      <header class="header-gestao sticky-header">
+        <div>
+          <h1>Gestão</h1>
+          <p>Financeiro e operacional com foco em clareza e produtividade</p>
+          <small class="micro-update" id="finance-last-update">Atualizado às --:--</small>
+        </div>
+        <div class="periodo-controls">
+          <button class="btn-periodo" data-period="dia" type="button">Dia</button>
+          <button class="btn-periodo" data-period="semana" type="button">Semana</button>
+          <button class="btn-periodo active" data-period="mes" type="button">Mes</button>
+          <button id="btn-voltar-hub-financeiro" class="btn-secundario hub-back-btn hidden" type="button">Voltar ao Hub</button>
+        </div>
+      </header>
+
+      <section id="sec-overview" class="finance-section active">
+        <section class="cards-resumo">
+        <div class="card-resumo">
+          <span class="label">Faturamento</span>
+          <strong id="valor-faturamento">R$ 0,00</strong>
+          <small id="texto-periodo-faturamento">Mes atual</small>
+          <div class="card-mini-bar" aria-hidden="true"><div id="card-bar-faturamento"></div></div>
+        </div>
+        <div class="card-resumo">
+          <span class="label">Despesas</span>
+          <strong id="valor-despesas">R$ 0,00</strong>
+          <small id="texto-periodo-despesas">Mes atual</small>
+          <div class="card-mini-bar despesa" aria-hidden="true"><div id="card-bar-despesas"></div></div>
+        </div>
+        <div class="card-resumo saldo">
+          <span class="label">Saldo</span>
+          <strong id="valor-saldo">R$ 0,00</strong>
+          <small id="texto-periodo-saldo">Mes atual</small>
+        </div>
+        <div class="card-resumo destaque-roxo">
+          <span class="label">A receber</span>
+          <strong id="valor-a-receber">R$ 0,00</strong>
+          <small id="texto-periodo-a-receber">Receitas pendentes no periodo</small>
+          <button id="btn-kpi-ver-pendentes" class="card-kpi-action" type="button">Ver pendentes</button>
+        </div>
+        <div class="card-resumo destaque-roxo">
+          <span class="label">Em atraso</span>
+          <strong id="valor-em-atraso">R$ 0,00</strong>
+          <small id="texto-periodo-em-atraso" title="Baseado em pendencias com data anterior a hoje">Inadimplencia vencida</small>
+          <button id="btn-kpi-ver-atrasadas" class="card-kpi-action" type="button">Ver atrasadas</button>
+        </div>
+      </section>
+
+        <div id="trend-overview"></div>
+
+        <section class="overview-previews">
+          <div class="bloco">
+            <div class="bloco-header">
+              <h2>Ultimas receitas</h2>
+              <button id="btn-ver-todas-receitas" class="btn-secundario">Ver tudo</button>
+            </div>
+            <table class="tabela" id="tabela-receitas-preview">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Descricao</th>
+                  <th>Categoria</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="bloco">
+            <div class="bloco-header">
+              <h2>Ultimas despesas</h2>
+              <button id="btn-ver-todas-despesas" class="btn-secundario">Ver tudo</button>
+            </div>
+            <table class="tabela" id="tabela-despesas-preview">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Descricao</th>
+                  <th>Categoria</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="sec-receitas" class="finance-section hidden">
+        <div id="trend-receitas" class="finance-tab-trend"></div>
+        <div class="bloco bloco-faturamento">
+          <div class="chips-row">
+            <div class="chips-group" id="chips-periodo-receitas">
+              <button class="chip-btn active" type="button" data-quick-period="dia" data-target="receitas">Hoje</button>
+              <button class="chip-btn" type="button" data-quick-period="semana" data-target="receitas">Semana</button>
+              <button class="chip-btn" type="button" data-quick-period="mes" data-target="receitas">Mes</button>
+            </div>
+            <div class="chips-group" id="chips-status-receitas">
+              <button class="chip-btn active" type="button" data-quick-status="" data-target="receitas">Todos</button>
+              <button class="chip-btn" type="button" data-quick-status="pago" data-target="receitas">Pago</button>
+              <button class="chip-btn" type="button" data-quick-status="pendente" data-target="receitas">Pendente</button>
+              <button class="chip-btn" type="button" data-quick-status="cancelado" data-target="receitas">Cancelado</button>
+            </div>
+          </div>
+          <div class="bloco-header">
+            <h2>Receitas</h2>
+            <div class="bloco-tools">
+              <input id="filtro-receitas-texto" type="text" placeholder="Filtrar por descricao, categoria, paciente..." />
+              <select id="filtro-receitas-dentista">
+                <option value="">Todos os dentistas</option>
+              </select>
+              <select id="filtro-receitas-status">
+                <option value="">Todos os status</option>
+                <option value="pago">Pago</option>
+                <option value="pendente">Pendente</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <button id="btn-nova-receita" class="btn-primario">+ Nova receita</button>
+          </div>
+          <table class="tabela" id="tabela-receitas">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Descricao</th>
+                <th>Categoria</th>
+                <th>Pagamento</th>
+                <th>Valor</th>
+                <th>Status</th>
+                <th class="actions-col">Acoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+          <div class="empty-state-finance hidden" id="empty-receitas">
+            <h3>Nenhuma receita no periodo</h3>
+            <button id="btn-empty-nova-receita" class="btn-primario" type="button">+ Nova receita</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-despesas" class="finance-section hidden">
+        <div id="trend-despesas" class="finance-tab-trend"></div>
+        <div class="bloco bloco-despesas">
+          <div class="chips-row">
+            <div class="chips-group" id="chips-periodo-despesas">
+              <button class="chip-btn active" type="button" data-quick-period="dia" data-target="despesas">Hoje</button>
+              <button class="chip-btn" type="button" data-quick-period="semana" data-target="despesas">Semana</button>
+              <button class="chip-btn" type="button" data-quick-period="mes" data-target="despesas">Mes</button>
+            </div>
+            <div class="chips-group" id="chips-status-despesas">
+              <button class="chip-btn active" type="button" data-quick-status="" data-target="despesas">Todos</button>
+              <button class="chip-btn" type="button" data-quick-status="pago" data-target="despesas">Pago</button>
+              <button class="chip-btn" type="button" data-quick-status="pendente" data-target="despesas">Pendente</button>
+              <button class="chip-btn" type="button" data-quick-status="cancelado" data-target="despesas">Cancelado</button>
+            </div>
+          </div>
+          <div class="bloco-header">
+            <h2>Despesas</h2>
+            <div class="bloco-tools">
+              <input id="filtro-despesas-texto" type="text" placeholder="Filtrar por descricao, categoria, colaborador..." />
+              <select id="filtro-despesas-dentista">
+                <option value="">Todos os dentistas</option>
+              </select>
+              <select id="filtro-despesas-status">
+                <option value="">Todos os status</option>
+                <option value="pago">Pago</option>
+                <option value="pendente">Pendente</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <button id="btn-nova-despesa" class="btn-secundario">+ Nova despesa</button>
+          </div>
+          <table class="tabela" id="tabela-despesas">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Descricao</th>
+                <th>Categoria</th>
+                <th>Pagamento</th>
+                <th>Valor</th>
+                <th>Status</th>
+                <th class="actions-col">Acoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+          <div class="empty-state-finance hidden" id="empty-despesas">
+            <h3>Nenhuma despesa no periodo</h3>
+            <button id="btn-empty-nova-despesa" class="btn-secundario" type="button">+ Nova despesa</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-lucratividade" class="finance-section hidden">
+        <div class="bloco lucratividade-bloco">
+          <div class="bloco-header">
+            <h2>Lucratividade</h2>
+            <div class="bloco-tools">
+              <input id="filtro-lucratividade-texto" type="text" placeholder="Buscar por paciente ou procedimento..." />
+            </div>
+          </div>
+
+          <section class="cards-resumo cards-lucratividade">
+            <div class="card-resumo">
+              <span class="label">Lucro do período</span>
+              <strong id="lucratividade-lucro-periodo">R$ 0,00</strong>
+            </div>
+            <div class="card-resumo">
+              <span class="label">Custo do período</span>
+              <strong id="lucratividade-custo-periodo">R$ 0,00</strong>
+            </div>
+            <div class="card-resumo saldo">
+              <span class="label">Lucro médio/procedimento</span>
+              <strong id="lucratividade-lucro-medio">R$ 0,00</strong>
+            </div>
+            <div class="card-resumo">
+              <span class="label">Procedimentos analisados</span>
+              <strong id="lucratividade-total-procedimentos">0</strong>
+            </div>
+          </section>
+
+          <table class="tabela" id="tabela-lucratividade">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Procedimento</th>
+                <th>Paciente</th>
+                <th>Valor cobrado</th>
+                <th>Custo total</th>
+                <th>Lucro</th>
+                <th>Lucro/hora</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="empty-lucratividade" class="empty-state-finance hidden">
+            <h3>Nenhum procedimento para o período/filtro selecionado</h3>
+          </div>
+        </div>
+      </section>
+
+      <section id="relatorios-placeholder" class="bloco hidden relatorios-bloco finance-section">
+        <div class="relatorios-header">
+          <h2>Relatorios</h2>
+          <div class="relatorios-filtros">
+            <label for="relatorio-mes">Mes</label>
+            <select id="relatorio-mes">
+              <option value="1">Janeiro</option>
+              <option value="2">Fevereiro</option>
+              <option value="3">Marco</option>
+              <option value="4">Abril</option>
+              <option value="5">Maio</option>
+              <option value="6">Junho</option>
+              <option value="7">Julho</option>
+              <option value="8">Agosto</option>
+              <option value="9">Setembro</option>
+              <option value="10">Outubro</option>
+              <option value="11">Novembro</option>
+              <option value="12">Dezembro</option>
+            </select>
+
+            <label for="relatorio-ano">Ano</label>
+            <input id="relatorio-ano" type="number" min="2000" max="2100" />
+
+            <button id="btn-gerar-relatorio" class="btn-primario">Gerar</button>
+          </div>
+        </div>
+
+        <div class="relatorios-resumo">
+          <div class="card-resumo">
+            <span class="label">Entradas</span>
+            <strong id="relatorio-total-entradas">R$ 0,00</strong>
+          </div>
+          <div class="card-resumo">
+            <span class="label">Saidas</span>
+            <strong id="relatorio-total-saidas">R$ 0,00</strong>
+          </div>
+          <div class="card-resumo saldo">
+            <span class="label">Saldo</span>
+            <strong id="relatorio-total-saldo">R$ 0,00</strong>
+          </div>
+        </div>
+
+        <div class="relatorios-tabelas">
+          <div class="bloco">
+            <h3>Entradas</h3>
+            <table class="tabela" id="tabela-relatorio-entradas">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Descricao</th>
+                  <th>Categoria</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="bloco">
+            <h3>Saidas</h3>
+            <table class="tabela" id="tabela-relatorio-saidas">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Descricao</th>
+                  <th>Categoria</th>
+                  <th>Valor</th>
+                  <th>Status</th>
+                
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-colaboradores" class="grid-gestao grid-colaboradores hidden finance-section">
+        <div class="bloco bloco-colaboradores">
+          <div class="bloco-header">
+            <h2>Pagamentos de colaboradores (mes atual)</h2>
+            <button id="btn-novo-pagamento-colaborador" class="btn-primario">+ Novo pagamento</button>
+          </div>
+          <table class="tabela" id="tabela-colaboradores">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Colaborador</th>
+                <th>Descricao</th>
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- preenchido via JS -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="sec-estoque" class="finance-section hidden">
+        <div class="bloco estoque-placeholder">
+          <h2>Estoque</h2>
+          <p>Modulo em desenvolvimento.</p>
+          <button id="btn-voltar-overview-estoque" class="btn-primario" type="button">Voltar para Visão Geral</button>
+        </div>
+      </section>
+    </main>
+  </div>
+  </section>
+
+  <section id="gestao-operacional" class="gestao-operacional hidden">
+    <div class="layout-gestao layout-operacional">
+      <aside class="sidebar-gestao sidebar-operacional">
+        <div class="logo-gestao">
+          <h2>Gestão</h2>
+          <span>Operacional</span>
+        </div>
+        <nav class="menu-gestao">
+          <div class="menu-group">
+            <span class="menu-group-title">Operacional</span>
+            <a class="nav-item-operacional active" id="nav-operacional-laboratorio" href="laboratorio.html">Laboratório</a>
+            <button class="nav-item-operacional estoque-item" id="btn-operacional-open-estoque" type="button">
+              Estoque
+              <span class="menu-badge">Em breve</span>
+            </button>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="content-gestao content-operacional">
+        <header class="gestao-operacional-header">
+          <div>
+            <h1>Operacional</h1>
+            <p>Módulos de suporte e rotina operacional da clínica.</p>
+          </div>
+          <button id="btn-voltar-hub-operacional" class="btn-secundario hub-back-btn hidden" type="button">Voltar ao Hub</button>
+        </header>
+
+        <div class="gestao-operacional-grid">
+          <article class="hub-card">
+            <div class="hub-card-title">
+              <h2>Laboratório</h2>
+              <p>Acompanhe solicitações, prazos e entregas.</p>
+            </div>
+            <a class="btn-primario hub-link-btn" href="laboratorio.html">Abrir laboratório</a>
+          </article>
+          <article class="hub-card">
+            <div class="hub-card-title">
+              <h2>Estoque</h2>
+              <p>Módulo em desenvolvimento, usando placeholder atual.</p>
+            </div>
+            <button id="btn-operacional-open-estoque-card" class="btn-secundario" type="button">Abrir estoque</button>
+          </article>
+        </div>
+        <section id="gestao-operacional-estoque-placeholder" class="bloco estoque-modulo hidden">
+          <div class="bloco-header">
+            <div>
+              <h2>Controle de estoque</h2>
+            </div>
+            <div class="bloco-tools estoque-tools">
+              <input id="estoque-busca" type="text" placeholder="Buscar produto..." />
+              <button id="btn-estoque-cadastrar" class="btn-primario" type="button">+ Cadastrar produto</button>
+            </div>
+          </div>
+
+          <section class="estoque-resumo-cards">
+            <div class="card-resumo">
+              <span class="label">Total de produtos</span>
+              <strong id="estoque-resumo-total">0</strong>
+              <small>Itens cadastrados</small>
+            </div>
+            <div class="card-resumo">
+              <span class="label">Itens críticos</span>
+              <strong id="estoque-resumo-criticos">0</strong>
+              <small>Estoque zerado</small>
+            </div>
+            <div class="card-resumo">
+              <span class="label">Itens baixos</span>
+              <strong id="estoque-resumo-baixos">0</strong>
+              <small>Abaixo ou no mínimo</small>
+            </div>
+          </section>
+
+          <div id="estoque-empty-state" class="estoque-empty-state">
+            <div class="estoque-empty-icon" aria-hidden="true">📦</div>
+            <h3>Sem estoque por aqui!</h3>
+            <p>Adicione produtos e deixe seu controle de estoque em dia.</p>
+            <button id="btn-estoque-cadastrar-empty" class="btn-primario" type="button">+ Cadastrar produto</button>
+          </div>
+
+          <div id="estoque-table-wrap" class="hidden">
+            <table class="tabela" id="tabela-estoque">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Categoria</th>
+                  <th>Unidade</th>
+                  <th>Estoque atual</th>
+                  <th>Estoque mínimo</th>
+                  <th>Status</th>
+                  <th class="actions-col">Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </section>
+
+  <!-- Modal de lançamento financeiro -->
+  <div id="modal-lancamento-bg" class="modal-bg hidden">
+    <div class="modal-lancamento">
+      <div class="modal-lancamento-header">
+        <button id="btn-voltar-detalhe-lancamento" class="modal-back-btn hidden" type="button" aria-label="Voltar para detalhes do recebimento">←</button>
+        <h2 id="titulo-modal-lancamento">Novo lançamento</h2>
+      </div>
+
+      <label for="input-tipo-lancamento">Tipo</label>
+      <select id="input-tipo-lancamento">
+        <option value="receita">Receita</option>
+        <option value="despesa">Despesa</option>
+      </select>
+
+      <label for="input-categoria-lancamento">Categoria</label>
+      <select id="input-categoria-lancamento">
+        <option value="procedimentos">Procedimentos</option>
+        <option value="laboratorio">Laboratório</option>
+        <option value="materiais">Materiais</option>
+        <option value="funcionarios">Colaboradores</option>
+        <option value="fixos">Fixos</option>
+        <option value="outros">Outros</option>
+      </select>
+
+      <label for="input-data-lancamento">Data</label>
+      <input id="input-data-lancamento" type="date">
+
+      <label for="input-descricao-lancamento">Descrição</label>
+      <input id="input-descricao-lancamento" type="text" placeholder="Ex: Consulta, pagamento laboratório..." />
+      <div class="receita-extra">
+        <label for="input-paciente-lancamento">Paciente</label>
+        <input id="input-paciente-lancamento" type="text" list="lista-pacientes" placeholder="Digite nome, CPF ou prontuario" />
+        <datalist id="lista-pacientes"></datalist>
+
+        <label for="input-procedimento-lancamento">Procedimento</label>
+        <input id="input-procedimento-lancamento" type="text" placeholder="Ex: Avaliacao, Limpeza..." />
+
+        <label for="input-metodo-pagamento-lancamento">Metodo de pagamento</label>
+        <select id="input-metodo-pagamento-lancamento">
+          <option value="pix">Pix</option>
+          <option value="cartao_credito">Cartao de credito</option>
+          <option value="cartao_debito">Cartao de debito</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="boleto">Boleto</option>
+        </select>
+
+        <label for="input-plano-finalizado-lancamento">Plano odontologico finalizado</label>
+        <select id="input-plano-finalizado-lancamento">
+          <option value="nao">Nao</option>
+          <option value="sim">Sim</option>
+        </select>
+      </div>
+
+      <label for="input-valor-lancamento">Valor (R$)</label>
+      <input id="input-valor-lancamento" type="number" step="0.01" min="0">
+
+      <label for="input-colaborador-lancamento">Colaborador responsavel</label>
+      <input id="input-colaborador-lancamento" type="text" list="lista-colaboradores-lancamento" placeholder="Digite ou selecione um dentista da clinica" />
+      <datalist id="lista-colaboradores-lancamento"></datalist>
+
+      <label for="input-status-lancamento">Status</label>
+      <select id="input-status-lancamento">
+        <option value="pago">Pago</option>
+        <option value="pendente">Pendente</option>
+      </select>
+
+      <div class="modal-actions">
+        <button id="btn-salvar-lancamento" class="btn-primario">Salvar</button>
+        <button id="btn-cancelar-lancamento" class="btn-secundario">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-estoque-bg" class="modal-bg hidden">
+    <div class="modal-lancamento modal-estoque">
+      <div class="modal-estoque-header">
+        <h2 id="titulo-modal-estoque">Cadastrar produto</h2>
+        <button id="btn-fechar-modal-estoque" class="modal-close-btn" type="button" aria-label="Fechar">×</button>
+      </div>
+
+      <label for="input-estoque-nome">Nome do produto</label>
+      <input id="input-estoque-nome" type="text" placeholder="Ex.: Luva descartável" />
+
+      <label for="input-estoque-categoria">Categoria</label>
+      <select id="input-estoque-categoria">
+        <option value="EPI">EPI</option>
+        <option value="Instrumento">Instrumento</option>
+        <option value="Material de consumo">Material de consumo</option>
+        <option value="Medicamento">Medicamento</option>
+        <option value="Outros">Outros</option>
+      </select>
+
+      <label for="input-estoque-unidade">Unidade de medida</label>
+      <select id="input-estoque-unidade">
+        <option value="Unidade">Unidade</option>
+        <option value="Caixa">Caixa</option>
+        <option value="Pacote">Pacote</option>
+        <option value="Frasco">Frasco</option>
+        <option value="Kit">Kit</option>
+      </select>
+
+      <label for="input-estoque-minimo">Estoque mínimo</label>
+      <input id="input-estoque-minimo" type="number" min="0" step="1" />
+
+      <div class="modal-actions">
+        <button id="btn-cancelar-estoque" class="btn-secundario" type="button">Cancelar</button>
+        <button id="btn-salvar-estoque" class="btn-primario" type="button">Concluir</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="gestao.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,1599 @@
+(function () {
+  const DEFAULT_BASE = localStorage.getItem('apiBase') || '';
+  const WEB_SESSION_TOKEN_KEY = 'voithos.web.session.token';
+  const WEB_SESSION_USER_KEY = 'voithos.web.session.user';
+  const WEB_SESSION_CLINIC_KEY = 'voithos.web.session.clinic';
+
+  const cleanText = (value) => String(value || '').trim();
+  const getBaseUrl = () => cleanText(window.__APP_API_BASE__ || DEFAULT_BASE || '').replace(/\/+$/, '');
+
+  const notImplemented = async (name) => {
+    throw new Error(name + ' ainda nao implementado no backend web.');
+  };
+
+  const LEGACY_TO_CENTRAL_STATUS = {
+    em_aberto: 'AGENDADO',
+    confirmado: 'CONFIRMADO',
+    realizado: 'CONCLUIDO',
+    nao_compareceu: 'NAO_COMPARECEU',
+    cancelado: 'CANCELADO',
+    remarcar: 'REMARCAR',
+  };
+
+  const LEGACY_TO_CENTRAL_ATTENDANCE = {
+    compareceu: 'ATTENDED',
+    nao_compareceu: 'NO_SHOW',
+    pendente: '',
+  };
+
+  const CENTRAL_TO_LEGACY_STATUS = {
+    AGENDADO: 'em_aberto',
+    CONFIRMADO: 'confirmado',
+    CONCLUIDO: 'realizado',
+    NAO_COMPARECEU: 'nao_compareceu',
+    CANCELADO: 'cancelado',
+    REMARCAR: 'remarcar',
+  };
+
+  const CENTRAL_TO_LEGACY_ATTENDANCE = {
+    ATTENDED: 'compareceu',
+    NO_SHOW: 'nao_compareceu',
+  };
+
+  const normalizeDigits = (value) => String(value || '').replace(/\D/g, '');
+  const normalizeDateOnly = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+  };
+
+  const normalizeTimeOnly = (value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(11, 16);
+  };
+
+  const normalizeRangeBoundary = (value, endOfDay = false) => {
+    const raw = cleanText(value);
+    if (!raw) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      return `${raw}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`;
+    }
+    return raw;
+  };
+
+  const combineDateTime = (dateValue, timeValue) => {
+    const date = cleanText(dateValue);
+    const time = cleanText(timeValue);
+    if (!date || !time) return null;
+    const iso = new Date(`${date}T${time}:00.000Z`);
+    if (Number.isNaN(iso.getTime())) return null;
+    return iso.toISOString();
+  };
+
+  const mapCentralPatientToLegacy = (patient = {}) => ({
+    ...patient,
+    id: patient.id,
+    prontuario: patient.id,
+    nome: patient.nome || '',
+    fullName: patient.nome || '',
+    birthDate: patient.dataNascimento ? normalizeDateOnly(patient.dataNascimento) : '',
+    dataNascimento: patient.dataNascimento ? normalizeDateOnly(patient.dataNascimento) : '',
+    allowsMessages: patient.allowsMessages !== false,
+    lastBirthdayMessageAt: patient.lastBirthdayMessageAt || '',
+    birthdayMessageYear: Number.isFinite(Number(patient.birthdayMessageYear))
+      ? Math.trunc(Number(patient.birthdayMessageYear))
+      : 0,
+  });
+
+  const normalizeLegacyPatientPayload = (payload = {}) => ({
+    nome: payload.nome || payload.fullName || '',
+    cpf: payload.cpf || '',
+    rg: payload.rg || '',
+    dataNascimento: payload.dataNascimento || payload.birthDate || null,
+    telefone: payload.telefone || payload.phone || payload.celular || payload.whatsapp || '',
+    email: payload.email || '',
+    endereco: payload.endereco || payload.address || '',
+    allowsMessages: payload.allowsMessages !== undefined ? payload.allowsMessages !== false : true,
+    lastBirthdayMessageAt: payload.lastBirthdayMessageAt || null,
+    birthdayMessageYear: Number.isFinite(Number(payload.birthdayMessageYear))
+      ? Math.trunc(Number(payload.birthdayMessageYear))
+      : null,
+  });
+
+  const buildPatientMap = (patients = []) => {
+    const map = new Map();
+    (patients || []).forEach((patient) => {
+      [patient?.id, patient?.prontuario, patient?.cpf]
+        .map((value) => cleanText(value))
+        .filter(Boolean)
+        .forEach((key) => map.set(key, patient));
+    });
+    return map;
+  };
+
+  const mapCentralAppointmentToLegacy = (appointment = {}, patientMap = new Map()) => {
+    const patient = patientMap.get(cleanText(appointment.patientId)) || appointment.patient || {};
+    const centralStatus = cleanText(appointment.status).toUpperCase();
+    const derivedAttendanceStatus = CENTRAL_TO_LEGACY_ATTENDANCE[cleanText(appointment.attendanceStatus).toUpperCase()]
+      || (centralStatus === 'CONCLUIDO' ? 'compareceu' : '')
+      || (centralStatus === 'NAO_COMPARECEU' ? 'nao_compareceu' : '');
+    const legacyStatus = ['CONCLUIDO', 'NAO_COMPARECEU'].includes(centralStatus)
+      ? (appointment.confirmado === true ? 'confirmado' : 'em_aberto')
+      : (CENTRAL_TO_LEGACY_STATUS[centralStatus] || 'em_aberto');
+
+    return {
+      id: appointment.id,
+      clinicId: appointment.clinicId,
+      pacienteId: appointment.patientId,
+      patientId: appointment.patientId,
+      prontuario: appointment.patientId,
+      pacienteNome: patient?.nome || '',
+      paciente: patient?.nome || '',
+      telefone: patient?.telefone || '',
+      dentistaId: appointment.profissionalId || '',
+      dentistaNome: appointment.profissionalNome || '',
+      data: normalizeDateOnly(appointment.dataHora),
+      horaInicio: normalizeTimeOnly(appointment.dataHora),
+      horaFim: appointment.horaFim ? normalizeTimeOnly(appointment.horaFim) : normalizeTimeOnly(appointment.dataHora),
+      tipo: appointment.tipo || 'procedimento',
+      status: legacyStatus,
+      attendanceStatus: derivedAttendanceStatus,
+      observacoes: appointment.observacoes || '',
+      confirmado: appointment.confirmado === true,
+      confirmationPending: appointment.confirmationPending === true,
+      lastConfirmationSentAt: appointment.lastConfirmationSentAt || '',
+      lastConfirmationOutboundId: appointment.lastConfirmationOutboundId || '',
+    };
+  };
+
+  const matchesPatientQuery = (patient = {}, query = '') => {
+    const normalizedQuery = cleanText(query).toLowerCase();
+    if (!normalizedQuery) return true;
+    const haystack = [
+      patient?.nome,
+      patient?.fullName,
+      patient?.cpf,
+      patient?.telefone,
+      patient?.email,
+      patient?.prontuario,
+    ]
+      .map((value) => cleanText(value).toLowerCase())
+      .join(' ');
+    return haystack.includes(normalizedQuery);
+  };
+
+  const normalizeAgendaSettingsForUi = (settings = {}) => ({
+    ...(settings && typeof settings === 'object' ? settings : {}),
+    markers: (Array.isArray(settings?.markers) ? settings.markers : []).map((marker) => ({
+      ...marker,
+      id: cleanText(marker?.id),
+      nome: cleanText(marker?.nome || marker?.label),
+      label: cleanText(marker?.label || marker?.nome),
+      cor: cleanText(marker?.cor || marker?.color),
+      color: cleanText(marker?.color || marker?.cor),
+    })),
+  });
+
+  const normalizeAgendaSettingsPatch = (payload = {}) => ({
+    ...(payload && typeof payload === 'object' ? payload : {}),
+    markers: Array.isArray(payload?.markers)
+      ? payload.markers.map((marker) => ({
+        id: cleanText(marker?.id),
+        label: cleanText(marker?.label || marker?.nome),
+        color: cleanText(marker?.color || marker?.cor),
+      })).filter((marker) => marker.label && marker.color)
+      : undefined,
+  });
+
+  const mapBirthdayItemsFromOverview = (overview = {}, date = '') => {
+    const dateIso = cleanText(date || overview?.date || normalizeDateOnly(new Date()));
+    const birthdays = overview?.birthdays || {};
+    const items = Array.isArray(birthdays?.items) ? birthdays.items : [];
+    return {
+      clinicId: cleanText(overview?.clinicId),
+      date: dateIso,
+      items: items.map((item) => ({
+        prontuario: cleanText(item?.patientId || item?.prontuario),
+        patientId: cleanText(item?.patientId || item?.prontuario),
+        nome: cleanText(item?.patientName || item?.nome),
+        telefone: cleanText(item?.phone || item?.telefone),
+        dataNascimento: cleanText(item?.birthDate || item?.dataNascimento),
+        allowsMessages: item?.allowsMessages !== false,
+        hasAppointment: item?.hasAppointment === true,
+        birthdaySentYear: item?.birthdaySentYear === true,
+        birthdaySentToday: item?.birthdaySentToday === true,
+      })),
+    };
+  };
+
+  const normalizeDocumentType = (value) => cleanText(value).toUpperCase();
+  const createLocalId = (prefix = 'id') => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}_${crypto.randomUUID()}`;
+    }
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  };
+  const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  const formatDatePtBr = (value) => {
+    const normalized = cleanText(value);
+    if (!normalized) return '-';
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) return normalized;
+    return date.toLocaleDateString('pt-BR');
+  };
+  const simpleHashString = (value) => {
+    const input = String(value || '');
+    let hash = 0;
+    for (let i = 0; i < input.length; i += 1) {
+      hash = ((hash << 5) - hash) + input.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(16);
+  };
+  const normalizeModelList = (items = [], prefix = 'model') => (Array.isArray(items) ? items : [])
+    .map((item, index) => ({
+      id: cleanText(item?.id || item?._id || `${prefix}_${index + 1}`),
+      nome: cleanText(item?.nome || item?.title || item?.name || `${prefix} ${index + 1}`),
+      titulo: cleanText(item?.titulo || item?.title || item?.nome || item?.name || ''),
+      categoria: cleanText(item?.categoria || item?.category || ''),
+      conteudo: item?.conteudo ?? item?.content ?? '',
+      data: item?.data ?? item?.fields ?? item?.payload ?? {},
+      ativo: item?.ativo === true || item?.isActive === true,
+      createdAt: item?.createdAt || '',
+      updatedAt: item?.updatedAt || '',
+    }));
+  const normalizeProcedureItem = (item = {}) => ({
+    id: cleanText(item?.id || item?.codigo || createLocalId('proc')),
+    codigo: cleanText(item?.codigo || item?.id || ''),
+    nome: cleanText(item?.nome || item?.name || item?.label || 'Procedimento'),
+    preco: Number(item?.preco ?? item?.price ?? 0) || 0,
+    categoria: cleanText(item?.categoria || item?.category || ''),
+    ativo: item?.ativo !== false,
+  });
+  const mergeProcedureCatalog = (base = [], custom = []) => {
+    const map = new Map();
+    [...(Array.isArray(base) ? base : []), ...(Array.isArray(custom) ? custom : [])]
+      .map((item) => normalizeProcedureItem(item))
+      .filter((item) => item.nome)
+      .forEach((item) => {
+        const key = cleanText(item.codigo || item.id || item.nome).toLowerCase();
+        map.set(key, item);
+      });
+    return Array.from(map.values());
+  };
+  const buildDocumentPreviewMarkup = (document = {}) => {
+    const data = document?.data && typeof document.data === 'object' ? document.data : {};
+    if (cleanText(data.previewHtml)) return String(data.previewHtml);
+    const content = cleanText(
+      data.conteudo
+      || data.texto
+      || data.content
+      || data.observacoes
+      || document?.conteudo
+      || ''
+    );
+    const sections = [];
+    Object.entries(data || {}).forEach(([key, value]) => {
+      if (['previewHtml', 'conteudo', 'content', 'texto'].includes(key)) return;
+      if (value === null || value === undefined || value === '') return;
+      if (Array.isArray(value)) {
+        const serialized = value.map((item) => {
+          if (item && typeof item === 'object') return JSON.stringify(item);
+          return String(item);
+        }).join('\n');
+        sections.push(`<section><h3>${escapeHtml(key)}</h3><pre>${escapeHtml(serialized)}</pre></section>`);
+        return;
+      }
+      if (value && typeof value === 'object') {
+        sections.push(`<section><h3>${escapeHtml(key)}</h3><pre>${escapeHtml(JSON.stringify(value, null, 2))}</pre></section>`);
+        return;
+      }
+      sections.push(`<section><h3>${escapeHtml(key)}</h3><p>${escapeHtml(value)}</p></section>`);
+    });
+    return [
+      '<main style="font-family:Segoe UI,Arial,sans-serif;padding:24px;max-width:960px;margin:0 auto;color:#10243e;">',
+      `<h1 style="margin:0 0 8px;">${escapeHtml(document?.title || document?.titulo || document?.nome || 'Documento')}</h1>`,
+      `<p style="margin:0 0 20px;color:#4b5b74;">${escapeHtml(document?.type || document?.tipo || 'DOCUMENTO')} | ${escapeHtml(formatDatePtBr(document?.documentDate || document?.createdAt || ''))}</p>`,
+      content ? `<article style="white-space:pre-wrap;line-height:1.6;margin-bottom:20px;">${escapeHtml(content)}</article>` : '',
+      sections.join(''),
+      '</main>',
+    ].join('');
+  };
+  const openBlobInBrowser = async (blob, mimeType = 'application/octet-stream') => {
+    const normalizedBlob = blob instanceof Blob ? blob : new Blob([blob], { type: mimeType });
+    const url = URL.createObjectURL(normalizedBlob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return { success: true, url };
+  };
+  const openHtmlPreview = async (document = {}) => {
+    const html = [
+      '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">',
+      `<title>${escapeHtml(document?.title || document?.titulo || 'Documento')}</title>`,
+      '</head><body style="margin:0;background:#f6f8fb;">',
+      buildDocumentPreviewMarkup(document),
+      '</body></html>',
+    ].join('');
+    return openBlobInBrowser(new Blob([html], { type: 'text/html;charset=utf-8' }), 'text/html;charset=utf-8');
+  };
+
+  const getStoredToken = () => cleanText(localStorage.getItem(WEB_SESSION_TOKEN_KEY));
+  const getStoredUser = () => {
+    try {
+      const raw = localStorage.getItem(WEB_SESSION_USER_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_error) {
+      return null;
+    }
+  };
+  const getStoredClinic = () => {
+    try {
+      const raw = localStorage.getItem(WEB_SESSION_CLINIC_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const persistWebSession = ({ token = '', user = null, clinic = null } = {}) => {
+    const normalizedToken = cleanText(token);
+    if (normalizedToken) localStorage.setItem(WEB_SESSION_TOKEN_KEY, normalizedToken);
+    else localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
+
+    if (user && typeof user === 'object') localStorage.setItem(WEB_SESSION_USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(WEB_SESSION_USER_KEY);
+
+    if (clinic && typeof clinic === 'object') localStorage.setItem(WEB_SESSION_CLINIC_KEY, JSON.stringify(clinic));
+    else localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
+  };
+
+  const clearWebSession = () => {
+    localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
+    localStorage.removeItem(WEB_SESSION_USER_KEY);
+    localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
+  };
+
+  const mapCentralRoleToTipo = (role) => {
+    const normalizedRole = cleanText(role).toUpperCase();
+    if (normalizedRole === 'ADMIN') return 'administrativo';
+    if (normalizedRole === 'SUPER_ADMIN') return 'super_admin';
+    if (normalizedRole === 'DENTISTA') return 'dentista';
+    return 'recepcionista';
+  };
+
+  const buildPermissions = (user = {}) => {
+    const normalizedRole = cleanText(user.role).toUpperCase();
+    const isAdmin = user.isClinicAdmin === true || normalizedRole === 'SUPER_ADMIN';
+    if (isAdmin) {
+      return {
+        admin: true,
+        'clinic.manage': true,
+        'procedures.manage': true,
+        'users.manage': true,
+        'data.import': true,
+        'agenda.settings': true,
+        'agenda.availability': true,
+        'notifications.manage': true,
+        'agenda.view': true,
+        'agenda.edit': true,
+        'finance.view': true,
+        'finance.edit': true,
+      };
+    }
+
+    if (normalizedRole === 'DENTISTA') {
+      return {
+        admin: false,
+        'agenda.view': true,
+        'agenda.edit': true,
+        'finance.view': true,
+      };
+    }
+
+    return {
+      admin: false,
+      'agenda.view': true,
+      'agenda.edit': true,
+    };
+  };
+
+  const mapCentralUserToDesktop = (user = {}, clinic = null) => ({
+    id: user.id,
+    userId: user.id,
+    clinicId: user.clinicId || '',
+    nome: user.nome || '',
+    login: user.email || '',
+    email: user.email || '',
+    tipo: mapCentralRoleToTipo(user.role),
+    role: cleanText(user.role).toUpperCase(),
+    isActive: user.ativo !== false,
+    isClinicAdmin: user.isClinicAdmin === true || ['ADMIN', 'SUPER_ADMIN'].includes(cleanText(user.role).toUpperCase()),
+    permissionsEnabled: true,
+    permissions: buildPermissions(user),
+    isImpersonatedSession: false,
+    clinicName: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || ''),
+    nomeClinica: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || ''),
+    clinic,
+  });
+
+  const buildAuthContext = (user = null, clinic = null) => ({
+    accessProfile: user?.tipo === 'super_admin' ? 'SUPERADMIN' : user ? 'AUTHENTICATED' : 'ANONYMOUS',
+    tenantScope: user?.tipo === 'super_admin' ? 'global' : user ? 'clinic' : 'anonymous',
+    clinicId: cleanText(user?.clinicId || clinic?.id || ''),
+    user,
+    clinic,
+  });
+
+  const buildRequestHeaders = (options = {}) => {
+    const headers = { ...(options.headers || {}) };
+    if (!options.omitContentType) {
+      headers['Content-Type'] = cleanText(options.contentType) || 'application/json';
+    }
+    if (options.auth !== false) {
+      const token = cleanText(options.token || getStoredToken());
+      if (token) headers.authorization = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
+  const performFetch = async (method, path, body, options = {}) => {
+    const base = getBaseUrl();
+    if (!base) {
+      throw new Error('Base da API nao configurada. Defina localStorage.apiBase ou window.__APP_API_BASE__.');
+    }
+    return fetch(base + path, {
+      method,
+      headers: buildRequestHeaders(options),
+      body,
+    });
+  };
+
+  const parseResponsePayload = async (response) => {
+    const text = await response.text();
+    let payload = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch (_e) {
+      payload = text || null;
+    }
+    return payload;
+  };
+
+  const request = async (method, path, body, options = {}) => {
+    const response = await performFetch(method, path, body ? JSON.stringify(body) : undefined, {
+      ...options,
+      contentType: 'application/json',
+    });
+    const payload = await parseResponsePayload(response);
+
+    if (!response.ok) {
+      const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
+      throw new Error(message);
+    }
+
+    return payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+  };
+
+  const requestRawBody = async (method, path, body, options = {}) => {
+    const response = await performFetch(method, path, body, options);
+    const payload = await parseResponsePayload(response);
+    if (!response.ok) {
+      const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
+      throw new Error(message);
+    }
+    return payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+  };
+
+  const requestBinary = async (method, path, body, options = {}) => {
+    const response = await performFetch(method, path, body, options);
+    if (!response.ok) {
+      const payload = await parseResponsePayload(response);
+      const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
+      throw new Error(message);
+    }
+    const buffer = await response.arrayBuffer();
+    return {
+      buffer,
+      headers: response.headers,
+      contentType: cleanText(response.headers.get('content-type') || 'application/octet-stream'),
+      fileName: decodeURIComponent(cleanText(response.headers.get('x-file-name') || '') || ''),
+    };
+  };
+
+  const getOperationalSettings = async () => request('GET', '/clinics/me/operational-settings', null, { auth: true });
+  const patchOperationalSettings = async (patch = {}) => {
+    const settings = await request('PATCH', '/clinics/me/operational-settings', patch || {}, { auth: true });
+    const currentClinic = getStoredClinic();
+    if (currentClinic && typeof currentClinic === 'object') {
+      persistWebSession({
+        token: getStoredToken(),
+        user: getStoredUser(),
+        clinic: {
+          ...currentClinic,
+          operationalSettings: settings,
+        },
+      });
+    }
+    return settings;
+  };
+  const fetchStaticProcedureCatalog = async () => {
+    const candidates = ['Procedimentos.json', './Procedimentos.json', '/Procedimentos.json'];
+    for (const candidate of candidates) {
+      try {
+        const response = await fetch(candidate, { method: 'GET' });
+        if (!response.ok) continue;
+        const payload = await response.json();
+        if (Array.isArray(payload)) return payload.map(normalizeProcedureItem);
+      } catch (_error) {
+      }
+    }
+    return [];
+  };
+  const resolvePatientId = (payload = {}) => cleanText(payload?.patientId || payload?.prontuario || payload?.id);
+  const buildDocumentRecord = ({
+    id = '',
+    title = '',
+    type = 'DOCUMENTO',
+    category = 'CLINICOS',
+    documentDate = '',
+    folder = '',
+    data = {},
+    archived = false,
+  } = {}) => ({
+    id: cleanText(id),
+    title: cleanText(title),
+    type: normalizeDocumentType(type || 'DOCUMENTO'),
+    category: cleanText(category || 'CLINICOS'),
+    folder: cleanText(folder),
+    documentDate: cleanText(documentDate || normalizeDateOnly(new Date())),
+    archived: archived === true,
+    data: data && typeof data === 'object' ? data : { conteudo: String(data || '') },
+  });
+  const sortDocumentsByDateDesc = (items = []) => (Array.isArray(items) ? items : [])
+    .slice()
+    .sort((a, b) => String(b?.documentDate || b?.createdAt || '').localeCompare(String(a?.documentDate || a?.createdAt || '')));
+  const findDocumentRecord = async ({ prontuario, patientId, documentId, includeArchived = true } = {}) => {
+    const resolvedPatientId = resolvePatientId({ prontuario, patientId });
+    const normalizedDocumentId = cleanText(documentId);
+    if (!resolvedPatientId || !normalizedDocumentId) return null;
+    const docs = await request(
+      'GET',
+      `/clinical/patients/${encodeURIComponent(resolvedPatientId)}/documents?includeArchived=${includeArchived ? 'true' : 'false'}`,
+      null,
+      { auth: true }
+    );
+    return (Array.isArray(docs) ? docs : []).find((item) => cleanText(item?.id) === normalizedDocumentId) || null;
+  };
+  const saveGenericDocument = async (payload = {}, { type, category = 'CLINICOS', titleFallback = 'Documento' } = {}) => {
+    const patientId = resolvePatientId(payload);
+    if (!patientId) throw new Error('patientId/prontuario is required.');
+    const title = cleanText(payload?.title || payload?.titulo || titleFallback);
+    const record = buildDocumentRecord({
+      id: payload?.documentId || payload?.id || '',
+      title,
+      type,
+      category,
+      folder: payload?.folder || '',
+      documentDate: payload?.documentDate || payload?.data || normalizeDateOnly(new Date()),
+      archived: payload?.archived === true,
+      data: {
+        ...payload,
+        previewHtml: buildDocumentPreviewMarkup({
+          title,
+          type,
+          documentDate: payload?.documentDate || payload?.data || normalizeDateOnly(new Date()),
+          data: payload,
+        }),
+      },
+    });
+    return request(
+      'POST',
+      `/clinical/patients/${encodeURIComponent(patientId)}/documents`,
+      { document: record },
+      { auth: true }
+    );
+  };
+
+  const clinicApi = {
+    get: async () => {
+      const [profile, operationalSettings] = await Promise.all([
+        request('GET', '/clinics/me/profile', null, { auth: true }),
+        request('GET', '/clinics/me/operational-settings', null, { auth: true }),
+      ]);
+
+      const clinic = {
+        ...(profile && typeof profile === 'object' ? profile : {}),
+        operationalSettings: operationalSettings && typeof operationalSettings === 'object' ? operationalSettings : {},
+      };
+
+      const storedUser = getStoredUser();
+      persistWebSession({
+        token: getStoredToken(),
+        user: storedUser ? {
+          ...storedUser,
+          clinicName: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.clinicName || ''),
+          nomeClinica: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.nomeClinica || ''),
+          clinic,
+        } : null,
+        clinic,
+      });
+
+      return clinic;
+    },
+    save: async (payload = {}) => {
+      const profilePatch = payload?.profile && typeof payload.profile === 'object' ? payload.profile : payload;
+      const settingsPatch = payload?.operationalSettings && typeof payload.operationalSettings === 'object'
+        ? payload.operationalSettings
+        : {};
+
+      const [profile, operationalSettings] = await Promise.all([
+        request('PATCH', '/clinics/me/profile', profilePatch || {}, { auth: true }),
+        Object.keys(settingsPatch).length
+          ? request('PATCH', '/clinics/me/operational-settings', settingsPatch, { auth: true })
+          : Promise.resolve(getStoredClinic()?.operationalSettings || {}),
+      ]);
+
+      const clinic = {
+        ...(profile && typeof profile === 'object' ? profile : {}),
+        operationalSettings: operationalSettings && typeof operationalSettings === 'object' ? operationalSettings : {},
+      };
+
+      const storedUser = getStoredUser();
+      persistWebSession({
+        token: getStoredToken(),
+        user: storedUser ? {
+          ...storedUser,
+          clinicName: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.clinicName || ''),
+          nomeClinica: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.nomeClinica || ''),
+          clinic,
+        } : null,
+        clinic,
+      });
+
+      return clinic;
+    },
+    testWhatsApp: async () => notImplemented('clinic.testWhatsApp'),
+    listMessagingLogs: async () => notImplemented('clinic.listMessagingLogs'),
+    queueWhatsApp: async () => notImplemented('clinic.queueWhatsApp'),
+    getWhatsAppEngineHealth: async () => notImplemented('clinic.getWhatsAppEngineHealth'),
+    getWhatsAppConnection: async () => notImplemented('clinic.getWhatsAppConnection'),
+    refreshWhatsAppConnection: async () => notImplemented('clinic.refreshWhatsAppConnection'),
+    connectWhatsApp: async () => notImplemented('clinic.connectWhatsApp'),
+  };
+
+  const auth = {
+    login: async ({ email, login, senha }) => {
+      const result = await request('POST', '/auth/login', {
+        email: cleanText(login || email).toLowerCase(),
+        password: cleanText(senha),
+      }, { auth: false });
+
+      const mappedUser = mapCentralUserToDesktop(result?.user || {});
+      persistWebSession({ token: result?.token || '', user: mappedUser, clinic: null });
+      return { success: true, user: mappedUser, token: result?.token || '' };
+    },
+    signup: async (payload) => {
+      const result = await request('POST', '/auth/signup', payload || {}, { auth: false });
+      const clinic = result?.clinic || null;
+      const mappedUser = mapCentralUserToDesktop(result?.user || {}, clinic);
+      persistWebSession({ token: result?.token || '', user: mappedUser, clinic });
+      return { success: true, user: mappedUser, clinic, token: result?.token || '' };
+    },
+    logout: async () => {
+      try {
+        if (getStoredToken()) {
+          await request('POST', '/auth/logout', {}, { auth: true });
+        }
+      } catch (_error) {
+        // local session still needs to be cleared
+      }
+      clearWebSession();
+      return { success: true };
+    },
+    currentUser: async () => {
+      const token = getStoredToken();
+      if (!token) return null;
+
+      try {
+        const user = await request('GET', '/auth/me', null, { auth: true, token });
+        const clinic = getStoredClinic();
+        const mappedUser = mapCentralUserToDesktop(user || {}, clinic);
+        persistWebSession({ token, user: mappedUser, clinic });
+        return mappedUser;
+      } catch (error) {
+        if (/unauthorized|expired|invalid/i.test(cleanText(error?.message))) {
+          clearWebSession();
+          return null;
+        }
+        return getStoredUser();
+      }
+    },
+    currentContext: async () => {
+      const user = await auth.currentUser();
+      if (!user) return buildAuthContext(null, null);
+      try {
+        const clinic = await clinicApi.get();
+        const normalizedUser = mapCentralUserToDesktop(user, clinic);
+        persistWebSession({ token: getStoredToken(), user: normalizedUser, clinic });
+        return buildAuthContext(normalizedUser, clinic);
+      } catch (_error) {
+        return buildAuthContext(user, getStoredClinic());
+      }
+    },
+    listUsers: async () => {
+      const data = await request('GET', '/users', null, { auth: true });
+      const clinic = getStoredClinic();
+      return (Array.isArray(data) ? data : []).map((user) => mapCentralUserToDesktop(user, clinic));
+    },
+    changePassword: async ({ senhaAtual, novaSenha }) => {
+      const result = await request('POST', '/auth/change-password', {
+        senhaAtual,
+        novaSenha,
+      }, { auth: true });
+      return { success: result?.changed === true || result?.success === true };
+    },
+    impersonateClinic: async () => notImplemented('auth.impersonateClinic'),
+    listClinics: async () => request('GET', '/clinics', null, { auth: false }),
+    createClinic: async () => notImplemented('auth.createClinic'),
+  };
+
+  const patients = {
+    list: async () => {
+      const data = await request('GET', '/patients', null, { auth: true });
+      return (Array.isArray(data) ? data : []).map(mapCentralPatientToLegacy);
+    },
+    read: async (id) => {
+      const data = await request('GET', '/patients/' + encodeURIComponent(cleanText(id)), null, { auth: true });
+      return mapCentralPatientToLegacy(data || {});
+    },
+    search: async (query) => {
+      const list = await patients.list();
+      return list.filter((patient) => matchesPatientQuery(patient, query));
+    },
+    find: async (query = {}) => {
+      const list = await patients.list();
+      const explicitId = cleanText(query?.prontuario || query?.patientId || query?.id);
+      if (explicitId) {
+        const foundById = list.find((patient) => cleanText(patient?.prontuario || patient?.id) === explicitId);
+        if (foundById) return foundById;
+      }
+      const terms = [
+        cleanText(query?.nome),
+        cleanText(query?.fullName),
+        cleanText(query?.cpf),
+        cleanText(query?.telefone),
+      ].filter(Boolean);
+      return list.find((patient) => terms.some((term) => matchesPatientQuery(patient, term))) || null;
+    },
+    save: async (payload = {}) => {
+      const normalizedId = cleanText(payload?.id || payload?.prontuario);
+      const body = normalizeLegacyPatientPayload(payload);
+      const data = normalizedId
+        ? await request('PATCH', '/patients/' + encodeURIComponent(normalizedId), body, { auth: true })
+        : await request('POST', '/patients', body, { auth: true });
+      return mapCentralPatientToLegacy(data || {});
+    },
+    remove: async (id) => request('DELETE', '/patients/' + encodeURIComponent(cleanText(id?.id || id)), null, { auth: true }),
+    uploadSelfie: async () => {
+      throw new Error('uploadSelfie ainda nao implementado no backend web.');
+    },
+    updateDentist: async () => notImplemented('patients.updateDentist'),
+  };
+
+  const users = {
+    list: async () => auth.listUsers(),
+    create: async (payload = {}) => {
+      const data = await request('POST', '/users', payload || {}, { auth: true });
+      return mapCentralUserToDesktop(data || {}, getStoredClinic());
+    },
+    update: async (payload = {}) => {
+      const id = cleanText(payload?.id || payload?.userId);
+      const data = await request('PATCH', `/users/${encodeURIComponent(id)}`, payload || {}, { auth: true });
+      return mapCentralUserToDesktop(data || {}, getStoredClinic());
+    },
+    delete: async (id) => request('DELETE', `/users/${encodeURIComponent(cleanText(id?.id || id))}`, null, { auth: true }),
+    resetPassword: async ({ id, password, novaSenha }) => request('POST', `/users/${encodeURIComponent(cleanText(id))}/reset-password`, {
+      password: cleanText(password || novaSenha),
+      novaSenha: cleanText(novaSenha || password),
+    }, { auth: true }),
+  };
+
+  const services = {
+    addToPatient: async ({ prontuario, service = {} } = {}) => {
+      const patientId = resolvePatientId({ prontuario, patientId: service?.patientId });
+      const data = await request(
+        'POST',
+        `/clinical/patients/${encodeURIComponent(patientId)}/procedures`,
+        { procedure: service || {} },
+        { auth: true }
+      );
+      return { service: data || null };
+    },
+    listForPatient: async (prontuario) => {
+      const patientId = resolvePatientId({ prontuario });
+      const data = await request('GET', `/clinical/patients/${encodeURIComponent(patientId)}/procedures`, null, { auth: true });
+      return {
+        prontuario: patientId,
+        servicos: Array.isArray(data) ? data : [],
+      };
+    },
+    update: async ({ prontuario, service = {} } = {}) => {
+      const patientId = resolvePatientId({ prontuario, patientId: service?.patientId });
+      const data = await request(
+        'POST',
+        `/clinical/patients/${encodeURIComponent(patientId)}/procedures`,
+        { procedure: service || {} },
+        { auth: true }
+      );
+      return {
+        service: data || null,
+        financeId: cleanText(data?.financeiroId || data?.financeiro?.financeEntryId),
+      };
+    },
+    delete: async ({ prontuario, id } = {}) => {
+      const patientId = resolvePatientId({ prontuario });
+      return request(
+        'DELETE',
+        `/clinical/patients/${encodeURIComponent(patientId)}/procedures/${encodeURIComponent(cleanText(id))}`,
+        null,
+        { auth: true }
+      );
+    },
+    markDone: async ({ prontuario, serviceId, dateISO } = {}) => services.update({
+      prontuario,
+      service: {
+        id: cleanText(serviceId),
+        status: 'realizado',
+        dataRealizacao: cleanText(dateISO || new Date().toISOString()),
+      },
+    }),
+    listAll: async () => notImplemented('services.listAll'),
+  };
+
+  const documents = {
+    list: async ({ prontuario, patientId, includeArchived = false } = {}) => {
+      const resolvedPatientId = resolvePatientId({ prontuario, patientId });
+      return request(
+        'GET',
+        `/clinical/patients/${encodeURIComponent(resolvedPatientId)}/documents?includeArchived=${includeArchived ? 'true' : 'false'}`,
+        null,
+        { auth: true }
+      );
+    },
+    upload: async (payload = {}) => {
+      const patientId = resolvePatientId(payload);
+      const file = payload?.file || null;
+      const isBrowserFile = (typeof File !== 'undefined' && file instanceof File)
+        || (typeof Blob !== 'undefined' && file instanceof Blob);
+      if (!patientId) throw new Error('patientId/prontuario is required.');
+      if (!isBrowserFile) {
+        throw new Error('Arquivo invalido para upload no webapp.');
+      }
+      const fileName = cleanText(payload?.fileName || file?.name || payload?.title || 'arquivo');
+      const metadata = await request(
+        'POST',
+        `/clinical/patients/${encodeURIComponent(patientId)}/documents`,
+        {
+          document: buildDocumentRecord({
+            title: cleanText(payload?.title || fileName),
+            type: payload?.type || 'ARQUIVO',
+            category: payload?.category || 'ARQUIVO_PACIENTE',
+            folder: payload?.folder || '',
+            documentDate: payload?.documentDate || normalizeDateOnly(new Date()),
+            data: {
+              ...payload,
+              fileName,
+              mimeType: cleanText(file?.type || payload?.mimeType || ''),
+            },
+          }),
+        },
+        { auth: true }
+      );
+      const arrayBuffer = await file.arrayBuffer();
+      await requestRawBody(
+        'PUT',
+        `/clinical/patients/${encodeURIComponent(patientId)}/documents/${encodeURIComponent(cleanText(metadata?.id))}/file?role=primary`,
+        arrayBuffer,
+        {
+          auth: true,
+          contentType: cleanText(file?.type || payload?.mimeType || 'application/octet-stream'),
+          headers: {
+            'x-file-name': encodeURIComponent(fileName),
+          },
+        }
+      );
+      return metadata;
+    },
+    open: async ({ prontuario, patientId, documentId } = {}) => {
+      const resolvedPatientId = resolvePatientId({ prontuario, patientId });
+      const record = await findDocumentRecord({ prontuario: resolvedPatientId, documentId, includeArchived: true });
+      if (!record) throw new Error('Documento nao encontrado.');
+      try {
+        const binary = await requestBinary(
+          'GET',
+          `/clinical/patients/${encodeURIComponent(resolvedPatientId)}/documents/${encodeURIComponent(cleanText(documentId))}/file?role=primary`,
+          null,
+          { auth: true, omitContentType: true }
+        );
+        return openBlobInBrowser(new Blob([binary.buffer], { type: binary.contentType || 'application/octet-stream' }), binary.contentType);
+      } catch (_error) {
+        return openHtmlPreview(record);
+      }
+    },
+    archive: async ({ prontuario, patientId, documentId, archived = true } = {}) => {
+      const resolvedPatientId = resolvePatientId({ prontuario, patientId });
+      const existing = await findDocumentRecord({ prontuario: resolvedPatientId, documentId, includeArchived: true });
+      const nextRecord = buildDocumentRecord({
+        ...(existing || {}),
+        id: cleanText(documentId),
+        archived,
+        data: existing?.data || {},
+      });
+      return request(
+        'POST',
+        `/clinical/patients/${encodeURIComponent(resolvedPatientId)}/documents`,
+        { document: nextRecord },
+        { auth: true }
+      );
+    },
+    saveCustom: async (payload = {}) => saveGenericDocument(payload, {
+      type: 'CUSTOMIZAVEL',
+      category: payload?.category || 'CLINICOS',
+      titleFallback: 'Documento customizavel',
+    }),
+    saveEvolucao: async (payload = {}) => {
+      const patientId = resolvePatientId(payload);
+      const title = cleanText(payload?.title || `Anotacao ${formatDatePtBr(payload?.data || new Date())}`);
+      const data = await request(
+        'POST',
+        `/clinical/patients/${encodeURIComponent(patientId)}/clinical-notes`,
+        {
+          noteType: 'EVOLUCAO',
+          content: payload || {},
+          document: buildDocumentRecord({
+            title,
+            type: 'EVOLUCAO',
+            category: payload?.category || 'CLINICOS',
+            documentDate: payload?.data || normalizeDateOnly(new Date()),
+            data: {
+              ...payload,
+              previewHtml: buildDocumentPreviewMarkup({
+                title,
+                type: 'EVOLUCAO',
+                documentDate: payload?.data || normalizeDateOnly(new Date()),
+                data: payload,
+              }),
+            },
+          }),
+        },
+        { auth: true }
+      );
+      return data?.sourceDocument || data?.document || data;
+    },
+    updateEvolucao: async (payload = {}) => {
+      const patientId = resolvePatientId(payload);
+      const documentId = cleanText(payload?.documentId || payload?.id);
+      const title = cleanText(payload?.title || `Anotacao ${formatDatePtBr(payload?.data || new Date())}`);
+      const data = await request(
+        'PATCH',
+        `/clinical/patients/${encodeURIComponent(patientId)}/clinical-notes/${encodeURIComponent(documentId)}`,
+        {
+          content: payload || {},
+          document: buildDocumentRecord({
+            id: documentId,
+            title,
+            type: 'EVOLUCAO',
+            category: payload?.category || 'CLINICOS',
+            documentDate: payload?.data || normalizeDateOnly(new Date()),
+            data: {
+              ...payload,
+              previewHtml: buildDocumentPreviewMarkup({
+                title,
+                type: 'EVOLUCAO',
+                documentDate: payload?.data || normalizeDateOnly(new Date()),
+                data: payload,
+              }),
+            },
+          }),
+        },
+        { auth: true }
+      );
+      return data?.sourceDocument || data?.document || data;
+    },
+    generateDossie: async ({ prontuario, patientId, docs = [], systemVersion = 'voithos-web' } = {}) => {
+      const resolvedPatientId = resolvePatientId({ prontuario, patientId });
+      const sourceDocs = Array.isArray(docs) && docs.length
+        ? docs
+        : await documents.list({ prontuario: resolvedPatientId, includeArchived: false });
+      const previewHtml = [
+        '<main style="font-family:Segoe UI,Arial,sans-serif;padding:24px;max-width:960px;margin:0 auto;color:#10243e;">',
+        '<h1>Dossie completo</h1>',
+        `<p>Gerado em ${escapeHtml(new Date().toLocaleString('pt-BR'))}</p>`,
+        '<ol>',
+        sortDocumentsByDateDesc(sourceDocs).map((doc) => (
+          `<li><strong>${escapeHtml(doc?.title || doc?.titulo || doc?.nome || 'Documento')}</strong> - ${escapeHtml(doc?.type || doc?.tipo || 'DOCUMENTO')} - ${escapeHtml(formatDatePtBr(doc?.documentDate || doc?.createdAt || ''))}</li>`
+        )).join(''),
+        '</ol>',
+        '</main>',
+      ].join('');
+      const record = await saveGenericDocument({
+        prontuario: resolvedPatientId,
+        title: 'Dossie completo',
+        category: 'CLINICOS',
+        documentDate: normalizeDateOnly(new Date()),
+        systemVersion,
+        docs: sortDocumentsByDateDesc(sourceDocs).map((doc) => ({
+          id: doc?.id || '',
+          title: doc?.title || doc?.titulo || '',
+          type: doc?.type || doc?.tipo || '',
+          documentDate: doc?.documentDate || doc?.createdAt || '',
+        })),
+        previewHtml,
+      }, {
+        type: 'DOSSIE',
+        category: 'CLINICOS',
+        titleFallback: 'Dossie completo',
+      });
+      return {
+        record,
+        hash: simpleHashString(JSON.stringify(record || {})),
+      };
+    },
+    saveAnamnese: async (payload = {}) => {
+      const patientId = resolvePatientId(payload);
+      const title = cleanText(payload?.title || 'Anamnese');
+      const data = await request(
+        'POST',
+        `/clinical/patients/${encodeURIComponent(patientId)}/anamneses`,
+        {
+          data: payload?.data || payload,
+          document: buildDocumentRecord({
+            title,
+            type: 'ANAMNESE',
+            category: 'CLINICOS',
+            documentDate: payload?.documentDate || normalizeDateOnly(new Date()),
+            data: {
+              ...(payload?.data || payload),
+              previewHtml: buildDocumentPreviewMarkup({
+                title,
+                type: 'ANAMNESE',
+                documentDate: payload?.documentDate || normalizeDateOnly(new Date()),
+                data: payload?.data || payload,
+              }),
+            },
+          }),
+        },
+        { auth: true }
+      );
+      return data?.sourceDocument || data?.document || data;
+    },
+    saveReceita: async (payload = {}) => saveGenericDocument({
+      ...payload,
+      documentDate: payload?.data || payload?.documentDate || normalizeDateOnly(new Date()),
+    }, {
+      type: 'RECEITA',
+      category: 'CLINICOS',
+      titleFallback: 'Receita',
+    }),
+    openLatestAnamnese: async ({ prontuario, patientId } = {}) => {
+      const docs = await documents.list({ prontuario, patientId, includeArchived: false });
+      const latest = sortDocumentsByDateDesc(docs).find((doc) => normalizeDocumentType(doc?.type || doc?.tipo) === 'ANAMNESE');
+      if (!latest?.id) throw new Error('Nenhuma anamnese encontrada.');
+      return documents.open({ prontuario, patientId, documentId: latest.id });
+    },
+    openLatestReceita: async ({ prontuario, patientId } = {}) => {
+      const docs = await documents.list({ prontuario, patientId, includeArchived: false });
+      const latest = sortDocumentsByDateDesc(docs).find((doc) => normalizeDocumentType(doc?.type || doc?.tipo) === 'RECEITA');
+      if (!latest?.id) throw new Error('Nenhuma receita encontrada.');
+      return documents.open({ prontuario, patientId, documentId: latest.id });
+    },
+    saveAtestado: async (payload = {}) => saveGenericDocument({
+      ...payload,
+      documentDate: payload?.data || payload?.documentDate || normalizeDateOnly(new Date()),
+    }, {
+      type: 'ATESTADO',
+      category: 'CLINICOS',
+      titleFallback: 'Atestado',
+    }),
+    saveContrato: async (payload = {}) => saveGenericDocument({
+      ...payload,
+      documentDate: payload?.data || payload?.documentDate || normalizeDateOnly(new Date()),
+    }, {
+      type: 'CONTRATO',
+      category: payload?.category || 'CLINICOS',
+      titleFallback: 'Contrato',
+    }),
+  };
+
+  const finance = {
+    getDashboard: async () => notImplemented('finance.getDashboard'),
+    getReminders: async () => notImplemented('finance.getReminders'),
+    list: async ({ patientId } = {}) => {
+      const query = patientId ? `?patientId=${encodeURIComponent(cleanText(patientId))}` : '';
+      return request('GET', `/financial/accounts${query}`, null, { auth: true });
+    },
+    listByPatient: async ({ patientId, prontuario } = {}) => {
+      const resolvedPatientId = resolvePatientId({ patientId, prontuario });
+      const data = await request('GET', `/financial/patients/${encodeURIComponent(resolvedPatientId)}/summary`, null, { auth: true });
+      return Array.isArray(data?.accounts) ? data.accounts : [];
+    },
+    add: async (payload = {}) => request('POST', '/financial/accounts', payload || {}, { auth: true }),
+    update: async (payload = {}) => request(
+      'PATCH',
+      `/financial/accounts/${encodeURIComponent(cleanText(payload?.id || payload?.financeEntryId))}`,
+      payload || {},
+      { auth: true }
+    ),
+    confirmPayment: async (payload = {}) => request(
+      'POST',
+      `/financial/accounts/${encodeURIComponent(cleanText(payload?.financeEntryId || payload?.id))}/payments`,
+      {
+        installmentId: cleanText(payload?.installmentId || ''),
+        amount: payload?.amount,
+        paymentMethod: payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+        paidAt: payload?.paidAt || new Date().toISOString(),
+        metadata: payload?.metadata || {},
+      },
+      { auth: true }
+    ),
+    createOrUpdateProcedureRevenue: async (payload = {}) => {
+      const normalizedId = cleanText(payload?.financeEntryId || payload?.id);
+      if (normalizedId) {
+        return finance.update({
+          id: normalizedId,
+          ...payload,
+        });
+      }
+      return finance.add(payload);
+    },
+    remove: async (id) => request('DELETE', `/financial/accounts/${encodeURIComponent(cleanText(id?.id || id))}`, null, { auth: true }),
+  };
+
+  const laboratorio = {
+    getDashboard: async () => notImplemented('laboratorio.getDashboard'),
+    list: async () => notImplemented('laboratorio.list'),
+    add: async () => notImplemented('laboratorio.add'),
+    update: async () => notImplemented('laboratorio.update'),
+    remove: async () => notImplemented('laboratorio.remove'),
+  };
+
+  const plans = {
+    list: async () => notImplemented('plans.list'),
+    getById: async () => notImplemented('plans.getById'),
+    create: async () => notImplemented('plans.create'),
+    update: async () => notImplemented('plans.update'),
+    remove: async () => notImplemented('plans.remove'),
+    dashboard: async () => notImplemented('plans.dashboard'),
+    messageHistory: async () => notImplemented('plans.messageHistory'),
+    messageSuggestions: async () => notImplemented('plans.messageSuggestions'),
+    sendMessage: async () => notImplemented('plans.sendMessage'),
+    resendMessage: async () => notImplemented('plans.resendMessage'),
+  };
+
+  const campanhas = {
+    list: async () => request('GET', '/campaigns', null, { auth: true }),
+    create: async (payload) => request('POST', '/campaigns', payload || {}, { auth: true }),
+    update: async (payload = {}) => request('PATCH', `/campaigns/${encodeURIComponent(cleanText(payload?.id))}`, payload || {}, { auth: true }),
+    remove: async (id) => request('DELETE', `/campaigns/${encodeURIComponent(cleanText(id))}`, null, { auth: true }),
+    dashboard: async () => request('GET', '/campaigns/dashboard', null, { auth: true }),
+    templates: async () => request('GET', '/campaigns/templates', null, { auth: true }),
+    createSendBatch: async (payload = {}) => request(
+      'POST',
+      `/campaigns/${encodeURIComponent(cleanText(payload?.campaignId))}/batches`,
+      {
+        force: payload?.force === true,
+        selectedPatientIds: Array.isArray(payload?.selectedPatientIds) ? payload.selectedPatientIds : [],
+        templateId: payload?.templateId || '',
+      },
+      { auth: true },
+    ),
+    logDelivery: async (payload = {}) => request(
+      'PATCH',
+      `/campaigns/dispatches/${encodeURIComponent(cleanText(payload?.dispatchId))}`,
+      {
+        status: payload?.status,
+        provider: payload?.provider || '',
+        providerMessageId: payload?.providerMessageId || '',
+        errorMessage: payload?.errorMessage || '',
+        metadata: payload?.metadata || null,
+      },
+      { auth: true },
+    ),
+    logsList: async (payload = {}) => {
+      const params = new URLSearchParams();
+      if (payload?.campaignId) params.set('campaignId', cleanText(payload.campaignId));
+      if (payload?.status) params.set('status', cleanText(payload.status));
+      if (payload?.dateFrom) params.set('dateFrom', cleanText(payload.dateFrom));
+      if (payload?.dateTo) params.set('dateTo', cleanText(payload.dateTo));
+      if (payload?.page) params.set('page', String(payload.page));
+      if (payload?.limit) params.set('limit', String(payload.limit));
+      const query = params.toString();
+      return request('GET', `/campaigns/logs${query ? `?${query}` : ''}`, null, { auth: true });
+    },
+    resolveAudience: async (payload = {}) => request('POST', '/campaigns/resolve-audience', payload || {}, { auth: true }),
+    result: async (payload = {}) => {
+      const campaignId = cleanText(payload?.campaignId);
+      const params = new URLSearchParams();
+      if (payload?.windowDays) params.set('windowDays', String(payload.windowDays));
+      const query = params.toString();
+      return request('GET', `/campaigns/${encodeURIComponent(campaignId)}/result${query ? `?${query}` : ''}`, null, { auth: true });
+    },
+  };
+
+  const campanhasGlobal = {
+    list: async () => notImplemented('campanhasGlobal.list'),
+    save: async () => notImplemented('campanhasGlobal.save'),
+  };
+
+  const whatsapp = {
+    sendText: async () => notImplemented('whatsapp.sendText'),
+    sendAppointmentConfirmation: async (input = {}) => {
+      const appointmentId = cleanText(input?.id || input?.appointment?.id);
+      if (!appointmentId) throw new Error('appointmentId is required.');
+      return request('POST', `/appointments/${encodeURIComponent(appointmentId)}/send-confirmation`, {}, { auth: true });
+    },
+    sendAppointmentReminder: async (input = {}) => {
+      const appointmentId = cleanText(input?.id || input?.appointment?.id);
+      if (!appointmentId) throw new Error('appointmentId is required.');
+      return request('POST', `/appointments/${encodeURIComponent(appointmentId)}/send-reminder`, {}, { auth: true });
+    },
+    sendCampaign: async () => notImplemented('whatsapp.sendCampaign'),
+    logsList: async () => notImplemented('whatsapp.logsList'),
+  };
+
+  const anamneseModels = {
+    getActive: async () => {
+      const settings = await getOperationalSettings();
+      const models = normalizeModelList(settings?.anamneseModels, 'anamnese');
+      return models.find((item) => item.ativo) || models[0] || null;
+    },
+    list: async () => {
+      const settings = await getOperationalSettings();
+      return normalizeModelList(settings?.anamneseModels, 'anamnese');
+    },
+    create: async (payload = {}) => {
+      const settings = await getOperationalSettings();
+      const models = normalizeModelList(settings?.anamneseModels, 'anamnese');
+      const nextModels = models.concat({
+        id: cleanText(payload?.id || createLocalId('anamnese')),
+        nome: cleanText(payload?.nome || payload?.title || 'Modelo de anamnese'),
+        titulo: cleanText(payload?.titulo || payload?.nome || payload?.title || ''),
+        categoria: cleanText(payload?.categoria || payload?.category || ''),
+        conteudo: payload?.conteudo ?? payload?.content ?? '',
+        data: payload?.data ?? payload?.fields ?? {},
+        ativo: models.length === 0 || payload?.ativo === true,
+      }).map((item, index, list) => ({
+        ...item,
+        ativo: item.ativo === true && list.findIndex((entry) => entry.ativo === true) === index,
+      }));
+      const updated = await patchOperationalSettings({ anamneseModels: nextModels });
+      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+    },
+    update: async (payload = {}) => {
+      const settings = await getOperationalSettings();
+      const models = normalizeModelList(settings?.anamneseModels, 'anamnese').map((item) => (
+        cleanText(item.id) === cleanText(payload?.id)
+          ? {
+              ...item,
+              nome: cleanText(payload?.nome || payload?.title || item.nome),
+              titulo: cleanText(payload?.titulo || payload?.nome || payload?.title || item.titulo),
+              categoria: cleanText(payload?.categoria || payload?.category || item.categoria),
+              conteudo: payload?.conteudo ?? payload?.content ?? item.conteudo,
+              data: payload?.data ?? payload?.fields ?? item.data,
+              ativo: payload?.ativo === undefined ? item.ativo : payload.ativo === true,
+            }
+          : item
+      ));
+      const updated = await patchOperationalSettings({ anamneseModels: models });
+      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+    },
+    remove: async (id) => {
+      const settings = await getOperationalSettings();
+      const models = normalizeModelList(settings?.anamneseModels, 'anamnese')
+        .filter((item) => cleanText(item.id) !== cleanText(id?.id || id));
+      const nextModels = models.map((item, index) => ({
+        ...item,
+        ativo: item.ativo || (index === 0 && !models.some((entry) => entry.ativo)),
+      }));
+      const updated = await patchOperationalSettings({ anamneseModels: nextModels });
+      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+    },
+    setActive: async (id) => {
+      const settings = await getOperationalSettings();
+      const models = normalizeModelList(settings?.anamneseModels, 'anamnese').map((item) => ({
+        ...item,
+        ativo: cleanText(item.id) === cleanText(id?.id || id),
+      }));
+      const updated = await patchOperationalSettings({ anamneseModels: models });
+      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+    },
+  };
+
+  const files = {
+    readPatients: async () => notImplemented('files.readPatients'),
+    readReceipts: async () => notImplemented('files.readReceipts'),
+  };
+
+  const agenda = {
+    getDay: async (input = {}) => {
+      const date = typeof input === 'string' ? cleanText(input) : cleanText(input?.date);
+      let from = normalizeRangeBoundary(date, false);
+      let to = normalizeRangeBoundary(date, true);
+      if (date && !from && !to) {
+        from = combineDateTime(date, '00:00');
+        to = combineDateTime(date, '23:59');
+      }
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      const query = params.toString();
+      const [appointmentsData, patientsData] = await Promise.all([
+        request('GET', `/appointments${query ? `?${query}` : ''}`, null, { auth: true }),
+        request('GET', '/patients', null, { auth: true }),
+      ]);
+      const patientMap = buildPatientMap((Array.isArray(patientsData) ? patientsData : []).map(mapCentralPatientToLegacy));
+      return (Array.isArray(appointmentsData) ? appointmentsData : []).map((appointment) => mapCentralAppointmentToLegacy(appointment, patientMap));
+    },
+    getRange: async ({ start, end, date, patientId } = {}) => {
+      let from = normalizeRangeBoundary(start, false);
+      let to = normalizeRangeBoundary(end, true);
+      if (date && !from && !to) {
+        from = combineDateTime(date, '00:00');
+        to = combineDateTime(date, '23:59');
+      }
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      if (patientId) params.set('patientId', cleanText(patientId));
+      const query = params.toString();
+      const [appointmentsData, patientsData] = await Promise.all([
+        request('GET', `/appointments${query ? `?${query}` : ''}`, null, { auth: true }),
+        patientId
+          ? request('GET', `/patients/${encodeURIComponent(cleanText(patientId))}`, null, { auth: true })
+              .then((patient) => [patient])
+              .catch(() => [])
+          : request('GET', '/patients', null, { auth: true }),
+      ]);
+      const patientMap = buildPatientMap((Array.isArray(patientsData) ? patientsData : []).map(mapCentralPatientToLegacy));
+      return (Array.isArray(appointmentsData) ? appointmentsData : []).map((appointment) => mapCentralAppointmentToLegacy(appointment, patientMap));
+    },
+    add: async (payload = {}) => {
+      const patientId = cleanText(payload?.patientId || payload?.pacienteId || payload?.prontuario);
+      const body = {
+        patientId,
+        profissionalId: payload?.dentistaId || '',
+        profissionalNome: payload?.dentistaNome || '',
+        dataHora: combineDateTime(payload?.data, payload?.horaInicio),
+        horaFim: combineDateTime(payload?.data, payload?.horaFim),
+        tipo: payload?.tipo || '',
+        observacoes: payload?.observacoes || '',
+        attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[cleanText(payload?.attendanceStatus).toLowerCase()] || null,
+      };
+      const [appointment, patient] = await Promise.all([
+        request('POST', '/appointments', body, { auth: true }),
+        patientId ? patients.read(patientId).catch(() => null) : Promise.resolve(null),
+      ]);
+      const patientMap = buildPatientMap(patient ? [patient] : []);
+      return mapCentralAppointmentToLegacy(appointment || {}, patientMap);
+    },
+    update: async (id, payload = {}) => {
+      const normalizedId = cleanText(id || payload?.id);
+      if (!normalizedId) throw new Error('appointmentId is required.');
+
+      const hasOnlyStatus = Object.keys(payload || {}).length === 1 && Object.prototype.hasOwnProperty.call(payload || {}, 'status');
+      const hasOnlyAttendance = Object.keys(payload || {}).length === 1 && Object.prototype.hasOwnProperty.call(payload || {}, 'attendanceStatus');
+
+      if (hasOnlyStatus) {
+        const appointment = await request('PATCH', `/appointments/${encodeURIComponent(normalizedId)}/status`, {
+          status: LEGACY_TO_CENTRAL_STATUS[cleanText(payload?.status).toLowerCase()] || 'AGENDADO',
+        }, { auth: true });
+        const patient = appointment?.patientId ? await patients.read(appointment.patientId).catch(() => null) : null;
+        return mapCentralAppointmentToLegacy(appointment || {}, buildPatientMap(patient ? [patient] : []));
+      }
+
+      if (hasOnlyAttendance) {
+        const appointment = await request('PATCH', `/appointments/${encodeURIComponent(normalizedId)}/attendance`, {
+          attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[cleanText(payload?.attendanceStatus).toLowerCase()] || null,
+        }, { auth: true });
+        const patient = appointment?.patientId ? await patients.read(appointment.patientId).catch(() => null) : null;
+        return mapCentralAppointmentToLegacy(appointment || {}, buildPatientMap(patient ? [patient] : []));
+      }
+
+      const patientId = cleanText(payload?.patientId || payload?.pacienteId || payload?.prontuario);
+      const appointment = await request('PATCH', `/appointments/${encodeURIComponent(normalizedId)}`, {
+        patientId,
+        profissionalId: payload?.dentistaId || '',
+        profissionalNome: payload?.dentistaNome || '',
+        dataHora: combineDateTime(payload?.data, payload?.horaInicio),
+        horaFim: combineDateTime(payload?.data, payload?.horaFim),
+        tipo: payload?.tipo || '',
+        observacoes: payload?.observacoes || '',
+        status: LEGACY_TO_CENTRAL_STATUS[cleanText(payload?.status || 'em_aberto').toLowerCase()] || 'AGENDADO',
+        attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[cleanText(payload?.attendanceStatus).toLowerCase()] || null,
+      }, { auth: true });
+      const patient = appointment?.patientId ? await patients.read(appointment.patientId).catch(() => null) : null;
+      return mapCentralAppointmentToLegacy(appointment || {}, buildPatientMap(patient ? [patient] : []));
+    },
+    remove: async (input) => {
+      const appointmentId = cleanText(typeof input === 'object' ? input?.id : input);
+      if (!appointmentId) throw new Error('appointmentId is required.');
+      return request('DELETE', `/appointments/${encodeURIComponent(appointmentId)}`, null, { auth: true });
+    },
+    syncConsultas: async () => notImplemented('agenda.syncConsultas'),
+  };
+
+  const birthdays = {
+    listToday: async ({ date } = {}) => {
+      const overview = await request(
+        'GET',
+        `/relationships/overview?${new URLSearchParams({ date: cleanText(date || normalizeDateOnly(new Date())) }).toString()}`,
+        null,
+        { auth: true },
+      );
+      return mapBirthdayItemsFromOverview(overview || {}, date);
+    },
+    listHistory: async ({ patientId, dateFrom, dateTo, limit } = {}) => {
+      const params = new URLSearchParams();
+      params.set('types', 'BIRTHDAY_MESSAGE_SENT,BIRTHDAY_MESSAGE_FAILED,BIRTHDAY_MESSAGE_JOB_COMPLETED');
+      if (patientId) params.set('patientId', cleanText(patientId));
+      if (dateFrom) params.set('dateFrom', cleanText(dateFrom));
+      if (dateTo) params.set('dateTo', cleanText(dateTo));
+      if (limit) params.set('limit', String(limit));
+      const items = await request('GET', `/notifications?${params.toString()}`, null, { auth: true });
+      return {
+        patientId: cleanText(patientId),
+        items: Array.isArray(items) ? items : [],
+      };
+    },
+    sendBirthdayMessage: null,
+  };
+
+  const relationship = {
+    getOverview: async ({ date, dueSoonDays } = {}) => {
+      const params = new URLSearchParams();
+      if (date) params.set('date', cleanText(date));
+      if (dueSoonDays !== undefined && dueSoonDays !== null && cleanText(dueSoonDays) !== '') {
+        params.set('dueSoonDays', String(dueSoonDays));
+      }
+      return request('GET', `/relationships/overview${params.toString() ? `?${params.toString()}` : ''}`, null, { auth: true });
+    },
+  };
+
+  const agendaSettings = {
+    get: async () => {
+      const settings = await request('GET', '/clinics/me/operational-settings', null, { auth: true });
+      return normalizeAgendaSettingsForUi(settings?.agendaSettings || {});
+    },
+    save: async (payload = {}) => {
+      const settings = await request('PATCH', '/clinics/me/operational-settings', {
+        agendaSettings: normalizeAgendaSettingsPatch(payload || {}),
+      }, { auth: true });
+      return normalizeAgendaSettingsForUi(settings?.agendaSettings || {});
+    },
+  };
+
+  const agendaAvailability = {
+    get: async () => {
+      const settings = await request('GET', '/clinics/me/operational-settings', null, { auth: true });
+      return settings?.agendaAvailability || null;
+    },
+    save: async (payload = {}) => {
+      const settings = await request('PATCH', '/clinics/me/operational-settings', {
+        agendaAvailability: payload || {},
+      }, { auth: true });
+      return settings?.agendaAvailability || null;
+    },
+  };
+
+  const notifications = {
+    get: async () => {
+      const settings = await request('GET', '/clinics/me/operational-settings', null, { auth: true });
+      return settings?.notificationPreferences || null;
+    },
+    save: async (payload = {}) => {
+      const settings = await request('PATCH', '/clinics/me/operational-settings', {
+        notificationPreferences: payload || {},
+      }, { auth: true });
+      return settings?.notificationPreferences || null;
+    },
+    listEvents: async (payload = {}) => {
+      const params = new URLSearchParams();
+      if (payload?.type) params.set('type', cleanText(payload.type));
+      if (payload?.types) {
+        const types = Array.isArray(payload.types) ? payload.types : String(payload.types).split(',');
+        const normalized = types.map((item) => cleanText(item)).filter(Boolean);
+        if (normalized.length) params.set('types', normalized.join(','));
+      }
+      if (payload?.patientId) params.set('patientId', cleanText(payload.patientId));
+      if (payload?.dateFrom) params.set('dateFrom', cleanText(payload.dateFrom));
+      if (payload?.dateTo) params.set('dateTo', cleanText(payload.dateTo));
+      if (payload?.limit) params.set('limit', String(payload.limit));
+      return request('GET', `/notifications${params.toString() ? `?${params.toString()}` : ''}`, null, { auth: true });
+    },
+  };
+
+  const procedures = {
+    list: async () => {
+      const settings = await getOperationalSettings();
+      const central = Array.isArray(settings?.proceduresCatalog) ? settings.proceduresCatalog : [];
+      const fallback = await fetchStaticProcedureCatalog();
+      return mergeProcedureCatalog(fallback, central);
+    },
+    upsert: async (payload = {}) => {
+      const current = await procedures.list();
+      const normalized = normalizeProcedureItem(payload);
+      const next = current.filter((item) => {
+        const sameCode = normalized.codigo && cleanText(item.codigo).toLowerCase() === cleanText(normalized.codigo).toLowerCase();
+        const sameId = cleanText(item.id) === cleanText(normalized.id);
+        return !(sameCode || sameId);
+      });
+      next.push(normalized);
+      const updated = await patchOperationalSettings({ proceduresCatalog: next });
+      return mergeProcedureCatalog([], updated?.proceduresCatalog || []);
+    },
+    remove: async (payload = {}) => {
+      const current = await procedures.list();
+      const normalizedId = cleanText(payload?.id || payload?.codigo || payload);
+      const next = current.filter((item) => cleanText(item.id || item.codigo || item.nome) !== normalizedId);
+      const updated = await patchOperationalSettings({ proceduresCatalog: next });
+      return mergeProcedureCatalog([], updated?.proceduresCatalog || []);
+    },
+  };
+
+  const documentModels = {
+    list: async () => notImplemented('documentModels.list'),
+    renderPreview: async () => notImplemented('documentModels.renderPreview'),
+    create: async () => notImplemented('documentModels.create'),
+    update: async () => notImplemented('documentModels.update'),
+    remove: async () => notImplemented('documentModels.remove'),
+    setActive: async () => notImplemented('documentModels.setActive'),
+  };
+
+  const loadProcedures = async () => procedures.list();
+
+  const openExternalUrl = async (url) => {
+    const target = cleanText(url);
+    if (!target) throw new Error('URL invalida.');
+    window.open(target, '_blank', 'noopener,noreferrer');
+    return { success: true };
+  };
+
+  const events = {
+    receive: () => null,
+  };
+
+  window.__webAdapter = {
+    mode: 'web',
+    auth,
+    users,
+    patients,
+    services,
+    documents,
+    finance,
+    laboratorio,
+    plans,
+    campanhas,
+    campanhasGlobal,
+    clinic: clinicApi,
+    whatsapp,
+    anamneseModels,
+    files,
+    agenda,
+    birthdays,
+    relationship,
+    agendaSettings,
+    agendaAvailability,
+    notifications,
+    procedures,
+    documentModels,
+    loadProcedures,
+    openExternalUrl,
+    events,
+  };
+})();

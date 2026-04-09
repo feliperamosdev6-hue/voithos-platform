@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nova receita - Voithos</title>
+    <link rel="stylesheet" href="header.css">
+    <link rel="stylesheet" href="atestado.css">
+</head>
+<body>
+    <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+            <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                </div>
+            </div>
+            <div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="atest-main">
+        <section class="atest-card">
+            <div class="atest-header">
+                <h1>Nova receita</h1>
+                <p>Preencha os dados para emitir o receituario.</p>
+            </div>
+
+            <form id="receita-form" class="atest-form">
+                <div class="field-block">
+                    <label for="receita-paciente">Selecione o paciente</label>
+                    <div class="patient-dropdown">
+                        <button type="button" class="patient-toggle" id="receita-patient-toggle">
+                            Selecione ou crie um(a) novo(a) paciente
+                        </button>
+                        <div class="patient-menu hidden" id="receita-patient-menu">
+                            <input type="text" id="receita-paciente-busca" class="patient-search" placeholder="Buscar por nome ou prontuario">
+                            <div class="patient-list" id="receita-patient-list"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" id="receita-paciente" value="">
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-block">
+                        <label for="receita-profissional">Selecione um profissional</label>
+                        <select id="receita-profissional">
+                            <option value="">Selecione</option>
+                        </select>
+                    </div>
+                    <div class="field-block">
+                        <label for="receita-data">Data de emissao</label>
+                        <input type="date" id="receita-data" required>
+                    </div>
+                </div>
+
+                <div class="field-block">
+                    <label>Itens da receita</label>
+                    <div id="receita-favorites" class="receita-favorites hidden"></div>
+                    <div id="receita-items"></div>
+                    <button type="button" class="btn-link" id="receita-add-item">+ Adicionar item</button>
+                </div>
+
+                <div class="field-block">
+                    <label for="receita-texto">Texto livre</label>
+                    <textarea id="receita-texto" rows="4" placeholder="Orientacoes gerais do receituario"></textarea>
+                </div>
+
+                <div class="field-block">
+                    <label for="receita-observacoes">Observacoes</label>
+                    <textarea id="receita-observacoes" rows="3" placeholder="Observacoes adicionais"></textarea>
+                </div>
+
+                <div class="form-footer">
+                    <a class="btn-link" href="index.html">Voltar</a>
+                    <div>
+                        <button type="button" class="btn-link" id="receita-open-latest">Abrir ultima receita</button>
+                        <button type="submit" class="btn-primary" id="receita-submit" disabled>Emitir receita</button>
+                    </div>
+                </div>
+                <p class="form-hint" id="receita-hint">Preencha paciente, profissional e data.</p>
+            </form>
+        </section>
+    </main>
+
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="header.js"></script>
+    <script src="receita.js"></script>
+</body>
+</html>

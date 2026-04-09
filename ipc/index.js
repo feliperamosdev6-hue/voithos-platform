@@ -1,0 +1,47 @@
+const { registerDocumentsHandlers } = require('./documentsHandlers');
+const { registerFinanceHandlers } = require('./financeHandlers');
+const { registerFaturamentoHandlers } = require('./faturamentoHandlers');
+const { registerLaboratorioHandlers } = require('./laboratorioHandlers');
+const { registerAgendaHandlers } = require('./agendaHandlers');
+const { registerAuthHandlers } = require('./authHandlers');
+const { registerPatientsHandlers } = require('./patientsHandlers');
+const { registerServicesHandlers } = require('./servicesHandlers');
+const { registerCampanhasHandlers } = require('./campanhasHandlers');
+const { registerClinicHandlers } = require('./clinicHandlers');
+const { registerProceduresHandlers } = require('./proceduresHandlers');
+const { registerAgendaSettingsHandlers } = require('./agendaSettingsHandlers');
+const { registerAgendaAvailabilityHandlers } = require('./agendaAvailabilityHandlers');
+const { registerNotificationsHandlers } = require('./notificationsHandlers');
+const { registerAnamneseModelsHandlers } = require('./anamneseModelsHandlers');
+const { registerDocumentModelsHandlers } = require('./documentModelsHandlers');
+const { registerBirthdaysHandlers } = require('./birthdaysHandlers');
+const { registerSystemHandlers } = require('./systemHandlers');
+const { registerPlansHandlers } = require('./plansHandlers');
+const { registerRelationshipHandlers } = require('./relationshipHandlers');
+const { registerWhatsappHandlers } = require('./whatsappHandlers');
+
+const registerIpcHandlers = (deps) => {
+  registerDocumentsHandlers(deps);
+  registerFinanceHandlers(deps);
+  registerFaturamentoHandlers(deps);
+  registerLaboratorioHandlers(deps);
+  registerAgendaHandlers(deps);
+  registerAuthHandlers(deps);
+  registerPatientsHandlers(deps);
+  registerServicesHandlers(deps);
+  registerCampanhasHandlers(deps);
+  registerClinicHandlers(deps);
+  registerProceduresHandlers(deps);
+  registerAgendaSettingsHandlers(deps);
+  registerAgendaAvailabilityHandlers(deps);
+  registerNotificationsHandlers(deps);
+  registerAnamneseModelsHandlers(deps);
+  registerDocumentModelsHandlers(deps);
+  registerBirthdaysHandlers(deps);
+  registerWhatsappHandlers(deps);
+  registerSystemHandlers(deps);
+  registerPlansHandlers(deps);
+  registerRelationshipHandlers(deps);
+};
+
+module.exports = { registerIpcHandlers };

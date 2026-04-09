@@ -1,0 +1,232 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servicos - voithos</title>
+    
+    <!-- Recomendo usar um arquivo de estilo consistente com o resto do app, como o 'cadastro-paciente.css' -->
+    <link rel="stylesheet" href="cadastro-paciente.css">
+    <link rel="stylesheet" href="servicos.css">
+    
+    <!-- Adiciona a biblioteca de ícones (Font Awesome) para o ícone de voltar -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <header class="page-header">
+        <h1>Servicos</h1>
+    </header>
+
+<main class="container">
+        <div class="form-container">
+            <div class="form-header">
+                <i class="fa-solid fa-tooth icon-header"></i>
+                <h2>Registrar Novo Servico</h2>
+            </div>
+
+            <form id="service-form">
+                <div class="form-grid">
+                                        <div class="linha-topo-servico form-group full-width">
+                        <div class="bloco-paciente">
+                            <label>Pacientes <span class="required">*</span></label>
+                            <div class="patient-dropdown">
+                                <button type="button" class="patient-toggle" id="patient-toggle">
+                                    Selecione ou crie um(a) novo(a) paciente
+                                </button>
+                                <div class="patient-menu hidden" id="patient-menu">
+                                    <input type="text" id="patient-search" class="patient-search" placeholder="Buscar por nome, prontuario ou CPF">
+                                    <div class="patient-list" id="patient-list"></div>
+                                </div>
+                            </div>
+                            <div id="patientSearchResult" style="margin-top: 10px; font-weight: bold;"></div>
+                            <input type="hidden" id="patientProntuario" name="patientProntuario" required>
+                        </div>
+                        <div class="bloco-dentista" id="dentista-responsavel-bloco">
+                            <label for="selectDentistaServico">Dentista responsavel</label>
+                            <select id="selectDentistaServico"></select>
+                            <span id="dentistaNomeFixo" style="display: none; font-weight: 600;"></span>
+                            <button type="button" id="btn-ver-anamnese" class="submit-button secondary" style="display: none;">Ver anamnese</button>
+                        </div>
+                    </div>
+
+                    <!-- Secao para adicionar multiplos servicos -->
+                    
+<!-- Secao para adicionar multiplos servicos -->
+                    <div class="odontograma-toolbar">
+                      <div class="odontograma-toolbar-text">
+                        <h3>Odontograma</h3>
+                        <p id="servicos-odontograma-mode-subtitle">Permanente</p>
+                      </div>
+                      <div class="odonto-mode-toggle" role="tablist" aria-label="Visualizacao do odontograma">
+                        <button type="button" class="odonto-mode-btn active" data-odonto-mode="permanente" role="tab" aria-selected="true">Permanente</button>
+                        <button type="button" class="odonto-mode-btn" data-odonto-mode="deciduo" role="tab" aria-selected="false">Deciduo</button>
+                      </div>
+                    </div>
+                    <div class="odontograma-layout odontograma-layout--stack" id="odontograma-layout">
+  <section class="odontograma-container" id="odontograma">
+    <iframe src="odontograma.html" title="Odontograma" class="odontograma-frame"></iframe>
+  </section>
+  <aside class="odontograma-panel">
+      <h3>Resumo do dente</h3>
+      <div class="panel-row panel-full"><span class="panel-label">Dentes selecionados:</span><span id="dentesSelecionadosResumo">Nenhum</span></div>
+      <div class="panel-grid">
+        <div class="panel-row"><span class="panel-label">Dente:</span><span id="painelResumoDente">-</span></div>
+        <div class="panel-row"><span class="panel-label">Faces:</span><span id="painelResumoFaces">-</span></div>
+        <div class="panel-row"><span class="panel-label">Procedimento ativo:</span><span id="painelProcedimentoAtivo">Nenhum</span>
+      <div class="panel-row panel-full face-legend">
+        <span class="panel-label">Selecionar faces:</span>
+        <div class="face-legend-items">
+          <span class="face-chip face-d face-select" data-face="D">D</span>
+          <span class="face-chip face-l face-select" data-face="L">L</span>
+          <span class="face-chip face-m face-select" data-face="M">M</span>
+          <span class="face-chip face-o face-select" data-face="O">O</span>
+          <span class="face-chip face-v face-select" data-face="V">V</span>
+        </div>
+      </div>
+        <label class="panel-label" for="painelObs">Observacoes clinicas</label>
+        <textarea id="painelObs" rows="3" placeholder="Notas rapidas sobre o odontograma"></textarea>
+      </div>
+    </aside>
+</div>
+<div class="form-group full-width">
+                        <h3 style="margin: 12px 0;">Procedimentos</h3>
+                        <div class="form-grid" style="grid-template-columns: 2fr 1fr auto; align-items: flex-end; gap: 12px;">
+                            <div class="form-group">
+                                <label for="serviceName">Procedimento</label>
+                                <div class="input-container">
+                                    <input type="text" id="serviceName" placeholder="Digite ou selecione o procedimento">
+                                    <span class="icon-wrapper" id="dropdownArrow">&#9662;</span>
+                                    <div class="suggestions-container" id="serviceSuggestions"></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="serviceValue">Valor (R$)</label>
+                                <input type="number" id="serviceValue" placeholder="0,00" step="0.01" min="0">
+                            </div>
+                            <button type="button" id="addServiceBtn" class="submit-button" style="margin-top: 0; width: 100%;">Adicionar</button>
+                        </div>
+</div>
+
+
+<div class="form-group full-width">
+                        <label>Servicos a Registrar</label>
+                        <!-- Lista onde os servicos adicionados aparecerao -->
+                        <ul id="selectedServicesList" class="selected-items-list"></ul>
+                    </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" id="btn-salvar-servico" class="submit-button">Salvar procedimento</button>
+                    <button type="button" id="btn-salvar-servico-agendar" class="submit-button secondary">Agendar consulta</button>
+                </div>
+            </form>
+        </div>
+    </main>
+
+    <!-- Bibliotecas para geração de PDF. Devem vir ANTES do seu script. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+
+    <!-- Seu script principal -->
+    <script src="servicos.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

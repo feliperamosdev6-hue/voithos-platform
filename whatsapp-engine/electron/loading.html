@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voithos WhatsApp NG</title>
+  <style>
+    :root {
+      --bg: #091019;
+      --panel: rgba(19, 29, 43, 0.94);
+      --border: rgba(145, 173, 207, 0.16);
+      --text: #edf3fb;
+      --muted: #8ca2bd;
+      --accent: #58d6b0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(88, 214, 176, 0.12), transparent 24%),
+        radial-gradient(circle at top right, rgba(44, 95, 179, 0.18), transparent 28%),
+        linear-gradient(180deg, #091019 0%, #0d131c 52%, #0a1118 100%);
+    }
+
+    .shell {
+      width: min(560px, calc(100vw - 48px));
+      padding: 32px;
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 34px;
+      line-height: 1.1;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .status {
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 10px rgba(88, 214, 176, 0.08);
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.86); opacity: 0.65; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <p class="eyebrow">Desktop local</p>
+    <h1>Voithos WhatsApp NG</h1>
+    <p>Inicializando o backend local e conectando a interface administrativa do engine.</p>
+    <div class="status">
+      <span class="dot" aria-hidden="true"></span>
+      <p>Aguardando API em <strong>http://127.0.0.1:8099</strong>.</p>
+    </div>
+  </main>
+</body>
+</html>

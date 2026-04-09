@@ -1,0 +1,541 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campanhas</title>
+  <link rel="stylesheet" href="campanhas.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+  <header class="page-header">
+    <div class="header-left">
+      <div class="title-group">
+        <h1>Campanhas</h1>
+        <p class="subtitle">Campanhas da clinica</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn ghost" id="btn-globais">Atualizar globais</button>
+      <button class="btn primary" id="btn-nova-campanha">+ Nova campanha</button>
+    </div>
+  </header>
+
+<main class="page-content">
+    <section class="campaign-health-panel" id="campaign-health-panel">
+      <div class="health-header">
+        <div>
+          <p class="muted">Operacao</p>
+          <h2>Saude de Campanhas</h2>
+        </div>
+        <button type="button" class="btn ghost" id="btn-logs-hoje">Ver logs de hoje</button>
+      </div>
+      <div class="health-grid">
+        <article class="health-card"><span>Enviadas hoje</span><strong id="kpi-sent-today">--</strong></article>
+        <article class="health-card"><span>Falhas hoje</span><strong id="kpi-failed-today">--</strong></article>
+        <article class="health-card"><span>Taxa de entrega</span><strong id="kpi-delivery-rate">--</strong></article>
+        <article class="health-card"><span>Ultimo envio</span><strong id="kpi-last-send">--</strong></article>
+        <article class="health-card"><span>Proximo envio elegivel</span><strong id="kpi-next-send">--</strong></article>
+      </div>
+    </section>
+
+    <section class="templates-panel" id="templates-panel">
+      <article class="monthly-template-card" id="monthly-template-card">
+        <p class="muted">Campanha do mes</p>
+        <h3 id="monthly-template-title">Carregando...</h3>
+        <p id="monthly-template-desc">Preparando sugestao mensal.</p>
+        <p class="monthly-template-cta" id="monthly-template-cta"></p>
+        <button type="button" class="btn primary" id="btn-activate-monthly-template">Usar template</button>
+        <section class="strategy-card" aria-label="Estrategia Voithos">
+          <p class="muted">Estrategia Voithos</p>
+          <h4>Estrategia da semana</h4>
+          <p class="strategy-subtitle">Como aumentar pacientes usando campanhas simples.</p>
+          <p class="strategy-description">Assista esse video rapido com uma dica pratica para melhorar os resultados das campanhas da sua clinica.</p>
+          <button type="button" class="btn ghost strategy-btn" id="btn-open-strategy-video">Assistir video</button>
+        </section>
+      </article>
+      <article class="quick-templates-card">
+        <div class="quick-templates-head">
+          <div>
+            <p class="muted">Biblioteca Anual Voithos</p>
+            <h3>12 campanhas estrategicas</h3>
+          </div>
+        </div>
+        <div class="quick-templates-grid" id="quick-templates-grid">
+          <div class="empty-state">Carregando templates...</div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card-list">
+      <div class="list-header">
+        <div>
+          <p class="muted">Visao geral</p>
+          <h2>Campanhas ativas</h2>
+        </div>
+      </div>
+      <div id="campanhas-list" class="campanhas-list">
+        <div class="empty-state">Nenhuma campanha criada</div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="campanhas-globais-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Campanhas globais</p>
+          <h3>Atualizar lista global</h3>
+        </div>
+        <button class="icon-button" id="close-globais-modal" aria-label="Fechar modal">&times;</button>
+      </div>
+      <form id="campanhas-globais-form">
+        <label class="form-field full">
+          <span>JSON das campanhas globais</span>
+          <textarea id="campanhas-globais-json" rows="10" placeholder="Cole aqui uma lista JSON de campanhas"></textarea>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="cancelar-globais">Cancelar</button>
+          <button type="submit" class="btn primary">Salvar globais</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="campanha-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Cadastro rapido</p>
+          <h3>Nova campanha</h3>
+        </div>
+        <button class="icon-button" id="close-modal" aria-label="Fechar modal">&times;</button>
+      </div>
+      <form id="campanha-form">
+        <div class="form-grid">
+          <label class="form-field full">
+            <span class="field-label">Nome da campanha</span>
+            <input type="text" id="camp-nome" name="nome" placeholder="De um nome a campanha" required>
+          </label>
+          <label class="form-field full">
+            <span class="field-label">
+              <span>Descricao</span>
+              <span class="optional">Opcional</span>
+            </span>
+            <textarea id="camp-descricao" name="descricao" rows="3" placeholder="Descreva os detalhes da campanha."></textarea>
+          </label>
+          <label class="form-field">
+            <span class="field-label">Comeca em</span>
+            <input type="date" id="camp-inicio" name="inicio">
+          </label>
+          <label class="form-field">
+            <span class="field-label">
+              <span>Termina em</span>
+              <span class="optional">Opcional</span>
+            </span>
+            <input type="date" id="camp-fim" name="fim">
+          </label>
+          <label class="form-field full">
+            <span class="field-label">Meio de comunicacao</span>
+            <select id="camp-canal" name="canal" required>
+              <option value="">Selecione o(s) meio(s)</option>
+              <option value="WhatsApp">WhatsApp</option>
+              <option value="SMS">SMS</option>
+              <option value="Email">Email</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span class="field-label">Mes/Ano</span>
+            <input type="month" id="camp-periodo" name="periodo" required>
+          </label>
+          <label class="form-field">
+            <span class="field-label">Cor da campanha</span>
+            <input type="color" id="camp-cor" name="cor" value="#2a9d8f">
+          </label>
+          <label class="form-field">
+            <span class="field-label">Status</span>
+            <select id="camp-status" name="status">
+              <option value="rascunho">Rascunho</option>
+              <option value="ativa">Ativa</option>
+              <option value="agendada">Agendada</option>
+              <option value="pausada">Pausada</option>
+              <option value="concluida">Concluida</option>
+            </select>
+          </label>
+          <label class="form-field full" id="publico-wrapper">
+            <span class="field-label">Publico</span>
+            <select id="camp-publico" name="publico">
+              <option value="pacientes_clinica">Pacientes da clinica</option>
+            </select>
+            <div id="publico-fixo" class="publico-fixo" hidden>Pacientes da clinica</div>
+          </label>
+          <label class="form-field full">
+            <span class="field-label">Enviar para</span>
+            <select id="camp-segmento" name="segmento">
+              <option value="all_active">Todos pacientes ativos</option>
+              <option value="inactive_90">Inativos ha 90 dias</option>
+              <option value="inactive_180">Inativos ha 180 dias</option>
+              <option value="never_cleaning">Nunca fizeram limpeza</option>
+              <option value="birthday_month">Aniversariantes do mes</option>
+              <option value="plan_overdue">Pacientes com plano em atraso</option>
+            </select>
+            <small id="segment-preview" class="segment-preview">Carregando segmento...</small>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="cancelar-modal">Cancelar</button>
+          <button type="submit" class="btn primary">Adicionar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="campanha-logs-modal" aria-hidden="true">
+    <div class="modal logs-modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Telemetria</p>
+          <h3>Logs de hoje</h3>
+        </div>
+        <button class="icon-button" id="close-logs-modal" aria-label="Fechar modal">&times;</button>
+      </div>
+      <div class="logs-table-wrap">
+        <table class="logs-table">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Campanha</th>
+              <th>Paciente</th>
+              <th>Status</th>
+              <th>Erro</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <tr><td colspan="5" class="logs-empty">Carregando logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="template-flow-modal" aria-hidden="true">
+    <div class="modal template-flow-modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted" id="template-flow-category">Campanha assistida</p>
+          <h3 id="template-flow-title">Template</h3>
+        </div>
+        <button class="icon-button" id="close-template-flow-modal" aria-label="Fechar fluxo de template">&times;</button>
+      </div>
+      <div class="template-flow-body">
+        <section class="template-flow-summary">
+          <p class="template-flow-description" id="template-flow-description">Escolha um template para carregar a audiencia sugerida.</p>
+          <div class="template-flow-stats">
+            <article class="template-stat">
+              <span>Audiencia sugerida</span>
+              <strong id="template-flow-total">0</strong>
+            </article>
+            <article class="template-stat">
+              <span>Elegiveis</span>
+              <strong id="template-flow-eligible">0</strong>
+            </article>
+            <article class="template-stat">
+              <span>Bloqueados</span>
+              <strong id="template-flow-blocked">0</strong>
+            </article>
+            <article class="template-stat">
+              <span>Selecionados</span>
+              <strong id="template-flow-selected">0</strong>
+            </article>
+          </div>
+          <div class="template-flow-form">
+            <label class="form-field">
+              <span class="field-label">Nome da campanha</span>
+              <input type="text" id="template-flow-campaign-name" placeholder="Nome da campanha orientada pelo template">
+            </label>
+            <label class="form-field full">
+              <span class="field-label">
+                <span>Mensagem base</span>
+                <span class="optional">Pode ajustar antes do envio</span>
+              </span>
+              <textarea id="template-flow-message" rows="5" placeholder="Mensagem base do template"></textarea>
+              <div class="template-message-tools" id="template-flow-message-tools">
+                <span class="template-message-tools-label">Inserir rapidamente:</span>
+                <button type="button" class="btn-small ghost" data-template-token="{NOME_PACIENTE}">Nome do paciente</button>
+                <button type="button" class="btn-small ghost" data-template-token="{NOME_CLINICA}">Nome da clinica</button>
+              </div>
+            </label>
+          </div>
+          <div class="template-flow-toolbar">
+            <div class="template-flow-search">
+              <label class="template-flow-search-label" for="template-flow-search">Buscar e selecionar pacientes sugeridos</label>
+              <div class="template-flow-search-control" id="template-flow-search-wrap">
+                <input type="search" id="template-flow-search" placeholder="Clique para ver e selecionar pacientes da clinica">
+                <div class="template-search-picker" id="template-flow-search-picker" hidden>
+                  <div class="empty-state">Carregando pacientes sugeridos...</div>
+                </div>
+              </div>
+              <p class="template-flow-search-helper">Clique no campo para abrir a lista sugerida do prontuario da clinica e marque paciente por paciente.</p>
+            </div>
+            <button type="button" class="btn ghost" id="template-flow-select-visible">Selecionar visiveis</button>
+            <button type="button" class="btn ghost" id="template-flow-select-all">Selecionar elegiveis</button>
+            <button type="button" class="btn ghost" id="template-flow-clear-selection">Limpar selecao</button>
+          </div>
+          <div class="template-flow-chips" id="template-flow-filters"></div>
+          <div class="template-flow-selection-hint" id="template-flow-selection-hint"></div>
+        </section>
+
+        <section class="template-flow-main">
+          <div class="template-audience-panel">
+            <div class="template-audience-header">
+              <div>
+                <h4>Pacientes sugeridos da clinica</h4>
+                <p class="muted" id="template-flow-list-meta">Carregando audiencia sugerida...</p>
+              </div>
+            </div>
+            <div class="template-audience-list" id="template-flow-audience-list">
+              <div class="empty-state">Selecione um template para carregar a audiencia.</div>
+            </div>
+          </div>
+
+          <aside class="template-preview-panel">
+            <article class="template-preview-card">
+              <p class="muted">Resumo da campanha</p>
+              <h4 id="template-flow-objective">Objetivo do template</h4>
+              <div class="template-preview-tags" id="template-flow-tags"></div>
+              <p class="template-preview-copy" id="template-flow-segment">Segmento sugerido</p>
+              <p class="template-preview-copy" id="template-flow-cta">CTA interno</p>
+            </article>
+            <article class="template-preview-card">
+              <p class="muted">Previa da mensagem</p>
+              <p class="template-preview-copy" id="template-flow-preview-sample">Exemplo com paciente selecionado</p>
+              <pre class="template-message-preview" id="template-flow-message-preview">Selecione um template para ver a mensagem.</pre>
+            </article>
+            <article class="template-preview-card">
+              <p class="muted">Qualidade da mensagem</p>
+              <div class="template-preview-tags" id="template-flow-message-health"></div>
+              <p class="template-preview-copy" id="template-flow-message-guidance">Ajuste a copy para ficar clara e pessoal.</p>
+            </article>
+            <article class="template-preview-card">
+              <p class="muted">Revisao antes do envio</p>
+              <h4 id="template-flow-review-title">Quem vai receber agora</h4>
+              <p class="template-preview-copy" id="template-flow-review-count">Nenhum paciente selecionado.</p>
+              <div class="template-review-list" id="template-flow-review-list"></div>
+              <div class="template-review-blocked" id="template-flow-blocked-summary"></div>
+            </article>
+            <article class="template-preview-card">
+              <p class="muted">Agendamento</p>
+              <p class="template-preview-copy">O fluxo seguro liberado nesta etapa e o envio imediato. O agendamento fica visivel como proxima evolucao, sem criar automacao pesada agora.</p>
+            </article>
+          </aside>
+        </section>
+      </div>
+      <div class="modal-actions template-flow-actions">
+        <button type="button" class="btn ghost" id="template-flow-cancel">Cancelar</button>
+        <button type="button" class="btn ghost" id="template-flow-schedule" disabled>Agendar em breve</button>
+        <button type="button" class="btn primary" id="template-flow-send">Enviar agora</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="template-send-confirm-modal" aria-hidden="true">
+    <div class="modal template-send-confirm-modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Confirmacao final</p>
+          <h3 id="template-send-confirm-title">Revisar envio da campanha</h3>
+        </div>
+        <button class="icon-button" id="close-template-send-confirm-modal" aria-label="Fechar confirmacao de envio">&times;</button>
+      </div>
+      <div class="template-send-confirm-body">
+        <p class="template-preview-copy" id="template-send-confirm-copy">Confira quem vai receber agora antes de enviar.</p>
+        <div class="template-send-confirm-stats">
+          <article class="template-stat">
+            <span>Enviados agora</span>
+            <strong id="template-send-confirm-selected">0</strong>
+          </article>
+          <article class="template-stat">
+            <span>Bloqueados</span>
+            <strong id="template-send-confirm-blocked">0</strong>
+          </article>
+          <article class="template-stat">
+            <span>Mensagem</span>
+            <strong id="template-send-confirm-length">0</strong>
+          </article>
+        </div>
+        <div class="template-send-confirm-grid">
+          <section class="template-send-confirm-card">
+            <p class="muted">Pacientes que vao receber</p>
+            <div class="template-review-list" id="template-send-confirm-list"></div>
+          </section>
+          <section class="template-send-confirm-card">
+            <p class="muted">Bloqueios reais da audiencia</p>
+            <div class="template-review-blocked" id="template-send-confirm-blocked-list"></div>
+          </section>
+        </div>
+        <section class="template-send-confirm-card">
+          <p class="muted">Previa final da mensagem</p>
+          <pre class="template-message-preview" id="template-send-confirm-preview">Selecione pacientes para revisar a mensagem.</pre>
+        </section>
+      </div>
+      <div class="modal-actions template-flow-actions">
+        <button type="button" class="btn ghost" id="template-send-confirm-cancel">Voltar</button>
+        <button type="button" class="btn primary" id="template-send-confirm-submit">Confirmar envio</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="template-send-result-modal" aria-hidden="true">
+    <div class="modal template-send-result-modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Resultado do envio</p>
+          <h3 id="template-send-result-title">Campanha enviada</h3>
+        </div>
+        <button class="icon-button" id="close-template-send-result-modal" aria-label="Fechar resultado do envio">&times;</button>
+      </div>
+      <div class="template-send-confirm-body">
+        <p class="template-preview-copy" id="template-send-result-copy">Resumo do envio realizado para a clinica atual.</p>
+        <div class="template-send-confirm-stats">
+          <article class="template-stat">
+            <span>Sucesso</span>
+            <strong id="template-send-result-sent">0</strong>
+          </article>
+          <article class="template-stat">
+            <span>Falhas</span>
+            <strong id="template-send-result-failed">0</strong>
+          </article>
+          <article class="template-stat">
+            <span>Bloqueados</span>
+            <strong id="template-send-result-blocked">0</strong>
+          </article>
+        </div>
+        <div class="template-send-confirm-grid">
+          <section class="template-send-confirm-card">
+            <p class="muted">Pacientes que receberam</p>
+            <div class="template-review-list" id="template-send-result-sent-list"></div>
+          </section>
+          <section class="template-send-confirm-card">
+            <p class="muted">Falhas e bloqueios</p>
+            <div class="template-review-blocked" id="template-send-result-issues"></div>
+          </section>
+        </div>
+      </div>
+      <div class="modal-actions template-flow-actions">
+        <button type="button" class="btn ghost" id="template-send-result-retry-failed">Nova tentativa com falhas</button>
+        <button type="button" class="btn ghost" id="template-send-result-review-blocked">Revisar bloqueados</button>
+        <button type="button" class="btn primary" id="template-send-result-close">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="strategy-video-modal" aria-hidden="true">
+    <div class="modal strategy-video-modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Estrategia Voithos</p>
+          <h3>Estrategia da semana</h3>
+        </div>
+        <button class="icon-button" id="close-strategy-video-modal" aria-label="Fechar modal">&times;</button>
+      </div>
+      <div class="strategy-video-wrap">
+        <iframe
+          id="strategy-video-iframe"
+          src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+          title="Estrategia Voithos"
+          loading="lazy"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="campanhas.js"></script>
+  <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+

@@ -1,0 +1,48 @@
+const fs = require('fs');
+const path = require('path');
+
+const envPath = path.join(process.cwd(), '.env');
+
+const parseEnvFile = (filePath) => {
+  if (!fs.existsSync(filePath)) return {};
+
+  return fs.readFileSync(filePath, 'utf8').split(/\r?\n/).reduce((acc, line) => {
+    const trimmed = String(line || '').trim();
+    if (!trimmed || trimmed.startsWith('#')) return acc;
+    const idx = trimmed.indexOf('=');
+    if (idx <= 0) return acc;
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim().replace(/^['"]|['"]$/g, '');
+    acc[key] = value;
+    return acc;
+  }, {});
+};
+
+const fileEnv = parseEnvFile(envPath);
+
+const readValue = (key, fallback = '') => {
+  const fromProcess = process.env[key];
+  if (typeof fromProcess === 'string' && fromProcess.trim() !== '') return fromProcess;
+  const fromFile = fileEnv[key];
+  if (typeof fromFile === 'string' && fromFile.trim() !== '') return fromFile;
+  return fallback;
+};
+
+const appEnv = {
+  whatsappNgBaseUrl: String(readValue('WHATSAPP_NG_BASE_URL', 'http://127.0.0.1:8099')).trim().replace(/\/+$/, ''),
+  whatsappNgServiceToken: String(readValue('WHATSAPP_NG_SERVICE_TOKEN', '')).trim(),
+  backendInternalApiToken: String(readValue('BACKEND_INTERNAL_API_TOKEN', '')).trim(),
+  clinicalDocumentsStorageRoot: String(readValue('CLINICAL_DOCUMENTS_STORAGE_ROOT', '')).trim(),
+  appointmentReminderSchedulerEnabled: String(readValue('APPOINTMENT_REMINDER_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',
+  appointmentReminderIntervalMinutes: Math.max(1, Number(readValue('APPOINTMENT_REMINDER_INTERVAL_MINUTES', '60')) || 60),
+  appointmentReminderTimeZone: String(readValue('APPOINTMENT_REMINDER_TIMEZONE', 'America/Sao_Paulo')).trim() || 'America/Sao_Paulo',
+  planMessageSchedulerEnabled: String(readValue('PLAN_MESSAGE_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',
+  planMessageSchedulerIntervalMinutes: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_INTERVAL_MINUTES', '60')) || 60),
+  planMessageSchedulerLimitPerClinic: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_LIMIT_PER_CLINIC', '200')) || 200),
+  planMessageDueSoonDays: Math.max(1, Number(readValue('PLAN_MESSAGE_DUE_SOON_DAYS', '3')) || 3),
+  appointmentActionLinksEnabled: String(readValue('APPOINTMENT_ACTION_LINKS_ENABLED', 'false')).trim().toLowerCase() === 'true',
+  appointmentActionBaseUrl: String(readValue('APPOINTMENT_ACTION_BASE_URL', readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000'))).trim().replace(/\/+$/, ''),
+  appointmentActionTokenTtlHours: Math.max(1, Number(readValue('APPOINTMENT_ACTION_TOKEN_TTL_HOURS', '36')) || 36),
+};
+
+module.exports = { appEnv };

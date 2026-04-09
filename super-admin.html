@@ -1,0 +1,93 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Voithos</title>
+  <link rel="stylesheet" href="super-admin.css">
+</head>
+<body>
+  <main class="super-admin-page">
+    <header class="topbar">
+      <div>
+        <h1>Admin Voithos</h1>
+        <p>Cadastro manual de clinicas e administrador inicial.</p>
+      </div>
+      <div class="actions">
+        <button id="btn-open-whatsapp-support" class="btn-outline" type="button">WhatsApp NG global</button>
+        <button id="btn-logout" class="btn-outline" type="button">Sair</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>Criar clinica</h2>
+      <form id="clinic-form" class="form-grid">
+        <label>
+          Nome fantasia *
+          <input id="clinic-nome" required>
+        </label>
+        <label>
+          Razao social *
+          <input id="clinic-razao" required>
+        </label>
+        <label>
+          CNPJ/CPF *
+          <input id="clinic-cnpj" required>
+        </label>
+        <label>
+          Email da clinica
+          <input id="clinic-email" type="email">
+        </label>
+        <label>
+          Telefone
+          <input id="clinic-telefone">
+        </label>
+        <label>
+          WhatsApp
+          <input id="clinic-whatsapp">
+        </label>
+
+        <label>
+          Nome do admin inicial *
+          <input id="admin-nome" required>
+        </label>
+        <label>
+          Email do admin inicial *
+          <input id="admin-email" type="email" required>
+        </label>
+      </form>
+      <div class="actions">
+        <button id="btn-create-clinic" class="btn-primary" type="button">Criar clinica</button>
+      </div>
+      <p id="create-error" class="error"></p>
+    </section>
+
+    <section class="card">
+      <h2>Clinicas cadastradas</h2>
+      <div id="clinics-list" class="list-empty">Carregando...</div>
+    </section>
+  </main>
+
+  <div id="success-modal" class="modal" hidden>
+    <div class="modal-card">
+      <button id="btn-close-success-modal-x" class="modal-close" type="button" aria-label="Fechar">×</button>
+      <h3>Clinica criada com sucesso</h3>
+      <p id="success-clinic-name" class="modal-clinic-name"></p>
+      <div class="credentials-box">
+        <div><strong>E-mail admin:</strong> <span id="success-admin-email">-</span></div>
+        <div><strong>Senha temporaria:</strong> <span id="success-admin-password">-</span></div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-copy-credentials" class="btn-outline" type="button">Copiar credenciais</button>
+        <button id="btn-open-created-clinic" class="btn-primary" type="button">Entrar como esta clinica</button>
+        <button id="btn-close-success-modal" class="btn-outline" type="button" data-close-modal="success">Voltar para lista</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="super-admin.js"></script>
+</body>
+</html>

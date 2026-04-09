@@ -1,0 +1,227 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editar Paciente</title>
+  <link rel="stylesheet" href="editar-paciente.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <header class="page-header">
+        <h1>Editar paciente</h1>
+    </header>
+
+<main class="container">
+    <section class="form-container">
+      <div class="form-header">
+        <i class="fa-solid fa-user-pen icon-header"></i>
+        <h2>Dados do Paciente</h2>
+      </div>
+      <form id="patient-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="edit-fullName">Nome Completo</label>
+            <input type="text" id="edit-fullName" name="fullName" required>
+          </div>
+          <div class="form-group">
+            <label for="edit-cpf">CPF</label>
+            <input type="text" id="edit-cpf" name="cpf">
+          </div>
+          <div class="form-group">
+            <label for="edit-rg">RG</label>
+            <input type="text" id="edit-rg" name="rg">
+          </div>
+          <div class="form-group">
+            <label for="edit-dataNascimento">Data de Nasc.</label>
+            <input type="date" id="edit-dataNascimento" name="dataNascimento">
+          </div>
+          <div class="form-group">
+            <label for="edit-prontuario">Prontuario</label>
+            <input type="text" id="edit-prontuario" name="prontuario" readonly>
+          </div>
+          <div class="form-group">
+            <label for="dentistaAtualLabel">Dentista responsavel</label>
+            <div class="dentista-row">
+              <span id="dentistaAtualLabel" class="dentista-label">Nao definido</span>
+              <button type="button" id="btnTrocarDentista" class="btn btn-ghost btn-small" title="Trocar dentista">&#9660;</button>
+            </div>
+            <select id="selectDentista" style="display: none;"></select>
+          </div>
+          <div class="form-group">
+            <label for="edit-phone">Telefone</label>
+            <input type="tel" id="edit-phone" name="phone">
+          </div>
+          <div class="form-group">
+            <label for="edit-allowsMessages">Permite mensagens (WhatsApp/SMS/Email)</label>
+            <input type="checkbox" id="edit-allowsMessages" name="allowsMessages">
+          </div>
+          <div class="form-group">
+            <label for="edit-email">Email</label>
+            <input type="email" id="edit-email" name="email">
+          </div>
+          <div class="form-group full-width">
+            <label for="edit-address">Endereço</label>
+            <input type="text" id="edit-address" name="address">
+          </div>
+          <div class="form-group full-width">
+            <label for="edit-notes">Observações</label>
+            <textarea id="edit-notes" name="notes" rows="3"></textarea>
+          </div>
+          <div class="form-group full-width">
+            <label>Selfie do paciente</label>
+            <div class="selfie-upload">
+              <button type="button" id="edit-selfie-select-btn" class="selfie-card" aria-label="Selecionar selfie">
+                <img id="edit-selfie-preview" alt="Preview da selfie" hidden>
+                <span id="edit-selfie-placeholder" class="selfie-placeholder">+</span>
+              </button>
+              <div class="selfie-meta">
+                <p id="edit-selfie-file-name">Nenhum arquivo selecionado.</p>
+                <button type="button" id="edit-selfie-remove-btn" class="btn btn-ghost">Remover selfie</button>
+              </div>
+            </div>
+            <input type="file" id="edit-selfie-input" hidden accept=".png,.jpg,.jpeg,.svg,.pdf,image/png,image/jpeg,image/svg+xml,application/pdf">
+          </div>
+        </div>
+        <div class="actions-row">
+          <button type="submit" class="btn btn-primary">Salvar Dados do Paciente</button>
+          <button type="button" id="delete-patient-btn" class="btn btn-danger">Excluir Paciente</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="form-container">
+      <div class="form-header">
+        <i class="fa-solid fa-tooth icon-header"></i>
+        <h2>Serviços do Paciente</h2>
+      </div>
+      <div class="table-wrapper">
+        <table class="services-table" id="services-table">
+          <thead>
+            <tr>
+              <th>Procedimento</th>
+              <th>Valor</th>
+              <th>Data</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="services-body">
+            <tr><td colspan="5">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card-footer">
+        <button id="add-service-btn" class="btn btn-primary">Adicionar Serviço</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="service-modal">
+    <div class="modal-content">
+      <h4>Adicionar Serviço</h4>
+      <div class="form-group">
+        <label for="modal-service-name">Procedimento</label>
+        <input type="text" id="modal-service-name" list="procedures-datalist" placeholder="Digite ou escolha">
+        <datalist id="procedures-datalist"></datalist>
+      </div>
+      <div class="form-group">
+        <label for="modal-service-value">Valor (R$)</label>
+        <input type="number" id="modal-service-value" step="0.01" placeholder="0.00">
+      </div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn btn-ghost">Cancelar</button>
+        <button id="modal-confirm" class="btn btn-primary">Adicionar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="editar-paciente.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+

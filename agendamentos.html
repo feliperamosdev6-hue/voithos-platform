@@ -1,0 +1,310 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <title>Agenda</title>
+    <link rel="stylesheet" href="timepicker.css" />
+    <link rel="stylesheet" href="agendamentos.css" />
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <header class="agenda-topbar">
+        <div class="top-left">
+            <div>
+                <h1>Agenda</h1>
+                <p class="subtitle" id="view-subtitle">Visao rapida do mes</p>
+            </div>
+        </div>
+        <div class="top-actions">
+            <button class="btn" id="btn-today">Hoje</button>
+            <div class="view-switch">
+                <button class="btn pill active" type="button" data-view="mes">Mes</button>
+                <button class="btn pill" type="button" data-view="semana">Semana</button>
+            </div>
+            <div class="nav-controls">
+                <button class="btn ghost" id="nav-prev" aria-label="Periodo anterior">&#8592;</button>
+                <div class="month-label" id="month-label">--</div>
+                <button class="btn ghost" id="nav-next" aria-label="Proximo periodo">&#8594;</button>
+            </div>
+            <button class="btn primary" id="btnNovoAgendamento">+ Novo agendamento</button>
+        </div>
+    </header>
+
+<main class="agenda-layout">
+        <aside class="panel calendar-panel">
+            <div class="calendar-header">
+                <div class="calendar-title">Calendario</div>
+            </div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+            <div id="agenda-week" class="agenda-week" hidden>
+                <div class="week-header">
+                    <div class="week-spacer"></div>
+                    <div class="week-header-days" id="week-header"></div>
+                </div>
+                <div class="week-scroll">
+                    <div class="week-times" id="week-times"></div>
+                    <div class="week-grid" id="week-grid"></div>
+                </div>
+            </div>
+        </aside>
+
+        <section class="panel agenda-panel">
+            <div class="agenda-header">
+                <div>
+                    <p class="muted" id="selected-day-label">--</p>
+                    <h2 id="selected-date-label">--</h2>
+                </div>
+                <div class="agenda-header-actions">
+                    <div class="dentist-filter" id="dentist-filter">
+                        <button class="btn ghost dentist-toggle" id="dentist-toggle" type="button" aria-expanded="false" aria-controls="dentist-dropdown">
+                            <span id="dentist-selected-label">Todos os dentistas</span>
+                            <span class="caret" aria-hidden="true">▼</span>
+                        </button>
+                        <div class="dentist-dropdown hidden" id="dentist-dropdown" role="menu" aria-label="Dentistas"></div>
+                    </div>
+                    <span class="dentist-chip hidden" id="dentist-chip">
+                        <span class="dentist-dot" id="dentist-chip-dot"></span>
+                        <span id="dentist-chip-label">Dentista</span>
+                    </span>
+                    <button class="birthday-header-badge hidden" id="birthday-header-badge" type="button" aria-label="Ver aniversariantes do dia">
+                        <span class="birthday-header-badge-icon" aria-hidden="true">🎂</span>
+                        <span class="birthday-header-badge-copy">
+                            <span id="birthday-header-badge-text">Aniversariantes</span>
+                            <span id="birthday-header-badge-meta">0 pendentes</span>
+                        </span>
+                    </button>
+                </div>
+            </div>
+            <section class="birthday-strip hidden" id="birthday-strip">
+                <div class="birthday-strip-header">
+                    <div>
+                        <strong>Aniversariantes do dia</strong>
+                        <span id="birthday-strip-summary" class="birthday-strip-summary"></span>
+                    </div>
+                    <button class="btn ghost birthday-strip-close" id="birthday-strip-close" type="button">Ocultar</button>
+                </div>
+                <div class="birthday-strip-list" id="birthday-strip-list"></div>
+            </section>
+            <div id="agenda-day" class="agenda-day">
+                <div class="day-times" id="day-times"></div>
+                <div class="day-grid" id="day-grid"></div>
+            </div>
+            <div id="agenda-list" class="agenda-list"></div>
+        </section>
+    </main>
+    <div class="agenda-drawer-backdrop" id="agenda-drawer-backdrop" hidden></div>
+    <aside class="agenda-drawer" id="agenda-drawer" hidden>
+      <div class="agenda-drawer-header">
+        <div>
+          <h3 id="drawer-title">Consulta</h3>
+          <span class="drawer-chip" id="drawer-type">Consulta</span>
+        </div>
+        <button class="icon-btn" id="drawer-close" type="button" aria-label="Fechar">&times;</button>
+      </div>
+      <div class="agenda-drawer-body">
+        <div class="drawer-row"><span>Paciente</span><strong id="drawer-paciente">-</strong></div>
+        <div class="drawer-row"><span>Dentista</span><strong id="drawer-dentista">-</strong></div>
+        <div class="drawer-row"><span>Horario</span><strong id="drawer-horario">-</strong></div>
+        <div class="drawer-row"><span>Telefone</span><strong id="drawer-telefone">-</strong></div>
+        <button class="drawer-whatsapp-link" type="button" id="drawer-falar-paciente">
+          <img class="drawer-whatsapp-icon" src="Logo whatsapp.svg" alt="" aria-hidden="true" />
+          Falar com o paciente
+        </button>
+        <button class="drawer-whatsapp-link" type="button" id="drawer-send-confirmacao">
+          Enviar confirmacao WhatsApp
+        </button>
+
+        <label class="drawer-label" for="drawer-status">Status do evento</label>
+        <select id="drawer-status" class="drawer-select">
+          <option value="em_aberto">Em aberto</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+        <div class="drawer-row">
+          <span>Presença clínica</span>
+          <strong id="drawer-presenca">Pendente</strong>
+        </div>
+
+        <div class="drawer-actions">
+          <button class="btn ghost" type="button" id="drawer-edit">Editar</button>
+          <button class="btn ghost" type="button" id="drawer-prontuario">Ver prontuario</button>
+          <button class="btn ghost" type="button" id="drawer-excluir">Excluir</button>
+        </div>
+      </div>
+    </aside>
+
+    <div id="modalNovoAgendamento" class="modal-bg hidden">
+      <div class="modal modal-agendamento">
+        <h2 id="titulo-modal-agendamento">Novo agendamento</h2>
+
+        <label for="selectPaciente">Paciente</label>
+        <div class="patient-dropdown">
+          <button type="button" class="patient-toggle" id="patient-toggle">
+            Selecione ou crie um(a) novo(a) paciente
+          </button>
+          <div class="patient-menu hidden" id="patient-menu">
+            <input id="filtroPaciente" type="text" class="patient-search" placeholder="Buscar por nome ou CPF" />
+            <div class="patient-list" id="patient-list"></div>
+          </div>
+        </div>
+        <input type="hidden" id="selectPaciente" value="">
+
+        <div id="dentistaRow">
+          <label for="selectDentista">Dentista</label>
+          <select id="selectDentista"></select>
+        </div>
+
+        <label for="agendamento-data">Data</label>
+        <input id="agendamento-data" type="date" />
+
+        <div class="form-group">
+          <label for="horaInicio">Hora in&iacute;cio</label>
+          <input id="horaInicio" type="text" data-timepicker="true" placeholder="HH:MM" inputmode="numeric" />
+        </div>
+
+        <div class="form-group">
+          <label for="horaFim">Hora fim</label>
+          <input id="horaFim" type="text" data-timepicker="true" placeholder="HH:MM" inputmode="numeric" />
+        </div>
+
+        <label for="agendamento-tipo">Tipo</label>
+        <input id="agendamento-tipo" type="text" placeholder="Consulta, Tratamento..." />
+
+        <label for="agendamento-status">Status</label>
+        <select id="agendamento-status">
+          <option value="em_aberto">Em aberto</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+
+        <label for="agendamento-marcador">Marcador (opcional)</label>
+        <select id="agendamento-marcador">
+          <option value="">Selecione um marcador</option>
+        </select>
+
+        <div class="modal-actions">
+          <button id="btnCancelarAgendamento" class="btn ghost">Cancelar</button>
+          <button id="btnSalvarAgendamento" class="btn primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="modalStatusBg" class="modal-bg hidden">
+      <div class="modal modal-status">
+        <h3>Alterar status</h3>
+        <label for="statusNovo">Status</label>
+        <select id="statusNovo">
+          <option value="em_aberto">Em aberto</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+        <div class="modal-actions">
+          <button id="btnConfirmarStatus" class="btn primary">Confirmar</button>
+          <button id="btnCancelarStatus" class="btn ghost">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="timepicker.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="agendamentos.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

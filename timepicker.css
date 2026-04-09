@@ -1,0 +1,78 @@
+﻿/* Time picker customizado (dropdown com rolagem fina) */
+.timepicker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.timepicker {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 220px;
+  background: #ffffff;
+  border: 1px solid #d1d9e6;
+  border-radius: 12px;
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.18);
+  padding: 8px;
+}
+
+.timepicker-column {
+  max-height: 220px;
+  overflow-y: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5f5 transparent;
+}
+
+.timepicker-column::-webkit-scrollbar {
+  width: 6px;
+}
+
+.timepicker-column::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.timepicker-column::-webkit-scrollbar-thumb {
+  background: #cbd5f5;
+  border-radius: 999px;
+}
+
+.timepicker-item {
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  cursor: pointer;
+  text-align: center;
+}
+
+.timepicker-item:hover {
+  background: #eef9f3;
+}
+
+.timepicker-item.active {
+  background: #0f766e;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.timepicker-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 2px;
+}
+
+.timepicker-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}

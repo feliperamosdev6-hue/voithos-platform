@@ -1,0 +1,20 @@
+﻿body {
+  background: #f4f7fb;
+}
+
+.coming-soon {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.soon-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.coming-soon p {
+  color: #64748b;
+  margin: 0;
+}

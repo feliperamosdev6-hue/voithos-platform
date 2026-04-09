@@ -1,0 +1,297 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faturamento - Voithos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="faturamento.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body class="fat-body">
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+<div class="fat-layout">
+    <aside class="fat-sidebar">
+      <div class="fat-logo">
+        <div class="logo-mark">V</div>
+        <div>
+          <strong>Voithos</strong>
+          <small>Financial Suite</small>
+        </div>
+      </div>
+      <nav class="fat-nav">
+        <a href="index.html" class="nav-link">Início</a>
+        <a href="gestao.html" class="nav-link">Gestão</a>
+        <a href="faturamento.html" class="nav-link active">Faturamento</a>
+        <a href="laboratorio.html" class="nav-link">Laboratório</a>
+        <a href="agendamentos.html" class="nav-link">Agenda</a>
+      </nav>
+      <button id="btn-abrir-modal" class="btn-primary full">+ Novo recebimento</button>
+    </aside>
+
+    <main class="fat-content">
+      <header class="fat-header">
+        <div>
+          <p class="eyebrow">Recebimentos • Voithos</p>
+          <h1>Faturamento premium</h1>
+          <p class="subtitle">Acompanhe entradas, métodos de pagamento e parcelas em tempo real.</p>
+        </div>
+        <div class="filters-period">
+          <button class="period-btn active" data-period="dia">Dia</button>
+          <button class="period-btn" data-period="semana">Semana</button>
+          <button class="period-btn" data-period="mes">Mês</button>
+        </div>
+      </header>
+
+      <section class="fat-cards">
+        <article class="fat-card">
+          <p class="label">Recebido hoje</p>
+          <strong id="valor-dia">R$ 0,00</strong>
+          <span class="microcopy">Total confirmado</span>
+        </article>
+        <article class="fat-card">
+          <p class="label">Recebido na semana</p>
+          <strong id="valor-semana">R$ 0,00</strong>
+          <span class="microcopy">Inclui cartões e pix</span>
+        </article>
+        <article class="fat-card">
+          <p class="label">Recebido no mês</p>
+          <strong id="valor-mes">R$ 0,00</strong>
+          <span class="microcopy">Mês corrente</span>
+        </article>
+        <article class="fat-card highlight">
+          <p class="label">Previsto (parcelas)</p>
+          <strong id="valor-previsto">R$ 0,00</strong>
+          <span class="microcopy" id="texto-previsto">Próximas parcelas</span>
+        </article>
+      </section>
+
+      <section class="fat-filters">
+        <div class="filter-group">
+          <label>Método de pagamento</label>
+          <select id="filtro-metodo">
+            <option value="todos">Todos</option>
+            <option value="pix">Pix</option>
+            <option value="debito">Débito</option>
+            <option value="cartao_credito">Crédito</option>
+            <option value="boleto">Boleto</option>
+            <option value="dinheiro">Dinheiro</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Status</label>
+          <select id="filtro-status">
+            <option value="todos">Todos</option>
+            <option value="pago">Pago</option>
+            <option value="pendente">Pendente</option>
+          </select>
+        </div>
+        <div class="filter-group grow">
+          <label>Busca rápida</label>
+          <input type="text" id="filtro-busca" placeholder="Paciente, descrição ou origem" />
+        </div>
+        <button id="btn-atualizar" class="btn-ghost">Atualizar</button>
+      </section>
+
+      <section class="fat-panels">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Lista</p>
+              <h2>Lançamentos e parcelas</h2>
+            </div>
+            <div class="legend">
+              <span class="pill pago"></span> Pago
+              <span class="pill pendente"></span> Pendente
+            </div>
+          </div>
+          <div class="table-wrapper">
+            <table id="tabela-faturamento">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Paciente / Origem</th>
+                  <th>Descrição</th>
+                  <th>Método</th>
+                  <th>Parcelas</th>
+                  <th>Status</th>
+                  <th>Valor</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel side">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Saúde das parcelas</p>
+              <h3>Recebimentos futuros</h3>
+            </div>
+          </div>
+          <div class="parcelas-list">
+            <div>
+              <p class="label">Pendentes</p>
+              <ul id="lista-pendentes"></ul>
+            </div>
+            <div class="divider"></div>
+            <div>
+              <p class="label">Recebidas</p>
+              <ul id="lista-recebidas"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-recebimento" class="modal hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Novo recebimento</p>
+          <h3>Adicionar faturamento</h3>
+        </div>
+        <button class="close-modal" id="btn-fechar-modal" aria-label="Fechar">×</button>
+      </div>
+      <div class="modal-body">
+        <p id="modal-error" class="modal-error hidden" role="alert"></p>
+        <label>Paciente / Origem</label>
+        <input type="text" id="input-paciente" placeholder="Nome do paciente ou convênio" />
+
+        <label>Descrição</label>
+        <input type="text" id="input-descricao" placeholder="Ex: Avaliação, limpeza, clareamento..." />
+
+        <div class="two-cols">
+          <div>
+            <label>Valor (R$)</label>
+            <input type="number" id="input-valor" min="0" step="0.01" />
+          </div>
+          <div>
+            <label>Data</label>
+            <input type="date" id="input-data" />
+          </div>
+        </div>
+
+        <div class="two-cols">
+          <div>
+            <label>Método de pagamento</label>
+            <select id="input-metodo">
+              <option value="pix">Pix</option>
+              <option value="debito">Débito</option>
+              <option value="cartao_credito">Cartão de crédito</option>
+              <option value="boleto">Boleto</option>
+              <option value="dinheiro">Dinheiro</option>
+            </select>
+          </div>
+          <div id="grupo-parcelas" class="hidden">
+            <label>Nº de parcelas</label>
+            <input type="number" id="input-parcelas" min="1" max="24" value="1" />
+          </div>
+        </div>
+
+        <label>Status</label>
+        <select id="input-status">
+          <option value="pago">Pago</option>
+          <option value="pendente">Pendente</option>
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-ghost" id="btn-cancelar">Cancelar</button>
+        <button class="btn-primary" id="btn-salvar">Salvar recebimento</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="faturamento.js"></script>
+  <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+

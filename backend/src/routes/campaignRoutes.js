@@ -1,0 +1,36 @@
+const express = require('express');
+const { authenticate } = require('../middlewares/authenticate');
+const {
+  listTemplates,
+  listCampaigns,
+  getCampaignById,
+  createCampaign,
+  updateCampaign,
+  deleteCampaign,
+  replaceCampaigns,
+  resolveAudience,
+  createBatch,
+  updateDispatch,
+  listDispatchLogs,
+  getDashboard,
+  getCampaignResult,
+} = require('../controllers/campaignController');
+
+const router = express.Router();
+
+router.use(authenticate);
+router.get('/templates', listTemplates);
+router.get('/', listCampaigns);
+router.put('/', replaceCampaigns);
+router.post('/', createCampaign);
+router.get('/dashboard', getDashboard);
+router.post('/resolve-audience', resolveAudience);
+router.get('/logs', listDispatchLogs);
+router.get('/:id', getCampaignById);
+router.patch('/:id', updateCampaign);
+router.delete('/:id', deleteCampaign);
+router.post('/:id/batches', createBatch);
+router.get('/:id/result', getCampaignResult);
+router.patch('/dispatches/:dispatchId', updateDispatch);
+
+module.exports = router;

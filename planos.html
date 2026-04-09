@@ -1,0 +1,338 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planos Odontologicos</title>
+  <link rel="stylesheet" href="planos.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <header class="page-header">
+        <div class="page-header-inner">
+          <div class="page-title-group">
+            <p class="kicker">Gestao de tratamentos</p>
+            <h1>Planos</h1>
+            <p class="subtitle">Acompanhe entradas, parcelas e liberacao dos procedimentos em um unico fluxo.</p>
+          </div>
+          <div class="page-header-actions">
+            <button type="button" class="btn primary" id="btn-new-plan">+ Novo plano</button>
+          </div>
+        </div>
+    </header>
+
+<main class="page-content">
+    <section class="summary-panel">
+      <div class="summary-card">
+        <p>Total de planos</p>
+        <strong id="summary-total">0</strong>
+      </div>
+      <div class="summary-card">
+        <p>Em andamento</p>
+        <strong id="summary-andamento">0</strong>
+      </div>
+      <div class="summary-card">
+        <p>Liberados</p>
+        <strong id="summary-liberados">0</strong>
+      </div>
+    </section>
+
+    <section class="filters-panel">
+      <div class="filter-group">
+        <label for="filter-category">Categoria</label>
+        <select id="filter-category">
+          <option value="">Todas</option>
+          <option value="estetica">Estetica</option>
+          <option value="clareamento">Clareamento</option>
+          <option value="implantes">Implantes</option>
+          <option value="ortodontia">Ortodontia</option>
+          <option value="protocolos_avancados">Protocolos avancados</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="filter-status">Status</label>
+        <select id="filter-status">
+          <option value="">Todos</option>
+          <option value="ativo">Ativo</option>
+          <option value="em_andamento">Em andamento</option>
+          <option value="inativo">Inativo</option>
+          <option value="liberado">Liberado para procedimento</option>
+        </select>
+      </div>
+      <div class="filter-group filter-group-search">
+        <label for="filter-search">Buscar</label>
+        <input id="filter-search" type="text" placeholder="Nome do plano ou paciente">
+        <div class="search-suggestions" id="filter-search-suggestions" role="listbox" aria-label="Sugestoes de pacientes"></div>
+      </div>
+      <div class="filter-group filter-group-actions">
+        <label for="btn-refresh-plans">Acoes</label>
+        <button type="button" class="btn ghost" id="btn-refresh-plans">Atualizar lista</button>
+      </div>
+    </section>
+
+    <section class="plan-detail" id="plan-detail" aria-live="polite">
+      <div class="plan-detail-empty" id="plan-detail-empty">Selecione um plano para ver detalhes.</div>
+      <div class="plan-detail-content" id="plan-detail-content"></div>
+    </section>
+
+    <section class="plans-grid" id="plans-grid" aria-live="polite">
+      <!-- cards renderizados via JS -->
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="plan-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Cadastro estrategico</p>
+          <h3>Novo plano odontologico</h3>
+        </div>
+        <button class="icon-button" id="close-modal" aria-label="Fechar modal">&times;</button>
+      </div>
+      <form id="plan-form">
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Nome do plano</span>
+            <input type="text" id="input-nome" name="nome" placeholder="Plano estetica premium" required>
+          </label>
+          <label class="form-field">
+            <span>Categoria</span>
+            <select id="input-categoria" name="categoria" required>
+              <option value="estetica">Estetica</option>
+              <option value="clareamento">Clareamento</option>
+              <option value="implantes">Implantes</option>
+              <option value="ortodontia">Ortodontia</option>
+              <option value="protocolos_avancados">Protocolos avancados</option>
+            </select>
+          </label>
+          <label class="form-field full">
+            <span>Descricao amigavel (para paciente)</span>
+            <textarea id="input-descricao" name="descricao" rows="2" placeholder="Tratamento completo com acompanhamento dedicado."></textarea>
+          </label>
+          <label class="form-field">
+            <span>Paciente</span>
+            <input type="text" id="input-paciente" name="paciente" placeholder="Nome ou prontuario" list="patients-datalist" required>
+            <datalist id="patients-datalist"></datalist>
+          </label>
+          <label class="form-field">
+            <span>Dentista responsavel</span>
+            <input type="text" id="input-dentista" name="dentista" placeholder="Nome do dentista">
+          </label>
+          <label class="form-field">
+            <span>Valor total (R$)</span>
+            <input type="text" inputmode="decimal" id="input-valor" name="valor" placeholder="0,00">
+          </label>
+          <label class="form-field">
+            <span>Numero de parcelas</span>
+            <input type="number" min="1" id="input-parcelas" name="parcelas" value="1">
+            <small class="muted" id="input-parcelas-hint"></small>
+          </label>
+          <label class="form-field">
+            <span>Valor da parcela (R$)</span>
+            <input type="text" inputmode="decimal" id="input-valor-parcela" name="valor_parcela" readonly>
+          </label>
+          <label class="form-field">
+            <span>Valor de entrada (R$)</span>
+            <input type="text" inputmode="decimal" id="input-entrada-valor" name="entrada_valor" value="0,00">
+          </label>
+          <label class="form-field">
+            <span>Data da entrada</span>
+            <input type="date" id="input-entrada-data" name="entrada_data">
+          </label>
+          <label class="form-field">
+            <span>Forma da entrada</span>
+            <select id="input-entrada-forma" name="entrada_forma">
+              <option value="PIX">Pix</option>
+              <option value="CREDIT">Cartao credito</option>
+              <option value="DEBIT">Cartao debito</option>
+              <option value="CASH">Dinheiro</option>
+              <option value="BOLETO">Boleto</option>
+              <option value="TRANSFER">Transferencia</option>
+              <option value="OTHER">Outros</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Parcelas pagas</span>
+            <input type="number" min="0" id="input-parcelas-pagas" name="parcelas_pagas" value="0">
+          </label>
+          <label class="form-field">
+            <span>Regra de inicio do tratamento</span>
+            <select id="input-regra" name="regra">
+              <option value="quitacao_total">Iniciar apenas apos quitacao total</option>
+              <option value="min_parcelas">Iniciar apos numero minimo de parcelas pagas</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Minimo de parcelas pagas</span>
+            <input type="number" min="1" id="input-min-parcelas" name="min_parcelas" value="1">
+          </label>
+          <label class="form-field">
+            <span>Status base</span>
+            <select id="input-status" name="status">
+              <option value="ativo">Ativo</option>
+              <option value="em_andamento">Em andamento</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Data inicial do plano</span>
+            <input type="date" id="input-start-date" name="start_date">
+          </label>
+          <label class="form-field">
+            <span>Dia de vencimento</span>
+            <input type="number" min="1" max="28" id="input-due-day" name="due_day" placeholder="Ex.: 10">
+          </label>
+          <label class="form-field full">
+            <span>Servico ou procedimento do plano</span>
+            <input type="text" id="input-servico" name="servico" placeholder="Opcional. Ex.: Manutencao ortodontica mensal" list="services-history-datalist" autocomplete="off">
+            <datalist id="services-history-datalist"></datalist>
+            <p class="muted" id="services-load-hint">Campo livre opcional. A categoria do plano ja organiza o tipo de tratamento.</p>
+          </label>
+          <label class="form-field full">
+            <span>Observacoes internas</span>
+            <textarea id="input-observacoes" name="observacoes" rows="2" placeholder="Observacoes internas da clinica."></textarea>
+          </label>
+        </div>
+        <p class="helper-text" id="rule-preview">Tratamento inicia apos quitacao total.</p>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="cancel-modal">Cancelar</button>
+          <button type="submit" class="btn primary">Salvar plano</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="plan-payment-modal" aria-hidden="true">
+    <div class="modal payment-modal">
+      <div class="modal-header">
+        <div>
+          <p class="muted">Financeiro do plano</p>
+          <h3 id="plan-payment-title">Confirmar pagamento</h3>
+          <p class="muted" id="plan-payment-info"></p>
+        </div>
+        <button class="icon-button" id="close-payment-modal" aria-label="Fechar modal">&times;</button>
+      </div>
+      <form id="plan-payment-form">
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Forma de pagamento</span>
+            <select id="plan-payment-method" required>
+              <option value="PIX">Pix</option>
+              <option value="CREDIT">Cartao credito</option>
+              <option value="DEBIT">Cartao debito</option>
+              <option value="CASH">Dinheiro</option>
+              <option value="BOLETO">Boleto</option>
+              <option value="TRANSFER">Transferencia</option>
+              <option value="OTHER">Outros</option>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Data do pagamento</span>
+            <input type="date" id="plan-payment-date" required>
+          </label>
+          <label class="form-field full">
+            <span>Observacao</span>
+            <textarea id="plan-payment-notes" rows="2" placeholder="Opcional"></textarea>
+          </label>
+          <label class="form-field full checkbox-inline">
+            <input type="checkbox" id="plan-payment-confirm-check">
+            <span>Marcar como pago e registrar</span>
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="cancel-payment-modal">Cancelar</button>
+          <button type="submit" class="btn primary">Confirmar pagamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="planos.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+

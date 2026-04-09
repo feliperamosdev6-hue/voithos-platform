@@ -1,0 +1,60 @@
+﻿body {
+  background: #f4f7fb;
+}
+
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.day-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: #fff;
+  font-weight: 600;
+  color: #334155;
+}
+
+.day-pill input {
+  width: 16px;
+  height: 16px;
+}
+
+.switch-field {
+  display: grid;
+  gap: 6px;
+  align-items: start;
+}
+
+.switch-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-primary {
+  border: none;
+  background: #0f766e;
+  color: #ffffff;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.form-error {
+  color: #16a34a;
+  font-size: 0.85rem;
+}

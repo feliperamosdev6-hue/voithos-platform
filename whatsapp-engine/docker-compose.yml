@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: whatsapp_engine
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - whatsapp_engine_pg:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - whatsapp_engine_redis:/data
+
+  whatsapp-engine-api:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./.sessions:/app/.sessions
+
+  whatsapp-engine-worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+    command: ["node", "dist/workers/messageWorker.js"]
+    volumes:
+      - ./.sessions:/app/.sessions
+
+volumes:
+  whatsapp_engine_pg:
+  whatsapp_engine_redis:
+

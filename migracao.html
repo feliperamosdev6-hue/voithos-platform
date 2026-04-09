@@ -1,0 +1,212 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Importacao de dados - Voithos</title>
+    <link rel="stylesheet" href="migracao.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+    <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+            <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                </div>
+            </div>
+            <div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="settings-layout">
+        <aside class="settings-sidebar">
+            <div class="sidebar-title">Configuracoes</div>
+            <nav class="sidebar-nav">
+                <div class="nav-group active">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">🏥</span>
+                        Minha clinica
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="clinica.html">Dados da clinica</a>
+                        <a class="nav-item" href="users.html">Gerenciar usuarios</a>
+                        <a class="nav-item" href="procedimentos.html">Lista de procedimentos</a>
+                        <a class="nav-item active" href="#">Importacao de dados</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📅</span>
+                        Agenda
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="agenda-config.html">Fuso horario e marcadores</a>
+                        <a class="nav-item" href="disponibilidade.html">Configurar disponibilidade</a>
+                        <a class="nav-item" href="notificacoes.html">Central de notificacoes</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">💳</span>
+                        Pagamentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="pagamentos.html">Pagamentos</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📄</span>
+                        Documentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="modelos-documentos.html">Modelos de documentos</a>
+                        <a class="nav-item" href="anamnese-modelos.html">Modelos de anamnese</a>
+                        <span class="nav-item disabled" aria-disabled="true">Receituarios</span>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <section class="settings-content">
+            <header class="migration-header">
+                <div class="header-left">
+                    <h1>Migracao de dados</h1>
+                    <p class="header-subtitle">Importe arquivos da plataforma anterior com seguranca.</p>
+                </div>
+            </header>
+
+            <section class="card">
+                <h2>Qual plataforma voce usava?</h2>
+                <p class="muted">Escolha a plataforma que deseja migrar os dados.</p>
+                <div class="platform-grid" id="platform-grid">
+                    <label class="platform-option"><input type="radio" name="platform" value="simplesdental"><span>Simples Dental</span></label>
+                    <label class="platform-option"><input type="radio" name="platform" value="dontus"><span>Dontus</span></label>
+                    <label class="platform-option"><input type="radio" name="platform" value="clinicorp"><span>CliniCorp</span></label>
+                    <label class="platform-option"><input type="radio" name="platform" value="dentaloffice"><span>Dental Office</span></label>
+                    <label class="platform-option"><input type="radio" name="platform" value="controleodonto"><span>Controle Odonto</span></label>
+                    <label class="platform-option"><input type="radio" name="platform" value="outra"><span>Outra</span></label>
+                </div>
+            </section>
+
+            <section class="card" id="migration-panel">
+                <div class="info-banner">Comece enviando os arquivos de Pacientes.</div>
+                <div class="import-grid">
+                    <div class="import-card" data-key="pacientes">
+                        <div class="import-icon">👤</div>
+                        <h3>Pacientes</h3>
+                        <p>Cadastro de pacientes</p>
+                        <input type="file" id="file-pacientes" class="file-input" accept=".csv,.xlsx,.json">
+                        <button class="btn-secondary" data-action="pick" data-target="file-pacientes">Enviar arquivos</button>
+                        <div class="file-status" id="status-pacientes">Aguardando envio</div>
+                    </div>
+                    <div class="import-card" data-key="agenda">
+                        <div class="import-icon">📅</div>
+                        <h3>Agenda</h3>
+                        <p>Agendamentos atuais</p>
+                        <input type="file" id="file-agenda" class="file-input" accept=".csv,.xlsx,.json">
+                        <button class="btn-secondary" data-action="pick" data-target="file-agenda">Enviar arquivos</button>
+                        <div class="file-status" id="status-agenda">Aguardando envio</div>
+                    </div>
+                    <div class="import-card" data-key="fichas">
+                        <div class="import-icon">📄</div>
+                        <h3>Fichas clinicas</h3>
+                        <p>Historico de procedimentos</p>
+                        <input type="file" id="file-fichas" class="file-input" accept=".csv,.xlsx,.json,.zip">
+                        <button class="btn-secondary" data-action="pick" data-target="file-fichas">Enviar arquivos</button>
+                        <div class="file-status" id="status-fichas">Aguardando envio</div>
+                    </div>
+                    <div class="import-card" data-key="financeiro">
+                        <div class="import-icon">💰</div>
+                        <h3>Fluxo de caixa</h3>
+                        <p>Receitas e despesas</p>
+                        <input type="file" id="file-financeiro" class="file-input" accept=".csv,.xlsx,.json">
+                        <button class="btn-secondary" data-action="pick" data-target="file-financeiro">Enviar arquivos</button>
+                        <div class="file-status" id="status-financeiro">Aguardando envio</div>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="settings-sidebar.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="migracao.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+

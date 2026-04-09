@@ -1,0 +1,230 @@
+﻿body {
+  margin: 0;
+  background: #f3f5f9;
+  color: #12213f;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.super-admin-page {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.topbar p {
+  margin: 4px 0 0;
+  color: #5b6780;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #d8e0ec;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.card h2 {
+  margin: 0 0 14px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  color: #2f3b53;
+}
+
+input {
+  border: 1px solid #ccd7e8;
+  border-radius: 10px;
+  height: 40px;
+  padding: 0 12px;
+  font: inherit;
+}
+
+input:focus {
+  outline: none;
+  border-color: #1fa87a;
+  box-shadow: 0 0 0 3px rgba(31, 168, 122, 0.15);
+}
+
+.actions {
+  margin-top: 16px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #22b07d, #1b996f);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  height: 40px;
+  padding: 0 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-outline {
+  border: 1px solid #b8c6de;
+  background: #fff;
+  color: #203156;
+  border-radius: 999px;
+  height: 38px;
+  padding: 0 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: #d92d20;
+  font-weight: 600;
+  min-height: 20px;
+}
+
+.result {
+  margin-top: 12px;
+  background: #f7fafc;
+  border: 1px solid #dbe7f5;
+  border-radius: 10px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.list-empty {
+  color: #5b6780;
+}
+
+.clinic-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #dfe7f2;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.clinic-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.clinic-actions button {
+  border: 1px solid #c5d2e6;
+  background: #fff;
+  color: #1f2f52;
+  border-radius: 999px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.clinic-actions button.btn-primary {
+  border: none;
+  background: linear-gradient(135deg, #22b07d, #1b996f);
+  color: #fff;
+}
+
+.clinic-name {
+  font-weight: 700;
+}
+
+.clinic-meta {
+  color: #5b6780;
+  font-size: 0.95rem;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 13, 24, 0.45);
+  display: grid;
+  place-items: center;
+  z-index: 999;
+  padding: 16px;
+}
+
+.modal[hidden] {
+  display: none !important;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 560px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #d6dfec;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  position: relative;
+}
+
+.modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid #c9d6eb;
+  background: #fff;
+  color: #1f2f52;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-card h3 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.modal-clinic-name {
+  margin: 6px 0 14px;
+  color: #374861;
+}
+
+.credentials-box {
+  border: 1px solid #d8e3f2;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f7fafc;
+  display: grid;
+  gap: 8px;
+}
+
+.modal-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 880px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

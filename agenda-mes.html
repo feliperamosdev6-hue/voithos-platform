@@ -1,0 +1,183 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8" />
+    <title>Agenda Mensal</title>
+    <link rel="stylesheet" href="timepicker.css" />
+    <link rel="stylesheet" href="agenda-mes.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+  <header class="top-bar">
+    <h2>Agenda mensal</h2>
+  </header>
+
+<main class="mes-container">
+
+    <div class="header-mes">
+        <button id="prev-month" class="nav-btn">&#9664;</button>
+        <h2 id="mes-ano"></h2>
+        <button id="next-month" class="nav-btn">&#9654;</button>
+    </div>
+
+    <div class="dias-semana">
+        <span>Dom</span> <span>Seg</span> <span>Ter</span> <span>Qua</span> 
+        <span>Qui</span> <span>Sex</span> <span>Sáb</span>
+    </div>
+
+    <div id="grade-mensal" class="grade-mensal"></div>
+
+    <div class="painel-lateral">
+        <button id="btn-novo-agendamento" class="btn-novo">+ Novo Agendamento</button>
+        <h3>Atendimentos do dia</h3>
+        <div id="lista-atendimentos"></div>
+    </div>
+
+</main>
+
+<div id="modal-bg" class="modal-bg hidden">
+    <div class="modal">
+        <h2>Novo Agendamento</h2>
+
+        <label>Paciente:</label>
+        <input id="input-paciente" type="text">
+
+        <label>Tipo de atendimento:</label>
+        <input id="input-tipo" type="text">
+
+        <label>Horário início:</label>
+        <input id="input-hora-inicio" type="text" data-timepicker="true" placeholder="HH:MM" inputmode="numeric">
+
+        <label>Horário fim:</label>
+        <input id="input-hora-fim" type="text" data-timepicker="true" placeholder="HH:MM" inputmode="numeric">
+
+        <label>Status:</label>
+        <select id="input-status">
+            <option value="em_aberto">Em aberto</option>
+            <option value="confirmado">Confirmado</option>
+            <option value="realizado">Realizado</option>
+            <option value="nao_compareceu">Não compareceu</option>
+            <option value="cancelado">Cancelado</option>
+        </select>
+
+        <div class="modal-actions">
+            <button id="btn-salvar-agendamento" class="btn-save">Salvar</button>
+            <button id="btn-fechar-modal" class="btn-cancel">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-editar" class="modal-bg hidden">
+  <div class="modal">
+      <h2>Editar Agendamento</h2>
+      <input id="edit-paciente" type="text" placeholder="Nome do paciente">
+      <input id="edit-tipo" type="text" placeholder="Tipo de atendimento">
+      <input id="edit-hora-inicio" type="text" data-timepicker="true" placeholder="HH:MM" inputmode="numeric">
+      <input id="edit-hora-fim" type="text" data-timepicker="true" placeholder="HH:MM" inputmode="numeric">
+      <select id="edit-status">
+          <option value="em_aberto">Em aberto</option>
+          <option value="confirmado">Confirmado</option>
+          <option value="realizado">Realizado</option>
+          <option value="nao_compareceu">Não compareceu</option>
+          <option value="cancelado">Cancelado</option>
+      </select>
+      <div class="modal-actions">
+          <button id="btn-salvar-edicao" class="btn-save">Salvar</button>
+          <button id="btn-cancelar-edicao" class="btn-cancel">Cancelar</button>
+      </div>
+  </div>
+</div>
+
+<script src="timepicker.js"></script>
+<script src="shared/adapters/desktop-adapter.js"></script>
+<script src="shared/adapters/web-adapter.js"></script>
+<script src="shared/app-api.js"></script>
+<script src="agenda-mes.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+

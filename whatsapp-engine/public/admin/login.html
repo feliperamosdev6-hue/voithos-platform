@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login | Voithos WhatsApp Engine</title>
+  <link rel="stylesheet" href="/admin-assets/admin.css">
+</head>
+<body data-page="login">
+  <main class="login-shell">
+    <section class="login-card">
+      <p class="eyebrow">Acesso interno</p>
+      <h1>Voithos WhatsApp Engine</h1>
+      <p class="muted">Use o token de operador em <code>ADMIN_PANEL_TOKEN</code> para manutencao completa ou o token de leitura em <code>ADMIN_PANEL_READONLY_TOKEN</code> para consulta segura.</p>
+
+      <form id="login-form" class="stack">
+        <label>
+          <span>Token interno</span>
+          <input id="internal-token" type="password" placeholder="Cole o token aqui" autocomplete="current-password" required>
+        </label>
+        <button class="btn btn-primary" type="submit">Entrar no painel</button>
+      </form>
+      <p class="footnote">O painel usa a propria API do engine e nao altera os fluxos ja validados.</p>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/admin-assets/admin.js"></script>
+</body>
+</html>

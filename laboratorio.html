@@ -1,0 +1,182 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Laboratório - Gestão &amp; Controle</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="laboratorio.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+  <main class="layout-lab">
+    <header class="lab-header">
+      <div class="lab-header-text">
+        <h1>Laboratório</h1>
+        <p>Gestão de peças e prazos do laboratório odontológico.</p>
+      </div>
+      <div class="header-actions-lab">
+        <a href="gestao.html" id="btn-voltar-lab" class="btn-secundario btn-voltar-lab">Voltar</a>
+        <div class="totais">
+          <div class="card-total">
+            <span>Total no mês</span>
+            <strong id="total-mes">R$ 0,00</strong>
+          </div>
+          <div class="card-total pendente">
+            <span>Pendentes</span>
+            <strong id="total-pendentes">0</strong>
+          </div>
+        </div>
+        <button id="btn-novo" class="btn-primario" type="button">+ Novo registro</button>
+      </div>
+    </header>
+
+    <section class="lab-section">
+      <div class="table-wrapper">
+        <table class="tabela-lab" id="tabela-lab">
+          <thead>
+            <tr>
+              <th>Laboratório</th>
+              <th>Paciente</th>
+              <th>Peça</th>
+              <th>Entrada</th>
+              <th>Saída</th>
+              <th>Valor</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="8" class="sem-registros">Carregando registros...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div id="modal-lab-bg" class="modal-bg hidden">
+    <div class="modal-lab">
+      <h2 id="titulo-modal-lab">Novo registro</h2>
+
+      <label for="input-laboratorio">Laboratório</label>
+      <input id="input-laboratorio" type="text" placeholder="Nome do laboratório" />
+
+      <label for="input-paciente">Paciente</label>
+      <select id="input-paciente"></select>
+
+      <label for="input-peca">Peça</label>
+      <input id="input-peca" type="text" placeholder="Ex: Coroa, prótese..." />
+
+      <label for="input-entrada">Data de entrada</label>
+      <input id="input-entrada" type="date" />
+
+      <label for="input-saida">Data de saída</label>
+      <input id="input-saida" type="date" />
+
+      <label for="input-valor">Valor (R$)</label>
+      <input id="input-valor" type="number" step="0.01" min="0" />
+
+      <label for="input-status">Status</label>
+      <select id="input-status">
+        <option value="pendente">Pendente</option>
+        <option value="entregue">Entregue</option>
+      </select>
+
+      <div class="modal-actions">
+        <button id="btn-salvar-lab" class="btn-primario">Salvar</button>
+        <button id="btn-cancelar-lab" class="btn-secundario">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="laboratorio.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+

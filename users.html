@@ -1,0 +1,384 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerenciamento de Usuarios - Voithos</title>
+    <link rel="stylesheet" href="users.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="settings-layout">
+        <aside class="settings-sidebar">
+            <div class="sidebar-title">Configuracoes</div>
+            <nav class="sidebar-nav">
+                <div class="nav-group active">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">🏥</span>
+                        Minha clinica
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="clinica.html">Dados da clinica</a>
+                        <a class="nav-item active" href="#" data-section="manage">Gerenciar usuarios</a>
+                        <a class="nav-item" href="procedimentos.html">Lista de procedimentos</a>
+                        <a class="nav-item" href="migracao.html">Importacao de dados</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📅</span>
+                        Agenda
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="agenda-config.html">Fuso horario e marcadores</a>
+                        <a class="nav-item" href="disponibilidade.html">Configurar disponibilidade</a>
+                        <a class="nav-item" href="notificacoes.html">Central de notificacoes</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📄</span>
+                        Documentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="modelos-documentos.html">Modelos de documentos</a>
+                        <a class="nav-item" href="anamnese-modelos.html">Modelos de anamnese</a>
+                        <span class="nav-item disabled" aria-disabled="true">Receituarios</span>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">💳</span>
+                        Pagamentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="pagamentos.html">Pagamentos</a>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <section class="settings-content">
+            <section class="settings-section" data-section="create">
+                <header class="users-header">
+                    <div class="header-left">
+                        <h1 id="create-title">Criar novo usuario</h1>
+                        <p class="header-subtitle">Configure perfis e permissoes manualmente.</p>
+                        <div class="clinic-context-badge" id="clinic-context-badge">
+                            <span class="clinic-context-label">Clinica ativa</span>
+                            <strong id="clinic-context-name">Carregando...</strong>
+                            <small id="clinic-context-id">--</small>
+                        </div>
+                    </div>
+                    <button class="btn-secondary" id="btn-cancel-edit" type="button" hidden>Cancelar edicao</button>
+                </header>
+
+                <section class="card">
+                    <div class="card-header">
+                        <h2>Informacoes basicas</h2>
+                        <p class="muted">Campos essenciais para acesso ao sistema.</p>
+                    </div>
+                    <form id="user-create-form" class="user-form">
+                        <div class="form-grid two">
+                            <label class="form-group">
+                                <span>Nome completo *</span>
+                                <input type="text" id="create-nome" required>
+                            </label>
+                            <label class="form-group">
+                                <span>Celular</span>
+                                <input type="text" id="create-telefone" placeholder="(00) 00000-0000">
+                            </label>
+                            <label class="form-group">
+                                <span>E-mail *</span>
+                                <input type="email" id="create-email" required placeholder="nome@clinica.com">
+                            </label>
+                            <label class="form-group">
+                                <span>Cargo *</span>
+                                <select id="create-tipo" required>
+                                    <option value="">Selecione</option>
+                                    <option value="administrativo">Administrativo</option>
+                                    <option value="recepcionista">Recepcionista</option>
+                                    <option value="dentista">Dentista</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="form-grid two">
+                            <label class="form-group">
+                                <span>Senha *</span>
+                                <input type="password" id="create-senha" required>
+                            </label>
+                            <div class="form-group hidden" id="create-dentist-color-group">
+                                <span>Cor do dentista</span>
+                                <div class="color-row">
+                                    <input type="color" id="create-corDentista" value="#1FA87A">
+                                    <input type="text" id="create-corDentistaTexto" placeholder="#1FA87A" maxlength="7">
+                                </div>
+                                <small class="hint">Cor usada na agenda.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-grid two hidden" id="create-dentist-signature-group">
+                            <label class="form-group">
+                                <span>Nome da assinatura (receita)</span>
+                                <input type="text" id="create-rx-assinatura-nome" placeholder="Ex.: Dra. Maria Souza">
+                            </label>
+                            <label class="form-group">
+                                <span>Registro da assinatura</span>
+                                <input type="text" id="create-rx-assinatura-registro" placeholder="CRO-">
+                            </label>
+                            <label class="form-group">
+                                <span>CRO do profissional</span>
+                                <input type="text" id="create-cro" placeholder="CRO-">
+                            </label>
+                            <div class="form-group">
+                                <span>Imagem da assinatura</span>
+                                <input type="file" id="create-rx-assinatura-file" accept="image/png,image/jpeg">
+                            </div>
+                            <div class="form-group">
+                                <span>Preview</span>
+                                <div class="signature-preview" id="create-rx-assinatura-preview">
+                                    <img id="create-rx-assinatura-image" alt="Assinatura do dentista">
+                                </div>
+                                <button type="button" class="btn-secondary" id="create-rx-assinatura-remove">Remover assinatura</button>
+                            </div>
+                        </div>
+
+                        <div class="permissions-block">
+                            <div class="section-title">Permissoes</div>
+                            <label class="perm-admin">
+                                <input type="checkbox" id="perm-admin">
+                                <span>Administrador(a)</span>
+                                <small>Perfil com acesso completo ao sistema.</small>
+                            </label>
+
+                            <div class="perm-group">
+                                <h3>Minha clinica</h3>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-clinic-manage">
+                                    <span class="toggle"></span>
+                                    <span>Editar dados da clinica</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-procedures-manage">
+                                    <span class="toggle"></span>
+                                    <span>Lista de procedimentos</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-users-manage">
+                                    <span class="toggle"></span>
+                                    <span>Gerenciar usuarios</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-import-data">
+                                    <span class="toggle"></span>
+                                    <span>Importacao de dados</span>
+                                </label>
+                            </div>
+
+                            <div class="perm-group">
+                                <h3>Agenda</h3>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-agenda-settings">
+                                    <span class="toggle"></span>
+                                    <span>Configurar agenda (fuso e marcadores)</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-agenda-availability">
+                                    <span class="toggle"></span>
+                                    <span>Configurar disponibilidade</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-notifications">
+                                    <span class="toggle"></span>
+                                    <span>Central de notificacoes</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-agenda-view">
+                                    <span class="toggle"></span>
+                                    <span>Visualizacao da agenda</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-agenda-edit">
+                                    <span class="toggle"></span>
+                                    <span>Edicao de agendamentos</span>
+                                </label>
+                            </div>
+
+                            <div class="perm-group">
+                                <h3>Financeiro</h3>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-finance-view">
+                                    <span class="toggle"></span>
+                                    <span>Visualizar financeiro</span>
+                                </label>
+                                <label class="perm-toggle">
+                                    <input type="checkbox" id="perm-finance-edit">
+                                    <span class="toggle"></span>
+                                    <span>Editar lancamentos financeiros</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary" id="create-submit">Salvar usuario</button>
+                            <span class="form-error" id="create-error"></span>
+                        </div>
+                    </form>
+                </section>
+            </section>
+
+            <section class="settings-section active" data-section="manage">
+                <header class="users-header">
+                <div class="header-left">
+                    <h1>Gerenciar usuarios</h1>
+                    <p class="header-subtitle">Permissoes e perfis da clinica.</p>
+                </div>
+                <div class="header-actions-row">
+                    <button class="btn-primary" id="btn-new-user">+ Novo usuario</button>
+                </div>
+            </header>
+
+                <section class="card">
+                    <div class="card-header">
+                        <h2>Usuarios cadastrados</h2>
+                        <p class="muted">Somente administradores podem gerenciar usuarios.</p>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="users-table" id="users-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Login</th>
+                                    <th>Tipo</th>
+                                    <th class="actions-col">Acoes</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-tbody">
+                                <tr><td colspan="4" class="empty">Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </section>
+        </section>
+    </main>
+
+    <div class="modal" id="reset-password-modal" aria-hidden="true">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Redefinir senha</h3>
+                <button class="modal-close" id="rp-close" type="button" aria-label="Fechar">&#10005;</button>
+            </div>
+            <form id="rp-form">
+                <div class="form-group">
+                    <label for="rp-nova-senha">Nova senha</label>
+                    <input type="password" id="rp-nova-senha" required>
+                </div>
+                <div class="form-group">
+                    <label for="rp-confirma">Confirmar senha</label>
+                    <input type="password" id="rp-confirma" required>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Salvar</button>
+                    <button type="button" class="btn-secondary" id="rp-cancel">Cancelar</button>
+                </div>
+                <p id="rp-error" class="form-error"></p>
+            </form>
+        </div>
+    </div>
+
+    <script src="settings-sidebar.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="users.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+
+
+
+
+

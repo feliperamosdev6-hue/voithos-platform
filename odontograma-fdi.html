@@ -1,0 +1,294 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="odontograma-fdi.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+            <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+<section class="odontograma-container" id="odontograma">
+    <svg id="odontograma-svg" class="odo-svg" viewBox="0 0 715 854" aria-label="Odontograma">
+      <g id="teeth-layer"></g>
+    </svg>
+  </section>
+
+  <script>
+  (function () {
+    var NS = "http://www.w3.org/2000/svg";
+    var selecionados = {};
+    var root = document.querySelector("#odontograma");
+    var svg = document.getElementById("odontograma-svg");
+    var layer = document.getElementById("teeth-layer");
+    if (!root || !svg || !layer) return;
+
+    var upper = [18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+    var lower = [48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+
+    var molars = new Set([18,17,16,26,27,28,48,47,46,36,37,38]);
+    var premolars = new Set([15,14,24,25,45,44,34,35]);
+    var canines = new Set([13,23,43,33]);
+    var incisors = new Set([12,11,21,22,42,41,31,32]);
+
+    function toothScale(dente) {
+      if (molars.has(dente)) return 1.1;
+      if (premolars.has(dente)) return 1.0;
+      if (canines.has(dente)) return 0.95;
+      if (incisors.has(dente)) return 0.9;
+      return 1.0;
+    }    var overrides = {
+      11: { dx: 0, dy: -359, dr: 0 },
+      21: { dx: 0, dy: -359, dr: 0 }
+    };
+    function createSvgEl(tag) {
+      return document.createElementNS(NS, tag);
+    }
+
+    function createTooth(dente, x, y, rot) {
+      var g = createSvgEl("g");
+      g.setAttribute("class", "tooth");
+      g.setAttribute("id", "tooth-" + dente);
+      g.setAttribute("data-tooth", dente);
+      g.setAttribute("data-dente", dente);
+
+      var scale = toothScale(dente);
+      var incisorBoost = (dente === 11 || dente === 21) ? 1.9 : 1;
+      scale = scale * incisorBoost;
+      var adj = overrides[dente];
+      if (adj) {
+        x += adj.dx || 0;
+        y += adj.dy || 0;
+        rot += adj.dr || 0;
+      }
+      g.setAttribute("transform", "translate(" + x.toFixed(1) + "," + y.toFixed(1) + ") rotate(" + rot.toFixed(1) + ") scale(" + scale.toFixed(2) + ")");
+
+            var isIncisorA = (dente === 11 || dente === 21);
+      var boxW = isIncisorA ? 28 : 36;
+      var boxH = isIncisorA ? 40 : 46;
+      var boxX = -boxW / 2;
+      var boxY = isIncisorA ? -22 : -26;
+      var boxRx = isIncisorA ? 8 : 10;
+
+      var vPts = isIncisorA ? "-9,-22 9,-22 6,-12 -6,-12" : "-12,-24 12,-24 8,-12 -8,-12";
+      var mPts = isIncisorA ? "-14,-12 -6,-8 -6,6 -14,9" : "-18,-12 -8,-8 -8,6 -18,10";
+      var dPts = isIncisorA ? "14,-12 6,-8 6,6 14,9" : "18,-12 8,-8 8,6 18,10";
+      var lPts = isIncisorA ? "-8,16 8,16 6,6 -6,6" : "-10,18 10,18 8,6 -8,6";
+      var oX = isIncisorA ? -4 : -6;
+      var oY = isIncisorA ? -5 : -6;
+      var oW = isIncisorA ? 8 : 12;
+      var oH = isIncisorA ? 10 : 12;
+      var oRx = isIncisorA ? 2 : 3;
+var rect = createSvgEl("rect");
+      rect.setAttribute("class", "tbox");
+      rect.setAttribute("x", boxX.toString());
+      rect.setAttribute("y", boxY.toString());
+      rect.setAttribute("width", boxW.toString());
+      rect.setAttribute("height", boxH.toString());
+      rect.setAttribute("rx", boxRx.toString());
+      g.appendChild(rect);
+
+      var v = createSvgEl("polygon");
+      v.setAttribute("class", "face");
+      v.setAttribute("data-face", "V");
+      v.setAttribute("points", vPts);
+      g.appendChild(v);
+
+      var m = createSvgEl("polygon");
+      m.setAttribute("class", "face");
+      m.setAttribute("data-face", "M");
+      m.setAttribute("points", mPts);
+      g.appendChild(m);
+
+      var d = createSvgEl("polygon");
+      d.setAttribute("class", "face");
+      d.setAttribute("data-face", "D");
+      d.setAttribute("points", dPts);
+      g.appendChild(d);
+
+      var l = createSvgEl("polygon");
+      l.setAttribute("class", "face");
+      l.setAttribute("data-face", "L");
+      l.setAttribute("points", lPts);
+      g.appendChild(l);
+
+      var o = createSvgEl("rect");
+      o.setAttribute("class", "face");
+      o.setAttribute("data-face", "O");
+      o.setAttribute("x", oX.toString());
+      o.setAttribute("y", oY.toString());
+      o.setAttribute("width", oW.toString());
+      o.setAttribute("height", oH.toString());
+      o.setAttribute("rx", oRx.toString());
+      g.appendChild(o);
+
+      var t = createSvgEl("text");
+      t.setAttribute("class", "tnum");
+      t.setAttribute("x", "0");
+      t.setAttribute("y", "34");
+      t.textContent = dente;
+      g.appendChild(t);
+
+      layer.appendChild(g);
+    }
+
+    function placeArc(teeth, cx, cy, radius, startDeg, endDeg) {
+      var count = teeth.length;
+      var step = (endDeg - startDeg) / (count - 1);
+      for (var i = 0; i < count; i++) {
+        var dente = teeth[i];
+        var theta = startDeg + step * i;
+        var rad = Math.PI / 180 * theta;
+        var x = cx + radius * Math.cos(rad);
+        var y = cy + radius * Math.sin(rad);
+        var rot = theta - 90;
+        createTooth(dente, x, y, rot);
+      }
+    }
+
+    // Posicoes ajustadas para alinhar com a imagem de referencia (715x854).
+    placeArc(upper, 357.5, 235, 235, 215, -35);
+    placeArc(lower, 357.5, 620, 245, 145, 35);
+
+    function buildResumo(lastDente) {
+      var dentes = Object.keys(selecionados).sort(function (a, b) { return Number(a) - Number(b); });
+      var resumo = dentes.map(function (d) {
+        var faces = Object.keys(selecionados[d]).sort().join('');
+        return faces ? (d + '(' + faces + ')') : d;
+      });
+      var facesAtual = [];
+      if (lastDente && selecionados[lastDente]) {
+        facesAtual = Object.keys(selecionados[lastDente]).sort();
+      }
+      return { dentes: dentes, resumo: resumo, lastDente: lastDente || '', lastFaces: facesAtual };
+    }
+
+    function enviarSelecao(lastDente) {
+      if (!window.parent) return;
+      var payload = buildResumo(lastDente);
+      window.parent.postMessage({ type: "odontograma:update", payload: payload }, "*");
+    }
+
+    root.addEventListener("click", function (e) {
+      var face = e.target.closest(".face");
+      if (!face) return;
+      var tooth = face.closest(".tooth");
+      if (!tooth) return;
+      var dente = tooth.getAttribute("data-dente") || tooth.getAttribute("data-tooth");
+      var faceId = face.getAttribute("data-face");
+      if (!dente || !faceId) return;
+      selecionados[dente] = selecionados[dente] || {};
+      if (selecionados[dente][faceId]) {
+        delete selecionados[dente][faceId];
+        face.classList.remove("ativa");
+      } else {
+        selecionados[dente][faceId] = true;
+        face.classList.add("ativa");
+      }
+      if (Object.keys(selecionados[dente]).length === 0) {
+        delete selecionados[dente];
+        tooth.classList.remove("is-selected");
+      } else {
+        tooth.classList.add("is-selected");
+      }
+      enviarSelecao(dente);
+    });
+  })();
+  </script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

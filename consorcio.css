@@ -1,0 +1,58 @@
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+}
+
+.btn-voltar {
+    background: #333;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+
+.container {
+    margin-top: 20px;
+}
+
+.btn.novo {
+    background: #28a745;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+}
+
+.tabela {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.tabela th, .tabela td {
+    border: 1px solid #ddd;
+    padding: 10px;
+}
+
+.tabela th {
+    background: #f3f3f3;
+    font-weight: bold;
+}
+
+.consorcio-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.consorcio-header h1 {
+    margin: 0 0 4px 0;
+}
+
+.consorcio-header p {
+    margin: 0;
+}

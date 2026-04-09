@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Voithos</title>
+    <link rel="stylesheet" href="login.css">
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <h1 class="title"><img src="assets/logo-voithos.svg" alt="Voithos" class="title-logo"></h1>
+            <p class="subtitle">Acesse sua conta para continuar</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="login-email">E-mail</label>
+                    <input type="email" id="login-email" name="email" autocomplete="email" required>
+                </div>
+                <div class="input-group">
+                    <label for="senha">Senha</label>
+                    <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn-login">Entrar</button>
+                <p class="login-help"><a href="#" id="forgot-password-link">Esqueci minha senha</a></p>
+                <p class="login-help"><a href="#" id="show-signup-link">Criar conta</a></p>
+                <p id="error-message" class="error-message"></p>
+            </form>
+            <form id="signup-form" class="signup-form hidden">
+                <div class="form-divider"><span>Nova conta</span></div>
+                <div class="signup-grid">
+                    <div class="input-group">
+                        <label for="signup-document-type">CPF ou CNPJ</label>
+                        <select id="signup-document-type" name="documentType" required>
+                            <option value="CPF">CPF</option>
+                            <option value="CNPJ">CNPJ</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-document-number">Número do documento</label>
+                        <input type="text" id="signup-document-number" name="documentNumber" inputmode="numeric" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-name">Nome da clínica ou conta</label>
+                        <input type="text" id="signup-clinic-name" name="nomeClinica" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-owner-name">Nome do responsável</label>
+                        <input type="text" id="signup-owner-name" name="responsavelNome" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-admin-email">E-mail do administrador</label>
+                        <input type="email" id="signup-admin-email" name="adminEmail" autocomplete="email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-email">E-mail da clínica</label>
+                        <input type="email" id="signup-clinic-email" name="clinicEmail" autocomplete="email">
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-phone">Telefone da clínica</label>
+                        <input type="tel" id="signup-clinic-phone" name="telefone" autocomplete="tel">
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-password">Senha</label>
+                        <input type="password" id="signup-password" name="password" autocomplete="new-password" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-password-confirmation">Confirmar senha</label>
+                        <input type="password" id="signup-password-confirmation" name="passwordConfirmation" autocomplete="new-password" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-login">Criar conta</button>
+                <p class="login-help"><a href="#" id="hide-signup-link">Já tenho conta</a></p>
+                <p id="signup-message" class="success-message"></p>
+            </form>
+        </div>
+        <footer class="footer-container">
+            <p>&copy; 2026 voithos. Todos os direitos reservados.</p>
+        </footer>
+    </div>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="login.js"></script>
+</body>
+</html>
+
+
+

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Migracao do WhatsApp Engine - Voithos</title>
+    <link rel="stylesheet" href="clinica.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+    <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="clinic-main">
+        <aside class="clinic-sidebar">
+            <div class="sidebar-title">Configuracoes</div>
+            <nav class="sidebar-nav">
+                <div class="nav-group active">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">🏥</span>
+                        Minha clinica
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="clinica.html">Dados da clinica</a>
+                        <span class="nav-item active">Migracao do WhatsApp</span>
+                        <a class="nav-item" href="users.html">Gerenciar usuarios</a>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <section class="clinic-content">
+            <div class="clinic-header">
+                <h1>WhatsApp migrado para o WhatsApp Engine</h1>
+                <p>As clinicas agora usam o motor interno da Voithos para conexao, envio e monitoramento do WhatsApp.</p>
+            </div>
+
+            <section class="clinic-card">
+                <div class="section-title">Fluxo atual</div>
+                <div class="whatsapp-engine-card">
+                    <div class="whatsapp-engine-summary">
+                        <div class="whatsapp-summary-item">
+                            <span class="whatsapp-summary-label">Conexao da clinica</span>
+                            <strong>Abra "Minha clinica", gere o QR Code e conecte o numero oficial da clinica.</strong>
+                        </div>
+                        <div class="whatsapp-summary-item">
+                            <span class="whatsapp-summary-label">Envios operacionais</span>
+                            <strong>Confirmacoes, lembretes, campanhas e aniversarios usam o WhatsApp Engine automaticamente.</strong>
+                        </div>
+                        <div class="whatsapp-engine-actions">
+                            <a class="btn-primary" href="clinica.html">Abrir Minha clinica</a>
+                            <button class="btn-secondary" type="button" id="btn-open-clinic-whatsapp">Ir para conexao do WhatsApp</button>
+                        </div>
+                        <small class="test-status" id="whatsapp-migration-status">Os atalhos antigos foram mantidos apenas como redirecionamento de compatibilidade.</small>
+                    </div>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="header.js"></script>
+    <script src="whatsapp-engine-migration.js"></script>
+</body>
+</html>

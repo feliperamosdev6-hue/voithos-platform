@@ -1,0 +1,47 @@
+{
+  "name": "whatsapp-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Voithos WhatsApp Engine - service isolated for clinic instances",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/workers/messageWorker.ts",
+    "dev:ui": "node scripts/run-electron.mjs",
+    "dev:all": "node scripts/run-all.mjs dev",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/workers/messageWorker.js",
+    "start:ui": "node scripts/run-electron.mjs",
+    "start:all": "node scripts/run-all.mjs start",
+    "start:all:headless": "node scripts/run-all.mjs start",
+    "whatsapp-ng": "npm run build && set WHATSAPP_ENGINE_BOOT_MODE=ui&& node scripts/run-all.mjs start",
+    "whatsapp-ng:headless": "npm run build && node scripts/run-all.mjs start",
+    "whatsapp-ng:dev": "node scripts/run-all.mjs dev",
+    "smoke:ng": "node scripts/smoke-whatsapp-ng.mjs",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.8.2",
+    "@whiskeysockets/baileys": "^6.7.8",
+    "bullmq": "^5.10.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "pino": "^9.3.2",
+    "pino-http": "^10.3.0",
+    "qrcode": "^1.5.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "concurrently": "^9.2.1",
+    "prisma": "^6.8.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InstanceStatus {
+  CREATED
+  CONNECTING
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum MessageJobStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  SCHEDULED
+  BLOCKED
+}
+
+enum MessageEventType {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  RETRYING
+}
+
+model WhatsAppInstance {
+  id                String         @id @default(cuid())
+  clinicId          String         @unique @map("clinic_id")
+  status            InstanceStatus @default(CREATED)
+  phoneNumber       String?        @map("phone_number")
+  displayName       String?        @map("display_name")
+  authBlobEncrypted String?        @map("auth_blob_encrypted")
+  lastSeenAt        DateTime?      @map("last_seen_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  messageJobs MessageJob[]
+
+  @@map("whatsapp_instances")
+}
+
+model MessageJob {
+  id            String           @id @default(cuid())
+  clinicId      String           @map("clinic_id")
+  instanceId    String           @map("instance_id")
+  appointmentId String?          @map("appointment_id")
+  toPhone       String           @map("to_phone")
+  body          String
+  scheduledFor  DateTime?        @map("scheduled_for")
+  status        MessageJobStatus @default(QUEUED)
+  retryCount    Int              @default(0) @map("retry_count")
+  lastError     String?          @map("last_error")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  instance    WhatsAppInstance @relation(fields: [instanceId], references: [id], onDelete: Restrict)
+  messageLogs MessageLog[]
+
+  @@index([clinicId])
+  @@index([instanceId])
+  @@index([status])
+  @@map("message_jobs")
+}
+
+model MessageLog {
+  id                String           @id @default(cuid())
+  jobId             String           @map("job_id")
+  providerMessageId String?          @map("provider_message_id")
+  eventType         MessageEventType @map("event_type")
+  payload           Json
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  job MessageJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("message_logs")
+}
+

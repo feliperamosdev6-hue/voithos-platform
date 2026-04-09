@@ -1,0 +1,204 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disponibilidade da agenda - Voithos</title>
+    <link rel="stylesheet" href="clinica.css">
+    <link rel="stylesheet" href="disponibilidade.css">
+    <link rel="stylesheet" href="header.css">
+</head>
+<body>
+    <header class="header-container">
+        <a href="index.html" class="brand-home" aria-label="Ir para inicio"><span class="back-home-icon" aria-hidden="true"></span><span>Inicio</span></a>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+            <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao financeira</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                </div>
+            </div>
+            <div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="clinic-main">
+        <aside class="clinic-sidebar">
+            <div class="sidebar-title">Configuracoes</div>
+            <nav class="sidebar-nav">
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">🏥</span>
+                        Minha clinica
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="clinica.html">Dados da clinica</a>
+                        <a class="nav-item" href="users.html">Gerenciar usuarios</a>
+                        <a class="nav-item" href="procedimentos.html">Lista de procedimentos</a>
+                        <a class="nav-item" href="migracao.html">Importacao de dados</a>
+                    </div>
+                </div>
+                <div class="nav-group active">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📅</span>
+                        Agenda
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="agenda-config.html">Fuso horario e marcadores</a>
+                        <a class="nav-item active" href="#">Configurar disponibilidade</a>
+                        <a class="nav-item" href="notificacoes.html">Central de notificacoes</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">💳</span>
+                        Pagamentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="pagamentos.html">Pagamentos</a>
+                    </div>
+                </div>
+                <div class="nav-group">
+                    <button class="nav-group-toggle" type="button">
+                        <span class="nav-icon" aria-hidden="true">📄</span>
+                        Documentos
+                        <span class="nav-caret" aria-hidden="true">▾</span>
+                    </button>
+                    <div class="nav-group-list">
+                        <a class="nav-item" href="modelos-documentos.html">Modelos de documentos</a>
+                        <a class="nav-item" href="anamnese-modelos.html">Modelos de anamnese</a>
+                        <span class="nav-item disabled" aria-disabled="true">Receituarios</span>
+                    </div>
+                </div>
+            </nav>
+        </aside>
+
+        <section class="clinic-content">
+            <div class="clinic-header">
+                <h1>Configurar disponibilidade</h1>
+                <p>Defina horarios de atendimento, intervalos e dias da semana.</p>
+            </div>
+
+            <section class="clinic-card">
+                <div class="section-title">Dias de atendimento</div>
+                <div class="days-grid" id="days-grid"></div>
+            </section>
+
+            <section class="clinic-card">
+                <div class="section-title">Horario de funcionamento</div>
+                <div class="clinic-grid two">
+                    <label class="field">
+                        <span>Inicio do expediente</span>
+                        <input type="time" id="start-time">
+                    </label>
+                    <label class="field">
+                        <span>Fim do expediente</span>
+                        <input type="time" id="end-time">
+                    </label>
+                </div>
+                <div class="clinic-grid two">
+                    <label class="field">
+                        <span>Inicio do intervalo</span>
+                        <input type="time" id="break-start">
+                    </label>
+                    <label class="field">
+                        <span>Fim do intervalo</span>
+                        <input type="time" id="break-end">
+                    </label>
+                </div>
+                <div class="clinic-grid two">
+                    <label class="field">
+                        <span>Duracao do atendimento (min)</span>
+                        <input type="number" id="slot-minutes" min="5" step="5">
+                    </label>
+                    <label class="field switch-field">
+                        <span>Permitir encaixes</span>
+                        <input type="checkbox" id="allow-overbooking">
+                        <small>Permite agendamentos fora do limite do dia.</small>
+                    </label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn-primary" id="save-availability" type="button">Salvar disponibilidade</button>
+                    <span class="form-error" id="availability-status"></span>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <script src="settings-sidebar.js"></script>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script src="disponibilidade.js"></script>
+    <script src="header.js"></script>
+</body>
+</html>
+
+

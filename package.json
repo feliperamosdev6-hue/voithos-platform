@@ -1,0 +1,75 @@
+{
+    "name": "voithos-app",
+    "version": "1.0.0",
+    "description": "Sistema de gestão Voithós para clínica odontológica",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron .",
+        "backend:start": "node backend/src/server.js",
+        "pack": "electron-builder --dir",
+        "dist": "electron-builder",
+        "dist:win": "electron-builder --win nsis --x64",
+        "smoke:platform": "node scripts/smoke-voithos-platform.mjs",
+        "smoke:platform:local": "node scripts/smoke-voithos-platform.mjs --strict",
+        "bootstrap:platform:local": "node scripts/bootstrap-voithos-local.mjs",
+        "doctor:platform:local": "node scripts/doctor-voithos-local.mjs",
+        "readiness:platform:local": "node scripts/readiness-voithos-local.mjs",
+        "gate:platform:local": "node scripts/pre-release-gate-local.mjs",
+        "e2e:pilot": "node scripts/e2e-pilot-runner.mjs",
+        "smoke:plans:automation": "node scripts/smoke-plan-message-automation.mjs",
+        "smoke:relationship:central": "node scripts/smoke-relationship-central.mjs",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "electron": "^28.3.3",
+        "electron-builder": "^24.13.3"
+    },
+    "dependencies": {
+        "@prisma/client": "^6.19.0",
+        "bcryptjs": "^3.0.3",
+        "prisma": "^6.19.0"
+    },
+    "type": "commonjs",
+    "build": {
+        "appId": "com.voithos.desktop",
+        "productName": "Voithos",
+        "files": [
+            "**/*",
+            "!dist/**",
+            "!build/**",
+            "!backend/**",
+            "!pacientes/**",
+            "!RECIBOS/**",
+            "!**/*.log"
+        ],
+        "directories": {
+            "output": "dist"
+        },
+        "asar": true,
+        "win": {
+            "signAndEditExecutable": false,
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ],
+            "icon": "assets/icone-voithos.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "artifactName": "Voithos-Setup-${version}.${ext}",
+            "installerIcon": "assets/icone-voithos.ico",
+            "uninstallerIcon": "assets/icone-voithos.ico",
+            "installerHeaderIcon": "assets/icone-voithos.ico"
+        }
+    }
+}
