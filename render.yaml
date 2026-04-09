@@ -1,10 +1,26 @@
+databases:
+  - name: voithos-postgres
+    plan: basic-256mb
+    databaseName: voithos
+    user: voithos
+
+  - name: voithos-whatsapp-ng-postgres
+    plan: basic-256mb
+    databaseName: whatsapp_engine
+    user: whatsapp_engine
+
 services:
+  - type: keyvalue
+    name: voithos-redis
+    plan: starter
+
   - type: web
     name: voithos-backend
     runtime: node
     plan: starter
     rootDir: .
     buildCommand: npm ci && npx prisma generate
+    preDeployCommand: npx prisma db push --accept-data-loss
     startCommand: npm run backend:start
     healthCheckPath: /health
     envVars:
@@ -13,17 +29,28 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: voithos-postgres
+          property: connectionString
       - key: WHATSAPP_NG_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: voithos-whatsapp-ng
+          property: hostport
       - key: WHATSAPP_NG_SERVICE_TOKEN
         sync: false
       - key: BACKEND_INTERNAL_API_TOKEN
         sync: false
       - key: PUBLIC_APP_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: voithos-web
+          envVarKey: RENDER_EXTERNAL_URL
       - key: APPOINTMENT_ACTION_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: voithos-backend
+          envVarKey: RENDER_EXTERNAL_URL
       - key: VOITHOS_SUPERADMIN_EMAIL
         sync: false
       - key: VOITHOS_SUPERADMIN_PASSWORD
@@ -45,6 +72,7 @@ services:
     plan: starter
     rootDir: whatsapp-engine
     buildCommand: npm ci && npm run build
+    preDeployCommand: npx prisma migrate deploy
     startCommand: npm run start:all:headless
     healthCheckPath: /health
     envVars:
@@ -53,19 +81,23 @@ services:
       - key: PORT
         value: 10000
       - key: DATABASE_URL
-        sync: false
-      - key: REDIS_HOST
-        sync: false
-      - key: REDIS_PORT
-        sync: false
-      - key: REDIS_PASSWORD
-        sync: false
+        fromDatabase:
+          name: voithos-whatsapp-ng-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: voithos-redis
+          property: connectionString
       - key: INTERNAL_API_TOKEN
         sync: false
       - key: SERVICE_INTERNAL_API_TOKEN
         sync: false
       - key: CENTRAL_BACKEND_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: voithos-backend
+          property: hostport
       - key: ADMIN_PANEL_TOKEN
         sync: false
       - key: ADMIN_PANEL_READONLY_TOKEN
@@ -83,4 +115,7 @@ services:
     staticPublishPath: ./render-static
     envVars:
       - key: WEB_CENTRAL_BACKEND_BASE_URL
-        sync: false
+        fromService:
+          type: web
+          name: voithos-backend
+          envVarKey: RENDER_EXTERNAL_URL

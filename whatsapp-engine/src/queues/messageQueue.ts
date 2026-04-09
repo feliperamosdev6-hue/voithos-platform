@@ -5,6 +5,7 @@ export const redisConnection: ConnectionOptions = {
   host: env.redisHost,
   port: env.redisPort,
   password: env.redisPassword || undefined,
+  ...(env.redisTls ? { tls: {} } : {}),
   maxRetriesPerRequest: null,
 };
 

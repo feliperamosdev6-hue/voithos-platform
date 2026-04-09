@@ -28,8 +28,15 @@ const readValue = (key, fallback = '') => {
   return fallback;
 };
 
+const normalizeBaseUrl = (value, fallback = '') => {
+  const raw = String(value || fallback || '').trim().replace(/\/+$/, '');
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `http://${raw}`;
+};
+
 const appEnv = {
-  whatsappNgBaseUrl: String(readValue('WHATSAPP_NG_BASE_URL', 'http://127.0.0.1:8099')).trim().replace(/\/+$/, ''),
+  whatsappNgBaseUrl: normalizeBaseUrl(readValue('WHATSAPP_NG_BASE_URL', 'http://127.0.0.1:8099')),
   whatsappNgServiceToken: String(readValue('WHATSAPP_NG_SERVICE_TOKEN', '')).trim(),
   backendInternalApiToken: String(readValue('BACKEND_INTERNAL_API_TOKEN', '')).trim(),
   clinicalDocumentsStorageRoot: String(readValue('CLINICAL_DOCUMENTS_STORAGE_ROOT', '')).trim(),
@@ -41,7 +48,7 @@ const appEnv = {
   planMessageSchedulerLimitPerClinic: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_LIMIT_PER_CLINIC', '200')) || 200),
   planMessageDueSoonDays: Math.max(1, Number(readValue('PLAN_MESSAGE_DUE_SOON_DAYS', '3')) || 3),
   appointmentActionLinksEnabled: String(readValue('APPOINTMENT_ACTION_LINKS_ENABLED', 'false')).trim().toLowerCase() === 'true',
-  appointmentActionBaseUrl: String(readValue('APPOINTMENT_ACTION_BASE_URL', readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000'))).trim().replace(/\/+$/, ''),
+  appointmentActionBaseUrl: normalizeBaseUrl(readValue('APPOINTMENT_ACTION_BASE_URL', readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000'))),
   appointmentActionTokenTtlHours: Math.max(1, Number(readValue('APPOINTMENT_ACTION_TOKEN_TTL_HOURS', '36')) || 36),
 };
 

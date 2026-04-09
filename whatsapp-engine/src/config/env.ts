@@ -7,19 +7,53 @@ const asNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const normalizeBaseUrl = (value: string | undefined, fallback = ''): string => {
+  const raw = String(value || fallback || '').trim().replace(/\/+$/, '');
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `http://${raw}`;
+};
+
+const parseRedisConfig = (): { host: string; port: number; password: string; tls: boolean } => {
+  const redisUrl = String(process.env.REDIS_URL || process.env.REDIS_CONNECTION_STRING || '').trim();
+  if (redisUrl) {
+    try {
+      const parsed = new URL(redisUrl);
+      return {
+        host: parsed.hostname || 'localhost',
+        port: asNumber(parsed.port, 6379),
+        password: decodeURIComponent(parsed.password || ''),
+        tls: parsed.protocol === 'rediss:',
+      };
+    } catch (_error) {
+      // Fall back to REDIS_HOST/REDIS_PORT/REDIS_PASSWORD.
+    }
+  }
+
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: asNumber(process.env.REDIS_PORT, 6379),
+    password: process.env.REDIS_PASSWORD || '',
+    tls: false,
+  };
+};
+
+const redisConfig = parseRedisConfig();
+
 export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: asNumber(process.env.PORT, 8099),
   logLevel: process.env.LOG_LEVEL || 'info',
   databaseUrl: process.env.DATABASE_URL || '',
-  redisHost: process.env.REDIS_HOST || 'localhost',
-  redisPort: asNumber(process.env.REDIS_PORT, 6379),
-  redisPassword: process.env.REDIS_PASSWORD || '',
+  redisHost: redisConfig.host,
+  redisPort: redisConfig.port,
+  redisPassword: redisConfig.password,
+  redisTls: redisConfig.tls,
   serviceInternalApiToken: process.env.SERVICE_INTERNAL_API_TOKEN || process.env.INTERNAL_API_TOKEN || '',
   adminPanelToken: process.env.ADMIN_PANEL_TOKEN || '',
   adminPanelReadOnlyToken: process.env.ADMIN_PANEL_READONLY_TOKEN || '',
   internalApiToken: process.env.INTERNAL_API_TOKEN || '',
-  centralBackendBaseUrl: process.env.CENTRAL_BACKEND_BASE_URL || '',
+  centralBackendBaseUrl: normalizeBaseUrl(process.env.CENTRAL_BACKEND_BASE_URL || ''),
   centralBackendServiceToken: process.env.CENTRAL_BACKEND_SERVICE_TOKEN || '',
   authEncryptionKeyHex: process.env.AUTH_ENCRYPTION_KEY_HEX || '',
   authEncryptionKeyBase64: process.env.AUTH_ENCRYPTION_KEY_BASE64 || '',
