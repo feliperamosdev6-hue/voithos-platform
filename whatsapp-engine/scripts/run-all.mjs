@@ -50,6 +50,33 @@ const sleep = (ms) => new Promise((resolvePromise) => {
   setTimeout(resolvePromise, Math.max(0, Number(ms) || 0));
 });
 
+const isLocalHost = (host) => {
+  const normalized = String(host || '').trim().toLowerCase();
+  return !normalized || normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+};
+
+const parseUrlHost = (value) => {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    return {
+      host: parsed.hostname || '',
+      port: Number(parsed.port || ''),
+    };
+  } catch {
+    return null;
+  }
+};
+
+const detectExternalDependencies = () => {
+  const database = parseUrlHost(process.env.DATABASE_URL);
+  const redis = parseUrlHost(process.env.REDIS_URL || process.env.REDIS_CONNECTION_STRING);
+
+  return {
+    hasExternalDatabase: Boolean(database?.host && !isLocalHost(database.host)),
+    hasExternalRedis: Boolean(redis?.host && !isLocalHost(redis.host)),
+  };
+};
+
 const canConnectToPort = (port, host = '127.0.0.1', timeoutMs = 1200) => new Promise((resolvePromise) => {
   const socket = new net.Socket();
   let settled = false;
@@ -99,6 +126,12 @@ const runCommand = (command, args) => new Promise((resolvePromise, rejectPromise
 });
 
 const ensureDockerDependencies = async () => {
+  const external = detectExternalDependencies();
+  if (external.hasExternalDatabase && external.hasExternalRedis) {
+    console.log('[runner] Dependencias externas detectadas via DATABASE_URL/REDIS_URL. Bootstrap Docker ignorado.');
+    return;
+  }
+
   const postgresReady = await canConnectToPort(5433);
   const redisReady = await canConnectToPort(6379);
   if (postgresReady && redisReady) {

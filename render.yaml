@@ -84,6 +84,8 @@ services:
         sync: false
       - key: SESSIONS_DIR
         value: .sessions
+      - key: WHATSAPP_ENGINE_SKIP_DOCKER
+        value: "1"
 
   - type: web
     name: voithos-web
