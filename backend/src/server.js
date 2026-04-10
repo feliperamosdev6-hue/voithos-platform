@@ -1,8 +1,5 @@
 const express = require('express');
 const cors = require('cors');
-const { initDb } = require('./db');
-const patientsRouter = require('./routes/patients');
-const authRouter = require('./routes/auth');
 const clinicRoutes = require('./routes/clinicRoutes');
 const campaignRoutes = require('./routes/campaignRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -42,6 +39,7 @@ process.on('uncaughtException', (err) => {
 
 const app = express();
 const port = Number(process.env.PORT || 4000);
+const legacySqliteApiEnabled = String(process.env.LEGACY_SQLITE_API_ENABLED || '').trim().toLowerCase() === 'true';
 
 const corsOriginAllowlist = new Set([
   'http://localhost:3000',
@@ -114,12 +112,19 @@ app.use('/internal/patients', internalPatientRoutes);
 app.use('/internal/relationships', internalRelationshipRoutes);
 app.use('/internal/whatsapp', internalWhatsappRoutes);
 app.use('/auth', authRoutes);
-app.use('/api/patients', patientsRouter);
-app.use('/api/auth', authRouter);
+
+if (legacySqliteApiEnabled) {
+  const { initDb } = require('./db');
+  const patientsRouter = require('./routes/patients');
+  const authRouter = require('./routes/auth');
+  initDb();
+  app.use('/api/patients', patientsRouter);
+  app.use('/api/auth', authRouter);
+  console.log('[backend] legacy sqlite API enabled');
+}
 
 app.use(errorHandler);
 
-initDb();
 startAppointmentReminderScheduler();
 startPlanMessageScheduler();
 
