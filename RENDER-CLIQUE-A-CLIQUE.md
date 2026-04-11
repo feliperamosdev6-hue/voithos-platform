@@ -98,9 +98,13 @@ Observacao:
 
 7. `DIRECT_DATABASE_URL` do NG
    deve apontar para o mesmo banco `whatsapp_engine` usando a URL direta do Neon sem pooler
+   e deve incluir `connect_timeout=15`
 
 8. `REDIS_URL`
    deve vir do Upstash
+
+9. as migrations do NG
+   devem rodar fora do `preDeploy` da Render
 
 ## Parte 6. Criar os servicos
 

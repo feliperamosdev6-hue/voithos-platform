@@ -58,7 +58,6 @@ services:
     plan: starter
     rootDir: whatsapp-engine
     buildCommand: "node -e \"console.log('render-ng build step: npm ci')\" && npm ci --include=dev --no-audit --no-fund && node -e \"console.log('render-ng build step: npm run build')\" && npm run build"
-    preDeployCommand: "node -e \"console.log('render-ng predeploy step: prisma migrate deploy')\" && npx prisma migrate deploy"
     startCommand: "node -e \"console.log('render-ng start step: render-headless-runner')\" && npm run start:render"
     healthCheckPath: /health
     envVars:

@@ -70,6 +70,8 @@ Observacao operacional:
 - o repositorio agora fixa Node em `.node-version` para evitar drift do runtime padrao da Render
 - o NG usa um runner dedicado de producao no Render, sem bootstrap local de Docker/Postgres/Redis
 - em Neon, `DATABASE_URL` do NG deve seguir na URL pooled para runtime e `DIRECT_DATABASE_URL` deve usar a URL direta sem pooler para `migrate deploy`
+- se o `migrate deploy` falhar com `P1001` no host direto do Neon, adicionar `connect_timeout=15` ou maior na `DIRECT_DATABASE_URL`
+- o deploy do `voithos-whatsapp-ng` nao deve mais depender de migration no `preDeploy`; a migracao deve rodar como etapa separada de release
 
 ## Variavel do frontend web
 
@@ -90,12 +92,14 @@ O build gera `render-static/runtime-config.js` e injeta esse arquivo nas paginas
 ## Ordem de configuracao
 
 1. Configurar `DATABASE_URL` do NG
-2. Configurar `DATABASE_URL` do backend
-3. Configurar `REDIS_*` do NG
-4. Configurar tokens internos em backend e NG
-5. Publicar NG
-6. Publicar backend apontando para o NG
-7. Publicar frontend apontando para o backend
+2. Configurar `DIRECT_DATABASE_URL` do NG
+3. Configurar `DATABASE_URL` do backend
+4. Configurar `REDIS_*` do NG
+5. Configurar tokens internos em backend e NG
+6. Rodar `npx prisma migrate deploy` do NG fora do fluxo do Render
+7. Publicar NG
+8. Publicar backend apontando para o NG
+9. Publicar frontend apontando para o backend
 
 ## Topologia de dominio recomendada
 

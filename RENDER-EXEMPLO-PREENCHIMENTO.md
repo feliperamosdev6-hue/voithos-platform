@@ -15,7 +15,7 @@ VOITHOS_SUPERADMIN_CLINIC_NAME=Voithos Platform
 
 ```env
 DATABASE_URL=postgresql://USER:PASSWORD@HOST-POOLER/whatsapp_engine?sslmode=require
-DIRECT_DATABASE_URL=postgresql://USER:PASSWORD@HOST-DIRECT/whatsapp_engine?sslmode=require
+DIRECT_DATABASE_URL=postgresql://USER:PASSWORD@HOST-DIRECT/whatsapp_engine?sslmode=require&connect_timeout=15
 REDIS_URL=rediss://default:SENHA@HOST:PORT
 INTERNAL_API_TOKEN=SEU_TOKEN_INTERNO_DO_NG
 SERVICE_INTERNAL_API_TOKEN=SEU_TOKEN_DE_SERVICO_DO_NG

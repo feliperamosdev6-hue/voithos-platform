@@ -58,7 +58,7 @@ Fontes oficiais:
 ### voithos-whatsapp-ng
 
 - `DATABASE_URL` do banco `whatsapp_engine` no Neon usando a URL pooled
-- `DIRECT_DATABASE_URL` do banco `whatsapp_engine` no Neon usando a URL direta sem pooler
+- `DIRECT_DATABASE_URL` do banco `whatsapp_engine` no Neon usando a URL direta sem pooler e `connect_timeout=15`
 - `REDIS_URL` do Upstash
 - `INTERNAL_API_TOKEN`
 - `SERVICE_INTERNAL_API_TOKEN`
