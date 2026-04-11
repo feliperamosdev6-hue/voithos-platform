@@ -46,6 +46,7 @@ Recomendadas:
 Minimo obrigatorio em `voithos-whatsapp-ng`:
 
 - `DATABASE_URL`
+- `DIRECT_DATABASE_URL`
 - `REDIS_HOST`
 - `REDIS_PORT`
 - `REDIS_PASSWORD` se houver
@@ -68,6 +69,7 @@ Observacao operacional:
 - o blueprint tambem sincroniza `WHATSAPP_NG_SERVICE_TOKEN` e `CENTRAL_BACKEND_SERVICE_TOKEN` entre os servicos
 - o repositorio agora fixa Node em `.node-version` para evitar drift do runtime padrao da Render
 - o NG usa um runner dedicado de producao no Render, sem bootstrap local de Docker/Postgres/Redis
+- em Neon, `DATABASE_URL` do NG deve seguir na URL pooled para runtime e `DIRECT_DATABASE_URL` deve usar a URL direta sem pooler para `migrate deploy`
 
 ## Variavel do frontend web
 

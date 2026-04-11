@@ -49,7 +49,6 @@ Fontes oficiais:
 ### voithos-backend
 
 - `DATABASE_URL` do banco `voithos` no Neon
-- `WHATSAPP_NG_SERVICE_TOKEN`
 - `BACKEND_INTERNAL_API_TOKEN`
 - `VOITHOS_SUPERADMIN_EMAIL`
 - `VOITHOS_SUPERADMIN_PASSWORD`
@@ -58,7 +57,8 @@ Fontes oficiais:
 
 ### voithos-whatsapp-ng
 
-- `DATABASE_URL` do banco `whatsapp_engine` no Neon
+- `DATABASE_URL` do banco `whatsapp_engine` no Neon usando a URL pooled
+- `DIRECT_DATABASE_URL` do banco `whatsapp_engine` no Neon usando a URL direta sem pooler
 - `REDIS_URL` do Upstash
 - `INTERNAL_API_TOKEN`
 - `SERVICE_INTERNAL_API_TOKEN`

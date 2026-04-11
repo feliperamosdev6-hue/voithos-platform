@@ -63,6 +63,7 @@ Ela nao deve mais criar:
 ### WhatsApp NG
 
 - `DATABASE_URL`
+- `DIRECT_DATABASE_URL`
 - `REDIS_URL`
 - `INTERNAL_API_TOKEN`
 - `SERVICE_INTERNAL_API_TOKEN`
@@ -93,9 +94,12 @@ Observacao:
    deve apontar para o banco `voithos`
 
 6. `DATABASE_URL` do NG
-   deve apontar para o banco `whatsapp_engine`
+   deve apontar para o banco `whatsapp_engine` usando a URL pooled do Neon
 
-7. `REDIS_URL`
+7. `DIRECT_DATABASE_URL` do NG
+   deve apontar para o mesmo banco `whatsapp_engine` usando a URL direta do Neon sem pooler
+
+8. `REDIS_URL`
    deve vir do Upstash
 
 ## Parte 6. Criar os servicos

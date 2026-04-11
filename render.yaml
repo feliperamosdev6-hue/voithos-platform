@@ -68,6 +68,8 @@ services:
         value: 10000
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
       - key: REDIS_URL
         sync: false
       - key: INTERNAL_API_TOKEN

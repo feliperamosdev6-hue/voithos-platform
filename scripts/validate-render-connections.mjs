@@ -56,6 +56,7 @@ const main = async () => {
 
   const backendDb = validateUrl('BACKEND_DATABASE_URL', values.BACKEND_DATABASE_URL, ['postgresql:', 'postgres:']);
   const ngDb = validateUrl('NG_DATABASE_URL', values.NG_DATABASE_URL, ['postgresql:', 'postgres:']);
+  const ngDirectDb = validateUrl('NG_DIRECT_DATABASE_URL', values.NG_DIRECT_DATABASE_URL, ['postgresql:', 'postgres:']);
   const redis = validateUrl('NG_REDIS_URL', values.NG_REDIS_URL, ['redis:', 'rediss:']);
 
   const results = [];
@@ -84,6 +85,19 @@ const main = async () => {
       servername: ngDb.parsed.hostname,
     });
     results.push(formatResult('NG_DATABASE_URL', probe.ok, probe.message));
+  }
+
+  if (!ngDirectDb.ok) {
+    results.push(formatResult('NG_DIRECT_DATABASE_URL', false, ngDirectDb.error));
+  } else {
+    const port = Number(ngDirectDb.parsed.port || 5432);
+    const probe = await testSocket({
+      host: ngDirectDb.parsed.hostname,
+      port,
+      tlsEnabled: String(ngDirectDb.parsed.searchParams.get('sslmode') || '').toLowerCase() === 'require',
+      servername: ngDirectDb.parsed.hostname,
+    });
+    results.push(formatResult('NG_DIRECT_DATABASE_URL', probe.ok, probe.message));
   }
 
   if (!redis.ok) {
