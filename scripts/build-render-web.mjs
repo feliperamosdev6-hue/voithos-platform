@@ -4,6 +4,7 @@ import path from 'node:path';
 const repoRoot = process.cwd();
 const outDir = path.join(repoRoot, 'render-static');
 const configFileName = 'runtime-config.js';
+const releaseInfoFileName = 'voithos-release.json';
 const apiBase = String(
   process.env.WEB_CENTRAL_BACKEND_BASE_URL ||
   process.env.CENTRAL_BACKEND_BASE_URL ||
@@ -70,6 +71,21 @@ const writeRuntimeConfig = async () => {
   await fs.writeFile(targetPath, `${contents}\n`, 'utf8');
 };
 
+const writeReleaseInfo = async () => {
+  const targetPath = path.join(outDir, releaseInfoFileName);
+  const payload = {
+    app: 'voithos-web',
+    deployTarget: 'render',
+    generatedAt: new Date().toISOString(),
+    gitCommit: String(process.env.RENDER_GIT_COMMIT || '').trim() || null,
+    gitBranch: String(process.env.RENDER_GIT_BRANCH || '').trim() || null,
+    renderServiceName: String(process.env.RENDER_SERVICE_NAME || '').trim() || null,
+    renderExternalUrl: String(process.env.RENDER_EXTERNAL_URL || '').trim() || null,
+    apiBase: apiBase || null,
+  };
+  await fs.writeFile(targetPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+};
+
 const copyRootFiles = async () => {
   const entries = await fs.readdir(repoRoot, { withFileTypes: true });
   for (const entry of entries) {
@@ -102,6 +118,7 @@ const main = async () => {
     await copyDirectory(sourceDir, targetDir);
   }
   await writeRuntimeConfig();
+  await writeReleaseInfo();
 
   console.log('[render-web] static package generated at', outDir);
 };
