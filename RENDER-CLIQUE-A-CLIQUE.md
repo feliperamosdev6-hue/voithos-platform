@@ -73,7 +73,7 @@ Ela nao deve mais criar:
 Observacao:
 
 - o servico `voithos-whatsapp-ng` precisa instalar `devDependencies` no build porque compila TypeScript no deploy
-- no blueprint atual isso ja esta embutido; nao troque o `buildCommand` por `npm ci` puro
+- no blueprint atual isso ja esta embutido; nao troque o `buildCommand` por `npm ci` puro ou remova `--no-audit --no-fund`
 
 ### Web
 

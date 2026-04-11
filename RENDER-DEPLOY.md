@@ -63,7 +63,7 @@ Observacao operacional:
 
 - o build do `voithos-whatsapp-ng` compila TypeScript e roda Prisma CLI
 - por isso, no Render, o install do servico precisa incluir `devDependencies`
-- no blueprint atual isso ja fica coberto por `npm ci --include=dev && npm run build`
+- no blueprint atual isso ja fica coberto por `npm ci --include=dev --no-audit --no-fund && npm run build`
 - o blueprint tambem sincroniza `WHATSAPP_NG_SERVICE_TOKEN` e `CENTRAL_BACKEND_SERVICE_TOKEN` entre os servicos
 
 ## Variavel do frontend web
