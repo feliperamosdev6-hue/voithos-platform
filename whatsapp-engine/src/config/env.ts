@@ -2,6 +2,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const isProductionEnv = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+
 const asNumber = (value: string | undefined, fallback: number): number => {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -19,19 +21,40 @@ const parseRedisConfig = (): { host: string; port: number; password: string; tls
   if (redisUrl) {
     try {
       const parsed = new URL(redisUrl);
+      if (!parsed.hostname) {
+        throw new Error('REDIS_URL is missing hostname.');
+      }
       return {
-        host: parsed.hostname || 'localhost',
+        host: parsed.hostname,
         port: asNumber(parsed.port, 6379),
         password: decodeURIComponent(parsed.password || ''),
         tls: parsed.protocol === 'rediss:',
       };
-    } catch (_error) {
-      // Fall back to REDIS_HOST/REDIS_PORT/REDIS_PASSWORD.
+    } catch (error) {
+      if (isProductionEnv) {
+        const message = error instanceof Error ? error.message : 'Invalid REDIS_URL.';
+        throw new Error(`Invalid REDIS_URL/REDIS_CONNECTION_STRING for production: ${message}`);
+      }
+      // Fall back to REDIS_HOST/REDIS_PORT/REDIS_PASSWORD in non-production environments.
     }
   }
 
+  const host = String(process.env.REDIS_HOST || '').trim();
+  if (host) {
+    return {
+      host,
+      port: asNumber(process.env.REDIS_PORT, 6379),
+      password: process.env.REDIS_PASSWORD || '',
+      tls: false,
+    };
+  }
+
+  if (isProductionEnv) {
+    throw new Error('REDIS_URL or REDIS_CONNECTION_STRING is required in production.');
+  }
+
   return {
-    host: process.env.REDIS_HOST || 'localhost',
+    host: 'localhost',
     port: asNumber(process.env.REDIS_PORT, 6379),
     password: process.env.REDIS_PASSWORD || '',
     tls: false,
