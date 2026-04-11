@@ -5,6 +5,8 @@
 Com o blueprint economico atual, a Render continua preenchendo automaticamente:
 
 - `WHATSAPP_NG_BASE_URL`
+- `WHATSAPP_NG_SERVICE_TOKEN`
+- `CENTRAL_BACKEND_SERVICE_TOKEN`
 - `PUBLIC_APP_BASE_URL`
 - `APPOINTMENT_ACTION_BASE_URL`
 - `CENTRAL_BACKEND_BASE_URL`
@@ -16,7 +18,6 @@ Com o blueprint economico atual, a Render continua preenchendo automaticamente:
 
 ```env
 DATABASE_URL=COLE_AQUI_A_DATABASE_URL_DO_BANCO_VOITHOS_NO_NEON
-WHATSAPP_NG_SERVICE_TOKEN=COLE_O_MESMO_VALOR_DE_SERVICE_INTERNAL_API_TOKEN_DO_NG
 BACKEND_INTERNAL_API_TOKEN=COLE_UM_TOKEN_LONGO_AQUI
 VOITHOS_SUPERADMIN_EMAIL=superadmin@voithos.local
 VOITHOS_SUPERADMIN_PASSWORD=COLE_UMA_SENHA_FORTE_AQUI
@@ -39,13 +40,6 @@ AUTH_ENCRYPTION_KEY_HEX=COLE_UMA_CHAVE_HEX_64_AQUI
 ### voithos-web
 
 Nenhum segredo manual obrigatorio.
-
-## Regras que precisam bater
-
-- `WHATSAPP_NG_SERVICE_TOKEN` no backend
-- `SERVICE_INTERNAL_API_TOKEN` no NG
-
-Esses dois precisam ser iguais.
 
 ## Regras que nao precisam ser iguais
 

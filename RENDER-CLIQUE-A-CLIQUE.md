@@ -54,7 +54,6 @@ Ela nao deve mais criar:
 ### Backend
 
 - `DATABASE_URL`
-- `WHATSAPP_NG_SERVICE_TOKEN`
 - `BACKEND_INTERNAL_API_TOKEN`
 - `VOITHOS_SUPERADMIN_EMAIL`
 - `VOITHOS_SUPERADMIN_PASSWORD`
@@ -83,16 +82,20 @@ Observacao:
 ## Parte 5. Regras criticas
 
 1. `WHATSAPP_NG_SERVICE_TOKEN` no backend
-   deve ser igual a:
+   e preenchido automaticamente pelo blueprint a partir de:
 2. `SERVICE_INTERNAL_API_TOKEN` no NG
 
-3. `DATABASE_URL` do backend
+3. `CENTRAL_BACKEND_SERVICE_TOKEN` no NG
+   e preenchido automaticamente pelo blueprint a partir de:
+4. `BACKEND_INTERNAL_API_TOKEN` no backend
+
+5. `DATABASE_URL` do backend
    deve apontar para o banco `voithos`
 
-4. `DATABASE_URL` do NG
+6. `DATABASE_URL` do NG
    deve apontar para o banco `whatsapp_engine`
 
-5. `REDIS_URL`
+7. `REDIS_URL`
    deve vir do Upstash
 
 ## Parte 6. Criar os servicos

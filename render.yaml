@@ -21,7 +21,10 @@ services:
           name: voithos-whatsapp-ng
           property: hostport
       - key: WHATSAPP_NG_SERVICE_TOKEN
-        sync: false
+        fromService:
+          type: web
+          name: voithos-whatsapp-ng
+          envVarKey: SERVICE_INTERNAL_API_TOKEN
       - key: BACKEND_INTERNAL_API_TOKEN
         sync: false
       - key: PUBLIC_APP_BASE_URL
@@ -76,6 +79,11 @@ services:
           type: web
           name: voithos-backend
           property: hostport
+      - key: CENTRAL_BACKEND_SERVICE_TOKEN
+        fromService:
+          type: web
+          name: voithos-backend
+          envVarKey: BACKEND_INTERNAL_API_TOKEN
       - key: ADMIN_PANEL_TOKEN
         sync: false
       - key: ADMIN_PANEL_READONLY_TOKEN

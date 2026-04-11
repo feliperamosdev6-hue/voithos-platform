@@ -31,7 +31,6 @@ Minimo obrigatorio em `voithos-backend`:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `WHATSAPP_NG_BASE_URL`
-- `WHATSAPP_NG_SERVICE_TOKEN`
 - `BACKEND_INTERNAL_API_TOKEN`
 - `PUBLIC_APP_BASE_URL`
 - `APPOINTMENT_ACTION_BASE_URL`
@@ -65,6 +64,7 @@ Observacao operacional:
 - o build do `voithos-whatsapp-ng` compila TypeScript e roda Prisma CLI
 - por isso, no Render, o install do servico precisa incluir `devDependencies`
 - no blueprint atual isso ja fica coberto por `npm ci --include=dev && npm run build`
+- o blueprint tambem sincroniza `WHATSAPP_NG_SERVICE_TOKEN` e `CENTRAL_BACKEND_SERVICE_TOKEN` entre os servicos
 
 ## Variavel do frontend web
 
