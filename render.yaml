@@ -57,9 +57,9 @@ services:
     runtime: node
     plan: starter
     rootDir: whatsapp-engine
-    buildCommand: npm ci --include=dev --no-audit --no-fund && npm run build
-    preDeployCommand: npx prisma migrate deploy
-    startCommand: npm run start:all:headless
+    buildCommand: "node -e \"console.log('render-ng build step: npm ci')\" && npm ci --include=dev --no-audit --no-fund && node -e \"console.log('render-ng build step: npm run build')\" && npm run build"
+    preDeployCommand: "node -e \"console.log('render-ng predeploy step: prisma migrate deploy')\" && npx prisma migrate deploy"
+    startCommand: "node -e \"console.log('render-ng start step', JSON.stringify({ node: process.version, hasDatabaseUrl: Boolean(process.env.DATABASE_URL), hasRedisUrl: Boolean(process.env.REDIS_URL), hasInternalApiToken: Boolean(process.env.INTERNAL_API_TOKEN), hasServiceInternalApiToken: Boolean(process.env.SERVICE_INTERNAL_API_TOKEN), hasCentralBackendBaseUrl: Boolean(process.env.CENTRAL_BACKEND_BASE_URL), hasCentralBackendServiceToken: Boolean(process.env.CENTRAL_BACKEND_SERVICE_TOKEN), hasAdminPanelToken: Boolean(process.env.ADMIN_PANEL_TOKEN), hasAuthEncryptionKeyHex: Boolean(process.env.AUTH_ENCRYPTION_KEY_HEX) }))\" && node scripts/run-all.mjs start"
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

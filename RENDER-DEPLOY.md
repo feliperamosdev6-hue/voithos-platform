@@ -65,6 +65,8 @@ Observacao operacional:
 - por isso, no Render, o install do servico precisa incluir `devDependencies`
 - no blueprint atual isso ja fica coberto por `npm ci --include=dev --no-audit --no-fund && npm run build`
 - o blueprint tambem sincroniza `WHATSAPP_NG_SERVICE_TOKEN` e `CENTRAL_BACKEND_SERVICE_TOKEN` entre os servicos
+- o repositorio agora fixa Node em `.node-version` para evitar drift do runtime padrao da Render
+- o blueprint do NG tambem imprime marcadores de `build`, `predeploy` e `start` para facilitar a leitura do log
 
 ## Variavel do frontend web
 
