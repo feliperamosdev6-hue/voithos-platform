@@ -47,3 +47,4 @@ whatsapp_engine_*.log
 *.bak
 *.vsix
 launch.json
+RENDER-SEGREDOS-LOCAL.md

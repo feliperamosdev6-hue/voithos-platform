@@ -60,6 +60,12 @@ Recomendada:
 
 - `SESSIONS_DIR=.sessions`
 
+Observacao operacional:
+
+- o build do `voithos-whatsapp-ng` compila TypeScript e roda Prisma CLI
+- por isso, no Render, o install do servico precisa incluir `devDependencies`
+- no blueprint atual isso ja fica coberto por `npm ci --include=dev && npm run build`
+
 ## Variavel do frontend web
 
 Em `voithos-web`:

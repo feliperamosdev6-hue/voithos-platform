@@ -71,6 +71,11 @@ Ela nao deve mais criar:
 - `ADMIN_PANEL_READONLY_TOKEN`
 - `AUTH_ENCRYPTION_KEY_HEX`
 
+Observacao:
+
+- o servico `voithos-whatsapp-ng` precisa instalar `devDependencies` no build porque compila TypeScript no deploy
+- no blueprint atual isso ja esta embutido; nao troque o `buildCommand` por `npm ci` puro
+
 ### Web
 
 - normalmente nenhum segredo manual obrigatorio

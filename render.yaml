@@ -54,7 +54,7 @@ services:
     runtime: node
     plan: starter
     rootDir: whatsapp-engine
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     preDeployCommand: npx prisma migrate deploy
     startCommand: npm run start:all:headless
     healthCheckPath: /health
