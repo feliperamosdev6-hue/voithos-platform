@@ -307,6 +307,7 @@
     const normalizedAddress = {
       rua: cleanText(rawAddress.rua || profileAddress.rua || raw?.endereco),
       numero: cleanText(rawAddress.numero || profileAddress.numero),
+      complemento: cleanText(rawAddress.complemento || profileAddress.complemento),
       bairro: cleanText(rawAddress.bairro || profileAddress.bairro),
       cidade: cleanText(rawAddress.cidade || profileAddress.cidade || raw?.cidade),
       uf: cleanText(rawAddress.uf || profileAddress.uf || raw?.uf),
@@ -317,14 +318,23 @@
       whatsapp: cleanText(raw?.whatsapp || clinicProfile?.whatsapp),
       cro: cleanText(raw?.cro || clinicProfile?.cro),
       responsavelTecnico: cleanText(raw?.responsavelTecnico || clinicProfile?.responsavelTecnico),
+      logoDataUrlCache: cleanText(raw?.logoData || raw?.logoDataUrlCache || clinicProfile?.logoDataUrlCache),
+      logoVersion: cleanText(raw?.logoVersion || clinicProfile?.logoVersion),
       endereco: normalizedAddress,
     };
+    const birthdayMessaging = operationalSettings?.birthdayMessaging && typeof operationalSettings.birthdayMessaging === 'object'
+      ? operationalSettings.birthdayMessaging
+      : {};
+    const whatsAppMessaging = raw?.messaging?.whatsapp && typeof raw.messaging.whatsapp === 'object'
+      ? raw.messaging.whatsapp
+      : {};
     const normalized = {
       ...raw,
       id: cleanText(raw?.id || raw?.clinicId),
       clinicId: cleanText(raw?.clinicId || raw?.id),
       nomeFantasia: cleanText(raw?.nomeFantasia),
       razaoSocial: cleanText(raw?.razaoSocial),
+      nomeClinica: cleanText(raw?.nomeClinica || raw?.nomeFantasia || raw?.razaoSocial),
       cnpjOuCpf: cleanText(raw?.cnpjOuCpf || raw?.cnpjCpf),
       cnpjCpf: cleanText(raw?.cnpjCpf || raw?.cnpjOuCpf),
       emailClinica: cleanText(raw?.emailClinica || raw?.email),
@@ -335,11 +345,25 @@
       cro: normalizedProfile.cro,
       responsavelTecnico: normalizedProfile.responsavelTecnico,
       endereco: normalizedAddress,
+      rua: normalizedAddress.rua,
+      numero: normalizedAddress.numero,
+      complemento: normalizedAddress.complemento,
+      bairro: normalizedAddress.bairro,
+      estado: normalizedAddress.uf,
+      cep: normalizedAddress.cep,
       cidade: normalizedAddress.cidade,
       uf: normalizedAddress.uf,
+      logoData: normalizedProfile.logoDataUrlCache,
+      logoDataUrlCache: normalizedProfile.logoDataUrlCache,
+      logoVersion: normalizedProfile.logoVersion,
+      logoFile: cleanText(raw?.logoFile),
       status: cleanText(raw?.status || 'active').toLowerCase() || 'active',
     };
     normalized.receituario = normalizeClinicReceituario(raw?.receituario || operationalSettings?.receituario, normalized);
+    normalized.messaging = {
+      birthday: birthdayMessaging,
+      whatsapp: whatsAppMessaging,
+    };
     normalized.operationalSettings = {
       ...operationalSettings,
       clinicProfile: normalizedProfile,
@@ -451,6 +475,12 @@
     '  .vx-doc-btn.vx-doc-btn-secondary { background: rgba(255,255,255,0.16); color: #f8fafc; }',
     '  .vx-doc-paper { width: min(210mm, 100%); min-height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14); border-radius: 18px; padding: 16mm 14mm; }',
     '  .vx-medical-doc { color: #0f172a; }',
+    '  .vx-brand-header { display: grid; grid-template-columns: minmax(80px, 118px) 1fr; gap: 18px; align-items: center; padding-bottom: 14px; margin-bottom: 24px; border-bottom: 1px solid #dbe2ea; }',
+    '  .vx-brand-logo-box { min-height: 58px; display: flex; align-items: center; justify-content: flex-start; }',
+    '  .vx-brand-logo { max-width: 118px; max-height: 58px; object-fit: contain; display: block; }',
+    '  .vx-brand-meta { min-width: 0; }',
+    '  .vx-brand-name { margin: 0; font-size: 17px; font-weight: 700; color: #0f172a; }',
+    '  .vx-brand-line { margin: 3px 0 0; font-size: 12px; line-height: 1.45; color: #475569; }',
     '  .vx-medical-doc h1 { margin: 0; text-align: center; font-size: 24px; letter-spacing: 0.3px; text-transform: uppercase; }',
     '  .vx-medical-doc .doc-head { margin: 10px 0 46px; }',
     '  .vx-medical-doc .doc-date { margin-top: 0; font-size: 15px; color: #1e293b; }',
@@ -491,6 +521,48 @@
     `  <main class="vx-doc-paper">${body}</main>`,
     '</div>',
   ].join('');
+  const buildClinicDocumentHeaderMarkup = (clinic = {}) => {
+    const normalizedClinic = normalizeClinicSessionData(clinic);
+    const logoDataUrl = cleanText(normalizedClinic?.logoData || normalizedClinic?.logoDataUrlCache || normalizedClinic?.logoDataUrl);
+    const nome = cleanText(normalizedClinic?.razaoSocial || normalizedClinic?.nomeFantasia || normalizedClinic?.nomeClinica) || 'Clinica';
+    const cnpj = cleanText(normalizedClinic?.cnpjCpf || normalizedClinic?.cnpjOuCpf);
+    const telefone = cleanText(normalizedClinic?.telefone || normalizedClinic?.telefoneComercial);
+    const email = cleanText(normalizedClinic?.email || normalizedClinic?.emailClinica);
+    const responsavelTecnico = cleanText(normalizedClinic?.responsavelTecnico);
+    const cro = cleanText(normalizedClinic?.cro);
+    const endereco = normalizedClinic?.endereco && typeof normalizedClinic.endereco === 'object'
+      ? normalizedClinic.endereco
+      : {};
+    const contactLine = [
+      cnpj ? `CNPJ/CPF: ${cnpj}` : '',
+      telefone,
+      email,
+    ].filter(Boolean).join(' | ');
+    const addressLine = [
+      [endereco?.rua, endereco?.numero].filter(Boolean).join(', '),
+      endereco?.complemento,
+      endereco?.bairro,
+      [endereco?.cidade, endereco?.uf].filter(Boolean).join(' - '),
+      endereco?.cep,
+    ].filter(Boolean).join(' | ');
+    const technicalLine = [
+      responsavelTecnico ? `Responsavel tecnico: ${responsavelTecnico}` : '',
+      cro ? `CRO: ${cro}` : '',
+    ].filter(Boolean).join(' | ');
+    return `
+      <header class="vx-brand-header">
+        <div class="vx-brand-logo-box">
+          ${logoDataUrl ? `<img class="vx-brand-logo" src="${escapeHtml(logoDataUrl)}" alt="Logo da clinica">` : ''}
+        </div>
+        <div class="vx-brand-meta">
+          <p class="vx-brand-name">${escapeHtml(nome)}</p>
+          ${contactLine ? `<p class="vx-brand-line">${escapeHtml(contactLine)}</p>` : ''}
+          ${addressLine ? `<p class="vx-brand-line">${escapeHtml(addressLine)}</p>` : ''}
+          ${technicalLine ? `<p class="vx-brand-line">${escapeHtml(technicalLine)}</p>` : ''}
+        </div>
+      </header>
+    `;
+  };
   const buildReceitaPreviewMarkup = (document = {}, context = {}) => {
     const data = document?.data && typeof document.data === 'object' ? document.data : {};
     const clinic = normalizeClinicSessionData(context?.clinic || getStoredClinic?.() || {});
@@ -519,6 +591,7 @@
       title: document?.title || document?.titulo || 'Receita',
       body: `
         <article class="vx-medical-doc vx-medical-doc--receita">
+          ${buildClinicDocumentHeaderMarkup(clinic)}
           ${receituario.cabecalho ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.cabecalho))}</div></div>` : ''}
           <div class="doc-head">
             <h1>Receita</h1>
@@ -580,6 +653,7 @@
       title: document?.title || document?.titulo || 'Atestado',
       body: `
         <article class="vx-medical-doc vx-medical-doc--atestado">
+          ${buildClinicDocumentHeaderMarkup(clinic)}
           <div class="doc-head">
             <h1>Atestado</h1>
           </div>
@@ -879,6 +953,55 @@
     }
     return settings;
   };
+  const buildLegacyClinicSavePayload = (payload = {}, currentClinic = {}) => {
+    const raw = payload && typeof payload === 'object' ? payload : {};
+    const current = normalizeClinicSessionData(currentClinic || {});
+    const currentProfile = current?.operationalSettings?.clinicProfile || {};
+    const nextAddress = {
+      rua: cleanText(raw?.rua ?? raw?.endereco?.rua ?? current?.rua ?? current?.endereco?.rua),
+      numero: cleanText(raw?.numero ?? raw?.endereco?.numero ?? current?.numero ?? current?.endereco?.numero),
+      complemento: cleanText(raw?.complemento ?? raw?.endereco?.complemento ?? current?.complemento ?? current?.endereco?.complemento),
+      bairro: cleanText(raw?.bairro ?? raw?.endereco?.bairro ?? current?.bairro ?? current?.endereco?.bairro),
+      cidade: cleanText(raw?.cidade ?? raw?.endereco?.cidade ?? current?.cidade ?? current?.endereco?.cidade),
+      uf: cleanText(raw?.estado ?? raw?.uf ?? raw?.endereco?.uf ?? current?.estado ?? current?.uf ?? current?.endereco?.uf),
+      cep: cleanText(raw?.cep ?? raw?.endereco?.cep ?? current?.cep ?? current?.endereco?.cep),
+    };
+    const nextLogoData = raw?.logoRemove === true
+      ? ''
+      : cleanText(raw?.logoData || current?.logoData || currentProfile?.logoDataUrlCache);
+    const nextLogoVersion = raw?.logoRemove === true
+      ? ''
+      : (cleanText(raw?.logoData) ? new Date().toISOString() : cleanText(current?.logoVersion || currentProfile?.logoVersion));
+    const profilePatch = {
+      nomeFantasia: cleanText(raw?.nomeFantasia || raw?.nomeClinica || current?.nomeFantasia || current?.nomeClinica),
+      razaoSocial: cleanText(raw?.razaoSocial || current?.razaoSocial),
+      cnpj: cleanText(raw?.cnpj || raw?.cnpjCpf || raw?.cnpjOuCpf || current?.cnpjCpf || current?.cnpjOuCpf),
+      email: cleanText(raw?.email || raw?.emailClinica || current?.email || current?.emailClinica),
+      telefone: cleanText(raw?.telefone || raw?.telefoneComercial || current?.telefone || current?.telefoneComercial),
+      whatsapp: cleanText(raw?.whatsapp || current?.whatsapp || currentProfile?.whatsapp),
+      cro: cleanText(raw?.cro || current?.cro || currentProfile?.cro),
+      responsavelTecnico: cleanText(raw?.responsavelTecnico || current?.responsavelTecnico || currentProfile?.responsavelTecnico),
+      logoDataUrlCache: nextLogoData,
+      logoVersion: nextLogoVersion,
+      endereco: nextAddress,
+    };
+    const settingsPatch = {};
+    if (raw?.messaging?.birthday && typeof raw.messaging.birthday === 'object') {
+      settingsPatch.birthdayMessaging = raw.messaging.birthday;
+    }
+    if (raw?.receituario && typeof raw.receituario === 'object') {
+      settingsPatch.receituario = raw.receituario;
+    }
+    settingsPatch.clinicProfile = {
+      whatsapp: profilePatch.whatsapp,
+      cro: profilePatch.cro,
+      responsavelTecnico: profilePatch.responsavelTecnico,
+      logoDataUrlCache: profilePatch.logoDataUrlCache,
+      logoVersion: profilePatch.logoVersion,
+      endereco: nextAddress,
+    };
+    return { profilePatch, settingsPatch };
+  };
   const fetchStaticProcedureCatalog = async () => {
     if (Array.isArray(staticProcedureCatalogCache)) {
       return staticProcedureCatalogCache;
@@ -1019,10 +1142,38 @@
       return normalizedClinic;
     },
     save: async (payload = {}) => {
-      const profilePatch = payload?.profile && typeof payload.profile === 'object' ? payload.profile : payload;
-      const settingsPatch = payload?.operationalSettings && typeof payload.operationalSettings === 'object'
+      const currentClinic = getStoredClinic() || {};
+      const legacyPayload = buildLegacyClinicSavePayload(payload, currentClinic);
+      const explicitProfilePatch = payload?.profile && typeof payload.profile === 'object' ? payload.profile : {};
+      const explicitSettingsPatch = payload?.operationalSettings && typeof payload.operationalSettings === 'object'
         ? payload.operationalSettings
         : {};
+      const profilePatch = {
+        ...legacyPayload.profilePatch,
+        ...explicitProfilePatch,
+        endereco: {
+          ...(legacyPayload.profilePatch?.endereco || {}),
+          ...(explicitProfilePatch?.endereco && typeof explicitProfilePatch.endereco === 'object' ? explicitProfilePatch.endereco : {}),
+        },
+      };
+      const settingsPatch = {
+        ...legacyPayload.settingsPatch,
+        ...explicitSettingsPatch,
+        clinicProfile: {
+          ...(legacyPayload.settingsPatch?.clinicProfile || {}),
+          ...(explicitSettingsPatch?.clinicProfile && typeof explicitSettingsPatch.clinicProfile === 'object' ? explicitSettingsPatch.clinicProfile : {}),
+          endereco: {
+            ...(legacyPayload.settingsPatch?.clinicProfile?.endereco || {}),
+            ...(explicitSettingsPatch?.clinicProfile?.endereco && typeof explicitSettingsPatch.clinicProfile.endereco === 'object' ? explicitSettingsPatch.clinicProfile.endereco : {}),
+          },
+        },
+        birthdayMessaging: explicitSettingsPatch?.birthdayMessaging && typeof explicitSettingsPatch.birthdayMessaging === 'object'
+          ? explicitSettingsPatch.birthdayMessaging
+          : legacyPayload.settingsPatch?.birthdayMessaging,
+        receituario: explicitSettingsPatch?.receituario && typeof explicitSettingsPatch.receituario === 'object'
+          ? explicitSettingsPatch.receituario
+          : legacyPayload.settingsPatch?.receituario,
+      };
 
       const [profile, operationalSettings] = await Promise.all([
         request('PATCH', '/clinics/me/profile', profilePatch || {}, { auth: true }),

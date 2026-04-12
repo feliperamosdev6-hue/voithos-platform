@@ -112,9 +112,12 @@ const getDefaultOperationalSettings = () => ({
     whatsapp: '',
     cro: '',
     responsavelTecnico: '',
+    logoDataUrlCache: '',
+    logoVersion: '',
     endereco: {
       rua: '',
       numero: '',
+      complemento: '',
       bairro: '',
       cidade: '',
       uf: '',
@@ -149,6 +152,7 @@ const getDefaultClinicProfile = (clinicId = '') => ({
   endereco: {
     rua: '',
     numero: '',
+    complemento: '',
     bairro: '',
     cidade: '',
     uf: '',
@@ -172,9 +176,12 @@ const normalizeClinicProfileExtras = (value = {}) => {
     whatsapp: String(raw.whatsapp || '').trim(),
     cro: String(raw.cro || '').trim(),
     responsavelTecnico: String(raw.responsavelTecnico || '').trim(),
+    logoDataUrlCache: String(raw.logoDataUrlCache || raw.logoData || '').trim().slice(0, RECEITUARIO_IMAGE_DATA_MAX_LENGTH),
+    logoVersion: String(raw.logoVersion || '').trim().slice(0, 80),
     endereco: {
       rua: String(address.rua || '').trim(),
       numero: String(address.numero || '').trim(),
+      complemento: String(address.complemento || '').trim(),
       bairro: String(address.bairro || '').trim(),
       cidade: String(address.cidade || '').trim(),
       uf: String(address.uf || address.estado || '').trim(),
@@ -208,6 +215,8 @@ const normalizeClinicProfile = (clinic = {}) => {
     whatsapp: extras.whatsapp,
     cro: extras.cro,
     responsavelTecnico: extras.responsavelTecnico,
+    logoVersion: extras.logoVersion,
+    logoDataUrlCache: extras.logoDataUrlCache,
     endereco: structuredAddress,
     isIncomplete: !(Boolean(nomeFantasia || razaoSocial) && Boolean(cnpj)),
   };
@@ -262,7 +271,7 @@ const normalizeClinicCampaigns = (value = [], clinicId = '') => {
 const buildClinicAddressLine = (address = {}) => {
   const safe = isPlainObject(address) ? address : {};
   const line1 = [safe.rua, safe.numero].filter(Boolean).join(', ');
-  const line2 = [safe.bairro, safe.cidade, safe.uf].filter(Boolean).join(' - ');
+  const line2 = [safe.complemento, safe.bairro, safe.cidade, safe.uf].filter(Boolean).join(' - ');
   const line3 = String(safe.cep || '').trim();
   return [line1, line2, line3].filter(Boolean).join(' | ');
 };
@@ -530,9 +539,12 @@ const clinicService = {
           whatsapp: String(mergedProfile.whatsapp || '').trim(),
           cro: String(mergedProfile.cro || '').trim(),
           responsavelTecnico: String(mergedProfile.responsavelTecnico || '').trim(),
+          logoDataUrlCache: String(mergedProfile.logoDataUrlCache || '').trim(),
+          logoVersion: String(mergedProfile.logoVersion || '').trim(),
           endereco: {
             rua: String(mergedProfile?.endereco?.rua || '').trim(),
             numero: String(mergedProfile?.endereco?.numero || '').trim(),
+            complemento: String(mergedProfile?.endereco?.complemento || '').trim(),
             bairro: String(mergedProfile?.endereco?.bairro || '').trim(),
             cidade: String(mergedProfile?.endereco?.cidade || '').trim(),
             uf: String(mergedProfile?.endereco?.uf || mergedProfile?.endereco?.estado || '').trim(),
