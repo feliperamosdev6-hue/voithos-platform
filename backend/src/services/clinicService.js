@@ -11,6 +11,7 @@ const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const isValidDocumentType = (value) => value === 'CPF' || value === 'CNPJ';
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
 const DEFAULT_BIRTHDAY_TEMPLATE = 'Ola, {nome}! A equipe da {clinicaNome} deseja um feliz aniversario! Conte com a gente para cuidar do seu sorriso.';
+const RECEITUARIO_IMAGE_DATA_MAX_LENGTH = 500000;
 const normalizeTime = (value, fallback) => {
   const raw = String(value || '').trim();
   return /^\d{2}:\d{2}$/.test(raw) ? raw : fallback;
@@ -40,6 +41,32 @@ const sanitizeMarker = (value = {}) => {
     id: id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     label,
     color,
+  };
+};
+
+const normalizeReceituarioFavoriteItem = (value = {}) => {
+  if (!isPlainObject(value)) return null;
+  const nome = String(value.nome || value.medicamento || '').trim().slice(0, 200);
+  const posologia = String(value.posologia || '').trim().slice(0, 500);
+  const quantidade = String(value.quantidade || '').trim().slice(0, 120);
+  if (!nome && !posologia && !quantidade) return null;
+  return { nome, posologia, quantidade };
+};
+
+const normalizeReceituario = (value = {}, clinicProfile = {}) => {
+  const raw = isPlainObject(value) ? value : {};
+  const profile = isPlainObject(clinicProfile) ? clinicProfile : {};
+  return {
+    cabecalho: String(raw.cabecalho || '').trim().slice(0, 4000),
+    rodape: String(raw.rodape || '').trim().slice(0, 4000),
+    assinaturaNome: String(raw.assinaturaNome || profile.responsavelTecnico || '').trim().slice(0, 160),
+    assinaturaRegistro: String(raw.assinaturaRegistro || profile.cro || '').trim().slice(0, 160),
+    assinaturaImagemData: String(raw.assinaturaImagemData || '').trim().slice(0, RECEITUARIO_IMAGE_DATA_MAX_LENGTH),
+    textoPadrao: String(raw.textoPadrao || '').trim().slice(0, 4000),
+    observacoesPadrao: String(raw.observacoesPadrao || '').trim().slice(0, 3000),
+    itensFavoritos: (Array.isArray(raw.itensFavoritos) ? raw.itensFavoritos : [])
+      .map((item) => normalizeReceituarioFavoriteItem(item))
+      .filter(Boolean),
   };
 };
 
@@ -98,6 +125,7 @@ const getDefaultOperationalSettings = () => ({
   anamneseModels: [],
   documentModels: [],
   proceduresCatalog: [],
+  receituario: normalizeReceituario({}),
 });
 
 const normalizeAgendaSettings = (value = {}) => {
@@ -294,6 +322,7 @@ const normalizeBirthdayMessaging = (value = {}) => {
 
 const normalizeOperationalSettings = (value = {}) => {
   const raw = isPlainObject(value) ? value : {};
+  const clinicProfile = normalizeClinicProfileExtras(raw.clinicProfile);
   return {
     agendaSettings: normalizeAgendaSettings(raw.agendaSettings),
     agendaAvailability: normalizeAgendaAvailability(raw.agendaAvailability),
@@ -301,17 +330,28 @@ const normalizeOperationalSettings = (value = {}) => {
       raw.notificationPreferences || raw.notifications
     ),
     birthdayMessaging: normalizeBirthdayMessaging(raw.birthdayMessaging),
-    clinicProfile: normalizeClinicProfileExtras(raw.clinicProfile),
+    clinicProfile,
     campaigns: normalizeClinicCampaigns(raw.campaigns),
     anamneseModels: Array.isArray(raw.anamneseModels) ? raw.anamneseModels : [],
     documentModels: Array.isArray(raw.documentModels) ? raw.documentModels : [],
     proceduresCatalog: Array.isArray(raw.proceduresCatalog) ? raw.proceduresCatalog : [],
+    receituario: normalizeReceituario(raw.receituario, clinicProfile),
   };
 };
 
 const mergeOperationalSettings = (current = {}, patch = {}) => {
   const safeCurrent = normalizeOperationalSettings(current);
   const safePatch = isPlainObject(patch) ? patch : {};
+  const nextClinicProfile = Object.prototype.hasOwnProperty.call(safePatch, 'clinicProfile')
+    ? normalizeClinicProfileExtras({
+        ...(isPlainObject(safeCurrent.clinicProfile) ? safeCurrent.clinicProfile : {}),
+        ...(isPlainObject(safePatch.clinicProfile) ? safePatch.clinicProfile : {}),
+        endereco: {
+          ...(isPlainObject(safeCurrent.clinicProfile?.endereco) ? safeCurrent.clinicProfile.endereco : {}),
+          ...(isPlainObject(safePatch.clinicProfile?.endereco) ? safePatch.clinicProfile.endereco : {}),
+        },
+      })
+    : normalizeClinicProfileExtras(safeCurrent.clinicProfile);
   return normalizeOperationalSettings({
     agendaSettings: Object.prototype.hasOwnProperty.call(safePatch, 'agendaSettings')
       ? { ...safeCurrent.agendaSettings, ...(isPlainObject(safePatch.agendaSettings) ? safePatch.agendaSettings : {}) }
@@ -335,16 +375,7 @@ const mergeOperationalSettings = (current = {}, patch = {}) => {
           ...(isPlainObject(safePatch.birthdayMessaging) ? safePatch.birthdayMessaging : {}),
         })
       : safeCurrent.birthdayMessaging,
-    clinicProfile: Object.prototype.hasOwnProperty.call(safePatch, 'clinicProfile')
-      ? normalizeClinicProfileExtras({
-          ...(isPlainObject(safeCurrent.clinicProfile) ? safeCurrent.clinicProfile : {}),
-          ...(isPlainObject(safePatch.clinicProfile) ? safePatch.clinicProfile : {}),
-          endereco: {
-            ...(isPlainObject(safeCurrent.clinicProfile?.endereco) ? safeCurrent.clinicProfile.endereco : {}),
-            ...(isPlainObject(safePatch.clinicProfile?.endereco) ? safePatch.clinicProfile.endereco : {}),
-          },
-        })
-      : normalizeClinicProfileExtras(safeCurrent.clinicProfile),
+    clinicProfile: nextClinicProfile,
     campaigns: Object.prototype.hasOwnProperty.call(safePatch, 'campaigns')
       ? normalizeClinicCampaigns(safePatch.campaigns)
       : normalizeClinicCampaigns(safeCurrent.campaigns),
@@ -357,6 +388,12 @@ const mergeOperationalSettings = (current = {}, patch = {}) => {
     proceduresCatalog: Object.prototype.hasOwnProperty.call(safePatch, 'proceduresCatalog')
       ? (Array.isArray(safePatch.proceduresCatalog) ? safePatch.proceduresCatalog : [])
       : (Array.isArray(safeCurrent.proceduresCatalog) ? safeCurrent.proceduresCatalog : []),
+    receituario: Object.prototype.hasOwnProperty.call(safePatch, 'receituario')
+      ? normalizeReceituario({
+          ...(isPlainObject(safeCurrent.receituario) ? safeCurrent.receituario : {}),
+          ...(isPlainObject(safePatch.receituario) ? safePatch.receituario : {}),
+        }, nextClinicProfile)
+      : normalizeReceituario(safeCurrent.receituario, nextClinicProfile),
   });
 };
 

@@ -262,6 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
         prontuario,
         pacienteId: pacienteSelect?.value || '',
         pacienteNome: selectedPatient?.nome || selectedPatient?.fullName || '',
+        pacienteCpf: selectedPatient?.cpf || '',
         profissionalId: profissionalSelect?.value || '',
         profissionalNome: profissionalSelect?.selectedOptions?.[0]?.textContent || '',
         data: dataInput?.value || '',

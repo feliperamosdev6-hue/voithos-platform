@@ -243,6 +243,110 @@
     if (Number.isNaN(date.getTime())) return normalized;
     return date.toLocaleDateString('pt-BR');
   };
+  const formatFieldValue = (value) => {
+    if (Array.isArray(value)) {
+      const items = value
+        .map((item) => cleanText(item))
+        .filter(Boolean);
+      return items.length ? items.join(', ') : '-';
+    }
+    if (value === true || value === 'on') return 'Sim';
+    if (value === false) return 'Nao';
+    const text = String(value ?? '').trim();
+    return text || '-';
+  };
+  const toDisplayDate = (value) => {
+    const normalized = cleanText(value);
+    if (!normalized) return new Date();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      return new Date(`${normalized}T12:00:00`);
+    }
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  };
+  const formatLongDatePtBr = (value) => new Intl.DateTimeFormat('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(toDisplayDate(value));
+  const normalizeReceituarioFavorites = (items = []) => (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      nome: cleanText(item?.nome || item?.medicamento),
+      posologia: cleanText(item?.posologia),
+      quantidade: cleanText(item?.quantidade),
+    }))
+    .filter((item) => item.nome || item.posologia || item.quantidade);
+  const normalizeClinicReceituario = (value = {}, clinic = {}) => {
+    const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const clinicProfile = clinic?.operationalSettings?.clinicProfile || {};
+    return {
+      cabecalho: String(raw.cabecalho || '').trim(),
+      rodape: String(raw.rodape || '').trim(),
+      assinaturaNome: cleanText(raw.assinaturaNome || clinic?.responsavelTecnico || clinicProfile?.responsavelTecnico),
+      assinaturaRegistro: cleanText(raw.assinaturaRegistro || clinic?.cro || clinicProfile?.cro),
+      assinaturaImagemData: cleanText(raw.assinaturaImagemData),
+      textoPadrao: String(raw.textoPadrao || '').trim(),
+      observacoesPadrao: String(raw.observacoesPadrao || '').trim(),
+      itensFavoritos: normalizeReceituarioFavorites(raw.itensFavoritos),
+    };
+  };
+  const normalizeClinicSessionData = (clinic = {}) => {
+    const raw = clinic && typeof clinic === 'object' ? clinic : {};
+    const operationalSettings = raw?.operationalSettings && typeof raw.operationalSettings === 'object'
+      ? { ...raw.operationalSettings }
+      : {};
+    const clinicProfile = operationalSettings?.clinicProfile && typeof operationalSettings.clinicProfile === 'object'
+      ? operationalSettings.clinicProfile
+      : {};
+    const profileAddress = clinicProfile?.endereco && typeof clinicProfile.endereco === 'object'
+      ? clinicProfile.endereco
+      : {};
+    const rawAddress = raw?.endereco && typeof raw.endereco === 'object'
+      ? raw.endereco
+      : {};
+    const normalizedAddress = {
+      rua: cleanText(rawAddress.rua || profileAddress.rua || raw?.endereco),
+      numero: cleanText(rawAddress.numero || profileAddress.numero),
+      bairro: cleanText(rawAddress.bairro || profileAddress.bairro),
+      cidade: cleanText(rawAddress.cidade || profileAddress.cidade || raw?.cidade),
+      uf: cleanText(rawAddress.uf || profileAddress.uf || raw?.uf),
+      cep: cleanText(rawAddress.cep || profileAddress.cep),
+    };
+    const normalizedProfile = {
+      ...clinicProfile,
+      whatsapp: cleanText(raw?.whatsapp || clinicProfile?.whatsapp),
+      cro: cleanText(raw?.cro || clinicProfile?.cro),
+      responsavelTecnico: cleanText(raw?.responsavelTecnico || clinicProfile?.responsavelTecnico),
+      endereco: normalizedAddress,
+    };
+    const normalized = {
+      ...raw,
+      id: cleanText(raw?.id || raw?.clinicId),
+      clinicId: cleanText(raw?.clinicId || raw?.id),
+      nomeFantasia: cleanText(raw?.nomeFantasia),
+      razaoSocial: cleanText(raw?.razaoSocial),
+      cnpjOuCpf: cleanText(raw?.cnpjOuCpf || raw?.cnpjCpf),
+      cnpjCpf: cleanText(raw?.cnpjCpf || raw?.cnpjOuCpf),
+      emailClinica: cleanText(raw?.emailClinica || raw?.email),
+      email: cleanText(raw?.email || raw?.emailClinica),
+      telefone: cleanText(raw?.telefone || raw?.telefoneComercial),
+      telefoneComercial: cleanText(raw?.telefoneComercial || raw?.telefone),
+      whatsapp: normalizedProfile.whatsapp,
+      cro: normalizedProfile.cro,
+      responsavelTecnico: normalizedProfile.responsavelTecnico,
+      endereco: normalizedAddress,
+      cidade: normalizedAddress.cidade,
+      uf: normalizedAddress.uf,
+      status: cleanText(raw?.status || 'active').toLowerCase() || 'active',
+    };
+    normalized.receituario = normalizeClinicReceituario(raw?.receituario || operationalSettings?.receituario, normalized);
+    normalized.operationalSettings = {
+      ...operationalSettings,
+      clinicProfile: normalizedProfile,
+      receituario: normalized.receituario,
+    };
+    return normalized;
+  };
   const simpleHashString = (value) => {
     const input = String(value || '');
     let hash = 0;
@@ -333,8 +437,177 @@
 
     return merged.sort((left, right) => String(left?.nome || '').localeCompare(String(right?.nome || ''), 'pt-BR', { sensitivity: 'base' }));
   };
-  const buildDocumentPreviewMarkup = (document = {}) => {
+  const buildPrintablePreviewShell = ({ title = 'Documento', subtitle = '', body = '' } = {}) => [
+    '<style>',
+    '  :root { color-scheme: light; }',
+    '  body { margin: 0; background: #e8eef4; color: #0f172a; font-family: "Segoe UI", Arial, sans-serif; }',
+    '  .vx-doc-shell { min-height: 100vh; padding: 24px; }',
+    '  .vx-doc-toolbar { max-width: 960px; margin: 0 auto 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 18px; border-radius: 18px; background: rgba(15, 23, 42, 0.88); color: #f8fafc; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2); }',
+    '  .vx-doc-toolbar-main { min-width: 0; }',
+    '  .vx-doc-toolbar-title { margin: 0; font-size: 17px; font-weight: 700; }',
+    '  .vx-doc-toolbar-subtitle { margin: 4px 0 0; font-size: 13px; color: rgba(248, 250, 252, 0.8); }',
+    '  .vx-doc-toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; }',
+    '  .vx-doc-btn { border: 0; border-radius: 999px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; background: #34d399; color: #052e2b; }',
+    '  .vx-doc-btn.vx-doc-btn-secondary { background: rgba(255,255,255,0.16); color: #f8fafc; }',
+    '  .vx-doc-paper { width: min(210mm, 100%); min-height: 297mm; margin: 0 auto; background: #fff; box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14); border-radius: 18px; padding: 16mm 14mm; }',
+    '  .vx-medical-doc { color: #0f172a; }',
+    '  .vx-medical-doc h1 { margin: 0; text-align: center; font-size: 24px; letter-spacing: 0.3px; text-transform: uppercase; }',
+    '  .vx-medical-doc .doc-head { margin: 10px 0 46px; }',
+    '  .vx-medical-doc .doc-date { margin-top: 0; font-size: 15px; color: #1e293b; }',
+    '  .vx-medical-doc .doc-text { margin-top: 20px; font-size: 15px; line-height: 1.75; }',
+    '  .vx-medical-doc .doc-text p { margin: 0 0 16px; }',
+    '  .vx-medical-doc .bloco { margin-bottom: 14px; page-break-inside: avoid; }',
+    '  .vx-medical-doc .label { font-size: 13px; color: #334155; margin-bottom: 4px; font-weight: 700; }',
+    '  .vx-medical-doc .value { white-space: pre-wrap; font-size: 14px; }',
+    '  .vx-medical-doc table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }',
+    '  .vx-medical-doc th, .vx-medical-doc td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }',
+    '  .vx-medical-doc th { background: #f8fafc; font-weight: 700; }',
+    '  .vx-medical-doc .doc-cid { margin-top: 10px; font-weight: 700; }',
+    '  .vx-medical-doc .signature { margin-top: 72px; text-align: center; page-break-inside: avoid; }',
+    '  .vx-medical-doc .signature-image { margin: 0 auto 8px; max-height: 76px; max-width: 320px; object-fit: contain; display: block; }',
+    '  .vx-medical-doc .signature-line { margin: 0 auto 14px; border-top: 1px solid #334155; width: 300px; max-width: 90%; }',
+    '  .vx-medical-doc .signature-name { font-size: 16px; font-weight: 500; color: #0f172a; }',
+    '  .vx-medical-doc .signature-reg { margin-top: 4px; font-size: 14px; color: #334155; }',
+    '  .vx-medical-doc--atestado .signature { margin-top: 92px; }',
+    '  @page { size: A4; margin: 12mm; }',
+    '  @media print {',
+    '    body { background: #fff; }',
+    '    .vx-doc-shell { padding: 0; }',
+    '    .vx-doc-toolbar { display: none !important; }',
+    '    .vx-doc-paper { width: auto; min-height: auto; margin: 0; box-shadow: none; border-radius: 0; padding: 0; }',
+    '  }',
+    '</style>',
+    '<div class="vx-doc-shell">',
+    '  <div class="vx-doc-toolbar">',
+    '    <div class="vx-doc-toolbar-main">',
+    `      <p class="vx-doc-toolbar-title">${escapeHtml(title)}</p>`,
+    `      <p class="vx-doc-toolbar-subtitle">${escapeHtml(subtitle || 'Use "Imprimir" para salvar em PDF pelo navegador.')}</p>`,
+    '    </div>',
+    '    <div class="vx-doc-toolbar-actions">',
+    '      <button type="button" class="vx-doc-btn" onclick="window.print()">Imprimir / Salvar PDF</button>',
+    '      <button type="button" class="vx-doc-btn vx-doc-btn-secondary" onclick="window.close()">Fechar</button>',
+    '    </div>',
+    '  </div>',
+    `  <main class="vx-doc-paper">${body}</main>`,
+    '</div>',
+  ].join('');
+  const buildReceitaPreviewMarkup = (document = {}, context = {}) => {
     const data = document?.data && typeof document.data === 'object' ? document.data : {};
+    const clinic = normalizeClinicSessionData(context?.clinic || getStoredClinic?.() || {});
+    const patient = context?.patient && typeof context.patient === 'object' ? context.patient : {};
+    const receituario = normalizeClinicReceituario(data?.receituario || clinic?.receituario, clinic);
+    const itens = Array.isArray(data.itens) ? data.itens : [];
+    const localidadeCidade = cleanText(clinic?.cidade || clinic?.endereco?.cidade);
+    const localidadeUf = cleanText(clinic?.uf || clinic?.endereco?.uf);
+    const localidade = [localidadeCidade, localidadeUf].filter(Boolean).join(' - ') || 'Cidade';
+    const issueDate = cleanText(data.data || document?.documentDate || document?.createdAt);
+    const assinaturaNome = cleanText(data.profissionalNome || receituario.assinaturaNome) || 'Assinatura do profissional';
+    const assinaturaRegistro = cleanText(receituario.assinaturaRegistro);
+    const pacienteNome = cleanText(data.pacienteNome || patient?.nome || patient?.fullName) || '-';
+    const prontuario = cleanText(data.prontuario || document?.prontuario || document?.patientId || patient?.prontuario || patient?.id) || '-';
+    const profissionalNome = cleanText(data.profissionalNome || document?.createdBy?.nome) || '-';
+    const itensHtml = itens.length
+      ? itens.map((item) => `
+        <tr>
+          <td>${escapeHtml(formatFieldValue(item?.nome))}</td>
+          <td>${escapeHtml(formatFieldValue(item?.posologia))}</td>
+          <td>${escapeHtml(formatFieldValue(item?.quantidade))}</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="3">Sem itens estruturados.</td></tr>';
+    return buildPrintablePreviewShell({
+      title: document?.title || document?.titulo || 'Receita',
+      body: `
+        <article class="vx-medical-doc vx-medical-doc--receita">
+          ${receituario.cabecalho ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.cabecalho))}</div></div>` : ''}
+          <div class="doc-head">
+            <h1>Receita</h1>
+          </div>
+          <div class="doc-date">${escapeHtml(`${localidade}, ${formatLongDatePtBr(issueDate)}`)}</div>
+          <div class="doc-text">
+            <p>Paciente: <strong>${escapeHtml(pacienteNome)}</strong></p>
+            <p>Prontuario: ${escapeHtml(prontuario)}</p>
+            <p>Profissional: ${escapeHtml(profissionalNome)}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Medicamento</th>
+                <th>Posologia</th>
+                <th>Quantidade</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itensHtml}
+            </tbody>
+          </table>
+          <div class="bloco">
+            <div class="label">Texto livre</div>
+            <div class="value">${escapeHtml(formatFieldValue(data.texto || '-'))}</div>
+          </div>
+          <div class="bloco">
+            <div class="label">Observacoes</div>
+            <div class="value">${escapeHtml(formatFieldValue(data.observacoes || '-'))}</div>
+          </div>
+          <div class="signature">
+            ${receituario.assinaturaImagemData ? `<img class="signature-image" src="${escapeHtml(receituario.assinaturaImagemData)}" alt="Assinatura digital">` : ''}
+            <div class="signature-line"></div>
+            <div class="signature-name">${escapeHtml(assinaturaNome)}</div>
+            ${assinaturaRegistro ? `<div class="signature-reg">${escapeHtml(assinaturaRegistro)}</div>` : ''}
+          </div>
+          ${receituario.rodape ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.rodape))}</div></div>` : ''}
+        </article>
+      `,
+    });
+  };
+  const buildAtestadoPreviewMarkup = (document = {}, context = {}) => {
+    const data = document?.data && typeof document.data === 'object' ? document.data : {};
+    const clinic = normalizeClinicSessionData(context?.clinic || getStoredClinic?.() || {});
+    const patient = context?.patient && typeof context.patient === 'object' ? context.patient : {};
+    const receituario = normalizeClinicReceituario(data?.receituario || clinic?.receituario, clinic);
+    const localidadeCidade = cleanText(clinic?.cidade || clinic?.endereco?.cidade);
+    const localidadeUf = cleanText(clinic?.uf || clinic?.endereco?.uf);
+    const localidade = [localidadeCidade, localidadeUf].filter(Boolean).join(' - ') || 'Cidade';
+    const issueDate = cleanText(data.data || document?.documentDate || document?.createdAt);
+    const patientName = cleanText(data.pacienteNome || patient?.nome || patient?.fullName) || '-';
+    const patientCpf = cleanText(data.pacienteCpf || patient?.cpf);
+    const conteudo = cleanText(data.tipo) === 'horas'
+      ? `Em decorrencia, devera permanecer afastado(a) de suas atividades no periodo de ${formatFieldValue(data.horaInicio || '--:--')} ate ${formatFieldValue(data.horaFim || '--:--')}, nesta data.`
+      : `Em decorrencia, devera permanecer afastado(a) de suas atividades por um periodo de ${formatFieldValue(data.dias || 1)} dia(s), a partir desta data.`;
+    const assinaturaNome = cleanText(data.profissionalNome || receituario.assinaturaNome) || 'Assinatura do profissional';
+    const assinaturaRegistro = cleanText(receituario.assinaturaRegistro);
+    return buildPrintablePreviewShell({
+      title: document?.title || document?.titulo || 'Atestado',
+      body: `
+        <article class="vx-medical-doc vx-medical-doc--atestado">
+          <div class="doc-head">
+            <h1>Atestado</h1>
+          </div>
+          <div class="doc-date">${escapeHtml(`${localidade}, ${formatLongDatePtBr(issueDate)}`)}</div>
+          <div class="doc-text">
+            <p>Atesto, para os devidos fins, que o(a) Sr.(a) <strong>${escapeHtml(patientName)}</strong>${patientCpf ? ` CPF ${escapeHtml(patientCpf)}` : ''}, foi submetido(a) a procedimentos nesta data.</p>
+            <p>${escapeHtml(conteudo)}</p>
+            ${cleanText(data.cid) ? `<p class="doc-cid">CID: ${escapeHtml(data.cid)}</p>` : ''}
+          </div>
+          <div class="signature">
+            ${receituario.assinaturaImagemData ? `<img class="signature-image" src="${escapeHtml(receituario.assinaturaImagemData)}" alt="Assinatura digital">` : ''}
+            <div class="signature-line"></div>
+            <div class="signature-name">${escapeHtml(assinaturaNome)}</div>
+            ${assinaturaRegistro ? `<div class="signature-reg">${escapeHtml(assinaturaRegistro)}</div>` : ''}
+          </div>
+        </article>
+      `,
+    });
+  };
+  const buildDocumentPreviewMarkup = (document = {}, context = {}) => {
+    const data = document?.data && typeof document.data === 'object' ? document.data : {};
+    const documentType = normalizeDocumentType(document?.type || document?.tipo);
+    if (documentType === 'RECEITA') {
+      return buildReceitaPreviewMarkup(document, context);
+    }
+    if (documentType === 'ATESTADO') {
+      return buildAtestadoPreviewMarkup(document, context);
+    }
     if (cleanText(data.previewHtml)) return String(data.previewHtml);
     const content = cleanText(
       data.conteudo
@@ -378,12 +651,12 @@
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return { success: true, url };
   };
-  const openHtmlPreview = async (document = {}) => {
+  const openHtmlPreview = async (document = {}, context = {}) => {
     const html = [
       '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">',
       `<title>${escapeHtml(document?.title || document?.titulo || 'Documento')}</title>`,
       '</head><body style="margin:0;background:#f6f8fb;">',
-      buildDocumentPreviewMarkup(document),
+      buildDocumentPreviewMarkup(document, context),
       '</body></html>',
     ].join('');
     return openBlobInBrowser(new Blob([html], { type: 'text/html;charset=utf-8' }), 'text/html;charset=utf-8');
@@ -401,7 +674,7 @@
   const getStoredClinic = () => {
     try {
       const raw = localStorage.getItem(WEB_SESSION_CLINIC_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? normalizeClinicSessionData(JSON.parse(raw)) : null;
     } catch (_error) {
       return null;
     }
@@ -415,7 +688,9 @@
     if (user && typeof user === 'object') localStorage.setItem(WEB_SESSION_USER_KEY, JSON.stringify(user));
     else localStorage.removeItem(WEB_SESSION_USER_KEY);
 
-    if (clinic && typeof clinic === 'object') localStorage.setItem(WEB_SESSION_CLINIC_KEY, JSON.stringify(clinic));
+    if (clinic && typeof clinic === 'object') {
+      localStorage.setItem(WEB_SESSION_CLINIC_KEY, JSON.stringify(normalizeClinicSessionData(clinic)));
+    }
     else localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
   };
 
@@ -488,7 +763,7 @@
     clinic,
   });
 
-  const mapClinicSummary = (clinic = {}) => ({
+  const mapClinicSummary = (clinic = {}) => normalizeClinicSessionData({
     ...clinic,
     id: cleanText(clinic?.id || clinic?.clinicId),
     clinicId: cleanText(clinic?.clinicId || clinic?.id),
@@ -592,13 +867,14 @@
     const settings = await request('PATCH', '/clinics/me/operational-settings', patch || {}, { auth: true });
     const currentClinic = getStoredClinic();
     if (currentClinic && typeof currentClinic === 'object') {
+      const clinic = normalizeClinicSessionData({
+        ...currentClinic,
+        operationalSettings: settings,
+      });
       persistWebSession({
         token: getStoredToken(),
         user: getStoredUser(),
-        clinic: {
-          ...currentClinic,
-          operationalSettings: settings,
-        },
+        clinic,
       });
     }
     return settings;
@@ -726,20 +1002,21 @@
         ...(profile && typeof profile === 'object' ? profile : {}),
         operationalSettings: operationalSettings && typeof operationalSettings === 'object' ? operationalSettings : {},
       };
+      const normalizedClinic = normalizeClinicSessionData(clinic);
 
       const storedUser = getStoredUser();
       persistWebSession({
         token: getStoredToken(),
         user: storedUser ? {
           ...storedUser,
-          clinicName: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.clinicName || ''),
-          nomeClinica: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.nomeClinica || ''),
-          clinic,
+          clinicName: cleanText(normalizedClinic?.nomeFantasia || normalizedClinic?.razaoSocial || storedUser?.clinicName || ''),
+          nomeClinica: cleanText(normalizedClinic?.nomeFantasia || normalizedClinic?.razaoSocial || storedUser?.nomeClinica || ''),
+          clinic: normalizedClinic,
         } : null,
-        clinic,
+        clinic: normalizedClinic,
       });
 
-      return clinic;
+      return normalizedClinic;
     },
     save: async (payload = {}) => {
       const profilePatch = payload?.profile && typeof payload.profile === 'object' ? payload.profile : payload;
@@ -758,20 +1035,21 @@
         ...(profile && typeof profile === 'object' ? profile : {}),
         operationalSettings: operationalSettings && typeof operationalSettings === 'object' ? operationalSettings : {},
       };
+      const normalizedClinic = normalizeClinicSessionData(clinic);
 
       const storedUser = getStoredUser();
       persistWebSession({
         token: getStoredToken(),
         user: storedUser ? {
           ...storedUser,
-          clinicName: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.clinicName || ''),
-          nomeClinica: cleanText(clinic?.nomeFantasia || clinic?.razaoSocial || storedUser?.nomeClinica || ''),
-          clinic,
+          clinicName: cleanText(normalizedClinic?.nomeFantasia || normalizedClinic?.razaoSocial || storedUser?.clinicName || ''),
+          nomeClinica: cleanText(normalizedClinic?.nomeFantasia || normalizedClinic?.razaoSocial || storedUser?.nomeClinica || ''),
+          clinic: normalizedClinic,
         } : null,
-        clinic,
+        clinic: normalizedClinic,
       });
 
-      return clinic;
+      return normalizedClinic;
     },
     testWhatsApp: async () => notImplemented('clinic.testWhatsApp'),
     listMessagingLogs: async () => notImplemented('clinic.listMessagingLogs'),
@@ -795,7 +1073,7 @@
     },
     signup: async (payload) => {
       const result = await request('POST', '/auth/signup', payload || {}, { auth: false });
-      const clinic = result?.clinic || null;
+      const clinic = result?.clinic ? normalizeClinicSessionData(result.clinic) : null;
       const mappedUser = mapCentralUserToDesktop(result?.user || {}, clinic);
       persistWebSession({ token: result?.token || '', user: mappedUser, clinic });
       return { success: true, user: mappedUser, clinic, token: result?.token || '' };
@@ -868,7 +1146,9 @@
       if (!token) {
         throw new Error('Token de sessao da clinica nao retornado pelo backend.');
       }
-      const clinic = await request('GET', '/clinics/me/profile', null, { auth: true, token }).catch(() => null);
+      const clinic = await request('GET', '/clinics/me/profile', null, { auth: true, token })
+        .then((data) => normalizeClinicSessionData(data || {}))
+        .catch(() => null);
       const mappedUser = {
         ...mapCentralUserToDesktop(result?.user || {}, clinic),
         isImpersonatedSession: true,
@@ -1076,7 +1356,10 @@
         );
         return openBlobInBrowser(new Blob([binary.buffer], { type: binary.contentType || 'application/octet-stream' }), binary.contentType);
       } catch (_error) {
-        return openHtmlPreview(record);
+        const patient = resolvedPatientId
+          ? await patients.read(resolvedPatientId).catch(() => null)
+          : null;
+        return openHtmlPreview(record, { patient, clinic: getStoredClinic() });
       }
     },
     archive: async ({ prontuario, patientId, documentId, archived = true } = {}) => {
