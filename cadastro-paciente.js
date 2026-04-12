@@ -195,9 +195,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             const saveResult = await patientsApi.save(patientData);
             const canonicalPatientKey = String(
-                saveResult?.patient?.prontuario
-                || saveResult?.patient?.id
-                || savedProntuario
+                saveResult?.id
+                || saveResult?.prontuario
                 || ''
             ).trim();
 
@@ -220,15 +219,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             const persistedPatient = {
-                ...(saveResult?.patient || {}),
+                ...(saveResult || {}),
                 ...(hydratedPatient || {}),
-                id: hydratedPatient?.id || saveResult?.patient?.id || canonicalPatientKey,
-                prontuario: hydratedPatient?.prontuario || saveResult?.patient?.prontuario || canonicalPatientKey,
-                nome: hydratedPatient?.nome || saveResult?.patient?.nome || patientData.nome || patientData.fullName || '',
-                fullName: hydratedPatient?.fullName || saveResult?.patient?.fullName || saveResult?.patient?.nome || patientData.fullName || patientData.nome || '',
-                dentistaId: hydratedPatient?.dentistaId || saveResult?.patient?.dentistaId || patientData.dentistaId || '',
-                dentistaNome: hydratedPatient?.dentistaNome || saveResult?.patient?.dentistaNome || patientData.dentistaNome || '',
-                clinicId: hydratedPatient?.clinicId || saveResult?.patient?.clinicId || currentUser?.clinicId || '',
+                id: hydratedPatient?.id || saveResult?.id || canonicalPatientKey,
+                prontuario: hydratedPatient?.prontuario || saveResult?.prontuario || canonicalPatientKey,
+                nome: hydratedPatient?.nome || saveResult?.nome || patientData.nome || patientData.fullName || '',
+                fullName: hydratedPatient?.fullName || saveResult?.fullName || saveResult?.nome || patientData.fullName || patientData.nome || '',
+                dentistaId: hydratedPatient?.dentistaId || saveResult?.dentistaId || patientData.dentistaId || '',
+                dentistaNome: hydratedPatient?.dentistaNome || saveResult?.dentistaNome || patientData.dentistaNome || '',
+                clinicId: hydratedPatient?.clinicId || saveResult?.clinicId || currentUser?.clinicId || '',
             };
             logPatientCreate('patient_create_completed', {
                 patientId: persistedPatient.id || '',

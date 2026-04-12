@@ -818,7 +818,7 @@
       return list.find((patient) => terms.some((term) => matchesPatientQuery(patient, term))) || null;
     },
     save: async (payload = {}) => {
-      const normalizedId = cleanText(payload?.id || payload?.prontuario);
+      const normalizedId = cleanText(payload?.id);
       const body = normalizeLegacyPatientPayload(payload);
       const data = normalizedId
         ? await request('PATCH', '/patients/' + encodeURIComponent(normalizedId), body, { auth: true })
