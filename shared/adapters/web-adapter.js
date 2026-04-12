@@ -559,7 +559,7 @@
     const responsavelTecnico = cleanText(normalizedClinic?.responsavelTecnico);
     const cro = cleanText(normalizedClinic?.cro);
     const professionalName = cleanText(clinic?.professionalName);
-    const professionalCro = cleanText(clinic?.professionalCro);
+    const professionalCro = cleanText(clinic?.professionalCro) || cro;
     const endereco = normalizedClinic?.endereco && typeof normalizedClinic.endereco === 'object'
       ? normalizedClinic.endereco
       : {};

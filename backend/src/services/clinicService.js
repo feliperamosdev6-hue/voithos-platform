@@ -453,6 +453,68 @@ const inferDocumentType = (documentNumber) => {
   return '';
 };
 
+const isRepeatedDigits = (value) => /^(\d)\1+$/.test(String(value || ''));
+
+const isValidCpfNumber = (value) => {
+  const cpf = normalizeDocument(value);
+  if (!cpf || cpf.length !== 11 || isRepeatedDigits(cpf)) return false;
+  let sum = 0;
+  for (let index = 0; index < 9; index += 1) {
+    sum += Number(cpf[index]) * (10 - index);
+  }
+  let check = (sum * 10) % 11;
+  if (check === 10) check = 0;
+  if (check !== Number(cpf[9])) return false;
+  sum = 0;
+  for (let index = 0; index < 10; index += 1) {
+    sum += Number(cpf[index]) * (11 - index);
+  }
+  check = (sum * 10) % 11;
+  if (check === 10) check = 0;
+  return check === Number(cpf[10]);
+};
+
+const isValidCnpjNumber = (value) => {
+  const cnpj = normalizeDocument(value);
+  if (!cnpj || cnpj.length !== 14 || isRepeatedDigits(cnpj)) return false;
+  const calculateCheckDigit = (base) => {
+    const weights = base.length === 12
+      ? [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+      : [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    const sum = base.split('').reduce((accumulator, item, index) => accumulator + (Number(item) * weights[index]), 0);
+    const mod = sum % 11;
+    return mod < 2 ? 0 : 11 - mod;
+  };
+  const base = cnpj.slice(0, 12);
+  const digitOne = calculateCheckDigit(base);
+  const digitTwo = calculateCheckDigit(base + digitOne);
+  return cnpj === `${base}${digitOne}${digitTwo}`;
+};
+
+const validateOptionalClinicDocument = (value) => {
+  const normalizedNumber = normalizeDocument(value);
+  if (!normalizedNumber) return null;
+  if (normalizedNumber.length === 11) {
+    if (!isValidCpfNumber(normalizedNumber)) {
+      throw new AppError(400, 'INVALID_CLINIC_DOCUMENT', 'CPF invalido. Confira os 11 digitos.');
+    }
+    return normalizedNumber;
+  }
+  if (normalizedNumber.length === 14) {
+    if (!isValidCnpjNumber(normalizedNumber)) {
+      throw new AppError(400, 'INVALID_CLINIC_DOCUMENT', 'CNPJ invalido. Confira os 14 digitos.');
+    }
+    return normalizedNumber;
+  }
+  if (normalizedNumber.length < 11) {
+    throw new AppError(400, 'INCOMPLETE_CLINIC_DOCUMENT', 'CPF/CNPJ incompleto. Confira se o documento possui 11 ou 14 digitos.');
+  }
+  if (normalizedNumber.length < 14) {
+    throw new AppError(400, 'INCOMPLETE_CLINIC_DOCUMENT', 'CNPJ incompleto. Confira os 14 digitos.');
+  }
+  throw new AppError(400, 'INVALID_CLINIC_DOCUMENT', 'CPF/CNPJ deve conter 11 ou 14 digitos.');
+};
+
 const clinicService = {
   list: async () => {
     try {
@@ -547,6 +609,9 @@ const clinicService = {
       if (!nomeFantasia) {
         throw new AppError(400, 'VALIDATION_ERROR', 'nomeFantasia is required.');
       }
+      const clinicDocument = validateOptionalClinicDocument(
+        mergedProfile.cnpj || mergedProfile.cnpjCpf || mergedProfile.cnpjOuCpf || ''
+      );
 
       const mergedOperationalSettings = mergeOperationalSettings(currentClinic.operationalSettings || {}, {
         clinicProfile: {
@@ -570,7 +635,7 @@ const clinicService = {
       const updated = await clinicRepository.updateProfile(normalizedClinicId, {
         nomeFantasia,
         razaoSocial: String(mergedProfile.razaoSocial || '').trim() || nomeFantasia,
-        cnpjCpf: String(mergedProfile.cnpj || mergedProfile.cnpjCpf || '').trim(),
+        cnpjCpf: clinicDocument,
         email: String(mergedProfile.email || '').trim(),
         telefoneComercial: String(mergedProfile.telefone || '').trim(),
         endereco: buildClinicAddressLine(mergedProfile.endereco),

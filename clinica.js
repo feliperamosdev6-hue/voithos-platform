@@ -153,6 +153,30 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d{1,2})$/, '$1.$2.$3/$4-$5');
   };
 
+  const getClinicDocumentValidation = (value) => {
+    const digits = onlyDigits(value);
+    if (!digits) {
+      return { ok: true, normalized: '', message: '' };
+    }
+    if (digits.length < 11) {
+      return { ok: false, normalized: digits, message: 'CPF/CNPJ incompleto. Confira se o documento possui 11 ou 14 digitos.' };
+    }
+    if (digits.length === 11) {
+      return isValidCpf(digits)
+        ? { ok: true, normalized: digits, message: '' }
+        : { ok: false, normalized: digits, message: 'CPF invalido. Confira os 11 digitos.' };
+    }
+    if (digits.length < 14) {
+      return { ok: false, normalized: digits, message: 'CNPJ incompleto. Confira os 14 digitos.' };
+    }
+    if (digits.length === 14) {
+      return isValidCnpj(digits)
+        ? { ok: true, normalized: digits, message: '' }
+        : { ok: false, normalized: digits, message: 'CNPJ invalido. Confira os 14 digitos.' };
+    }
+    return { ok: false, normalized: digits.slice(0, 14), message: 'CPF/CNPJ deve conter 11 ou 14 digitos.' };
+  };
+
   const formatPhone = (value) => {
     const digits = onlyDigits(value).slice(0, 11);
     if (digits.length <= 10) {
@@ -730,7 +754,10 @@ document.addEventListener('DOMContentLoaded', () => {
       Object.keys(fields).forEach((key) => {
         if (fields[key]) fields[key].value = data[key] || '';
       });
+      if (fields.cnpjCpf) fields.cnpjCpf.value = formatCpfCnpj(data?.cnpjCpf || data?.cnpj || '');
       if (fields.cro) fields.cro.value = formatCroValue(data?.cro || '');
+      if (fields.telefone) fields.telefone.value = formatPhone(data?.telefone || '');
+      if (fields.cep) fields.cep.value = formatCep(data?.cep || '');
       if (birthdayFields.enabled) birthdayFields.enabled.checked = data?.messaging?.birthday?.enabled === true;
       if (birthdayFields.draftMode) birthdayFields.draftMode.checked = data?.messaging?.birthday?.draftMode !== false;
       if (birthdayFields.sendTime) birthdayFields.sendTime.value = data?.messaging?.birthday?.sendTime || '09:00';
@@ -851,15 +878,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     clearFieldErrors();
     let hasError = false;
-    const cpfCnpjDigits = onlyDigits(fields.cnpjCpf?.value);
-    if (cpfCnpjDigits.length > 0) {
-      const valid = cpfCnpjDigits.length <= 11
-        ? isValidCpf(cpfCnpjDigits)
-        : isValidCnpj(cpfCnpjDigits);
-      if (!valid) {
-        setFieldError(fields.cnpjCpf, 'CPF/CNPJ invalido.');
-        hasError = true;
-      }
+    const clinicDocumentValidation = getClinicDocumentValidation(fields.cnpjCpf?.value || '');
+    if (!clinicDocumentValidation.ok) {
+      setFieldError(fields.cnpjCpf, clinicDocumentValidation.message);
+      hasError = true;
     }
 
     if (fields.email?.value && !isValidEmail(fields.email.value)) {
@@ -924,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       await clinicApi.save(payload);
+      await loadClinic();
       logoData = '';
       logoRemoved = false;
       setStatus('Alteracoes salvas com sucesso.', false);
