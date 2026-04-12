@@ -216,6 +216,20 @@
     }
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   };
+  const resolveDocumentActor = (payload = {}) => {
+    const storedUser = getStoredUser?.() || {};
+    return {
+      id: cleanText(payload?.createdBy?.id || payload?.profissionalId || payload?.dentistaId || storedUser?.id || storedUser?.userId),
+      nome: cleanText(
+        payload?.createdBy?.nome
+        || payload?.profissionalNome
+        || payload?.dentistaNome
+        || storedUser?.nome
+        || storedUser?.fullName
+        || storedUser?.login
+      ),
+    };
+  };
   const escapeHtml = (value) => String(value || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -628,16 +642,26 @@
     category = 'CLINICOS',
     documentDate = '',
     folder = '',
+    prontuario = '',
+    patientId = '',
+    createdBy = null,
     data = {},
     archived = false,
   } = {}) => ({
-    id: cleanText(id),
+    id: cleanText(id || createLocalId('doc')),
     title: cleanText(title),
     type: normalizeDocumentType(type || 'DOCUMENTO'),
     category: cleanText(category || 'CLINICOS'),
     folder: cleanText(folder),
     documentDate: cleanText(documentDate || normalizeDateOnly(new Date())),
     archived: archived === true,
+    prontuario: cleanText(prontuario || patientId),
+    patientId: cleanText(patientId || prontuario),
+    createdBy: createdBy && typeof createdBy === 'object' ? {
+      id: cleanText(createdBy.id),
+      nome: cleanText(createdBy.nome),
+    } : resolveDocumentActor(data),
+    updatedAt: new Date().toISOString(),
     data: data && typeof data === 'object' ? data : { conteudo: String(data || '') },
   });
   const sortDocumentsByDateDesc = (items = []) => (Array.isArray(items) ? items : [])
@@ -659,16 +683,22 @@
     const patientId = resolvePatientId(payload);
     if (!patientId) throw new Error('patientId/prontuario is required.');
     const title = cleanText(payload?.title || payload?.titulo || titleFallback);
+    const actor = resolveDocumentActor(payload);
     const record = buildDocumentRecord({
-      id: payload?.documentId || payload?.id || '',
+      id: payload?.documentId || payload?.id || createLocalId('doc'),
       title,
       type,
       category,
       folder: payload?.folder || '',
+      prontuario: patientId,
+      patientId,
+      createdBy: actor,
       documentDate: payload?.documentDate || payload?.data || normalizeDateOnly(new Date()),
       archived: payload?.archived === true,
       data: {
         ...payload,
+        prontuario: patientId,
+        patientId,
         previewHtml: buildDocumentPreviewMarkup({
           title,
           type,
@@ -992,18 +1022,25 @@
         throw new Error('Arquivo invalido para upload no webapp.');
       }
       const fileName = cleanText(payload?.fileName || file?.name || payload?.title || 'arquivo');
+      const actor = resolveDocumentActor(payload);
       const metadata = await request(
         'POST',
         `/clinical/patients/${encodeURIComponent(patientId)}/documents`,
         {
           document: buildDocumentRecord({
+            id: payload?.documentId || payload?.id || createLocalId('doc'),
             title: cleanText(payload?.title || fileName),
             type: payload?.type || 'ARQUIVO',
             category: payload?.category || 'ARQUIVO_PACIENTE',
             folder: payload?.folder || '',
+            prontuario: patientId,
+            patientId,
+            createdBy: actor,
             documentDate: payload?.documentDate || normalizeDateOnly(new Date()),
             data: {
               ...payload,
+              prontuario: patientId,
+              patientId,
               fileName,
               mimeType: cleanText(file?.type || payload?.mimeType || ''),
             },
@@ -1066,6 +1103,7 @@
     saveEvolucao: async (payload = {}) => {
       const patientId = resolvePatientId(payload);
       const title = cleanText(payload?.title || `Anotacao ${formatDatePtBr(payload?.data || new Date())}`);
+      const actor = resolveDocumentActor(payload);
       const data = await request(
         'POST',
         `/clinical/patients/${encodeURIComponent(patientId)}/clinical-notes`,
@@ -1073,12 +1111,18 @@
           noteType: 'EVOLUCAO',
           content: payload || {},
           document: buildDocumentRecord({
+            id: payload?.documentId || payload?.id || createLocalId('doc'),
             title,
             type: 'EVOLUCAO',
             category: payload?.category || 'CLINICOS',
+            prontuario: patientId,
+            patientId,
+            createdBy: actor,
             documentDate: payload?.data || normalizeDateOnly(new Date()),
             data: {
               ...payload,
+              prontuario: patientId,
+              patientId,
               previewHtml: buildDocumentPreviewMarkup({
                 title,
                 type: 'EVOLUCAO',
@@ -1096,6 +1140,7 @@
       const patientId = resolvePatientId(payload);
       const documentId = cleanText(payload?.documentId || payload?.id);
       const title = cleanText(payload?.title || `Anotacao ${formatDatePtBr(payload?.data || new Date())}`);
+      const actor = resolveDocumentActor(payload);
       const data = await request(
         'PATCH',
         `/clinical/patients/${encodeURIComponent(patientId)}/clinical-notes/${encodeURIComponent(documentId)}`,
@@ -1106,9 +1151,14 @@
             title,
             type: 'EVOLUCAO',
             category: payload?.category || 'CLINICOS',
+            prontuario: patientId,
+            patientId,
+            createdBy: actor,
             documentDate: payload?.data || normalizeDateOnly(new Date()),
             data: {
               ...payload,
+              prontuario: patientId,
+              patientId,
               previewHtml: buildDocumentPreviewMarkup({
                 title,
                 type: 'EVOLUCAO',
@@ -1164,18 +1214,25 @@
     saveAnamnese: async (payload = {}) => {
       const patientId = resolvePatientId(payload);
       const title = cleanText(payload?.title || 'Anamnese');
+      const actor = resolveDocumentActor(payload);
       const data = await request(
         'POST',
         `/clinical/patients/${encodeURIComponent(patientId)}/anamneses`,
         {
           data: payload?.data || payload,
           document: buildDocumentRecord({
+            id: payload?.documentId || payload?.id || createLocalId('doc'),
             title,
             type: 'ANAMNESE',
             category: 'CLINICOS',
+            prontuario: patientId,
+            patientId,
+            createdBy: actor,
             documentDate: payload?.documentDate || normalizeDateOnly(new Date()),
             data: {
               ...(payload?.data || payload),
+              prontuario: patientId,
+              patientId,
               previewHtml: buildDocumentPreviewMarkup({
                 title,
                 type: 'ANAMNESE',

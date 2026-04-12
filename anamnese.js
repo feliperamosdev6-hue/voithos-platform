@@ -336,10 +336,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!api.saveAnamnese) throw new Error('API indisponivel');
       await api.saveAnamnese({ prontuario, data: payload });
       clearFormForNewAnamnese();
-      showMessage('Anamnese salva com sucesso. Formulario limpo para nova anamnese.', 'success');
+      showMessage('Anamnese salva com sucesso e registrada no prontuario.', 'success');
     } catch (err) {
       console.warn('Falha ao salvar anamnese', err);
-      showMessage('Erro ao salvar anamnese.', 'error');
+      showMessage(`Erro ao salvar anamnese: ${err?.message || 'falha desconhecida'}`, 'error');
     }
   });
 

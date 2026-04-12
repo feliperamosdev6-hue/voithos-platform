@@ -56,7 +56,8 @@ const mapDocumentToLegacy = (row = {}) => {
   return {
     id: row.externalDocumentId || row.id,
     centralDocumentId: row.id,
-    prontuario: metadata.prontuario || '',
+    prontuario: metadata.prontuario || row.patientId || '',
+    patientId: row.patientId || metadata.patientId || '',
     category: row.category || metadata.category || metadata.categoria || '',
     categoria: row.category || metadata.categoria || metadata.category || '',
     type: row.type || metadata.type || metadata.tipo || '',
@@ -250,8 +251,10 @@ const patientClinicalService = {
   createAnamnesis: async ({ clinicId, patientId, data, sourceDocument }) => {
     const record = await patientClinicalService.getClinicalRecord({ clinicId, patientId });
     let sourceDocumentId = null;
+    let sourceDocumentRecord = null;
     if (sourceDocument) {
       const doc = await patientClinicalService.upsertDocumentMetadata({ clinicId, patientId, document: sourceDocument });
+      sourceDocumentRecord = doc;
       const docRow = await patientClinicalRepository.findDocumentByExternalId({
         clinicId,
         patientId,
@@ -260,7 +263,7 @@ const patientClinicalService = {
       sourceDocumentId = docRow?.id || null;
     }
 
-    return patientClinicalRepository.createAnamnesis({
+    const created = await patientClinicalRepository.createAnamnesis({
       clinicId,
       patientId,
       clinicalRecordId: record.id,
@@ -271,6 +274,10 @@ const patientClinicalService = {
       createdByName: String(sourceDocument?.createdBy?.nome || '').trim() || null,
       documentDate: normalizeIsoDate(sourceDocument?.documentDate),
     });
+    return {
+      record: created,
+      sourceDocument: sourceDocumentRecord,
+    };
   },
 
   listClinicalNotes: async ({ clinicId, patientId, noteType }) => {
@@ -281,8 +288,10 @@ const patientClinicalService = {
   createClinicalNote: async ({ clinicId, patientId, noteType, content, sourceDocument }) => {
     const record = await patientClinicalService.getClinicalRecord({ clinicId, patientId });
     let sourceDocumentId = null;
+    let sourceDocumentRecord = null;
     if (sourceDocument) {
       const doc = await patientClinicalService.upsertDocumentMetadata({ clinicId, patientId, document: sourceDocument });
+      sourceDocumentRecord = doc;
       const docRow = await patientClinicalRepository.findDocumentByExternalId({
         clinicId,
         patientId,
@@ -291,7 +300,7 @@ const patientClinicalService = {
       sourceDocumentId = docRow?.id || null;
     }
 
-    return patientClinicalRepository.createClinicalNote({
+    const created = await patientClinicalRepository.createClinicalNote({
       clinicId,
       patientId,
       clinicalRecordId: record.id,
@@ -304,6 +313,10 @@ const patientClinicalService = {
       createdByName: String(sourceDocument?.createdBy?.nome || '').trim() || null,
       noteDate: normalizeIsoDate(sourceDocument?.documentDate),
     });
+    return {
+      record: created,
+      sourceDocument: sourceDocumentRecord,
+    };
   },
 
   updateClinicalNoteBySourceDocument: async ({ clinicId, patientId, sourceDocumentId, content, sourceDocument }) => {
@@ -316,7 +329,7 @@ const patientClinicalService = {
     if (!existing) {
       throw new AppError(404, 'CLINICAL_NOTE_NOT_FOUND', 'Clinical note not found.');
     }
-    await patientClinicalService.upsertDocumentMetadata({ clinicId, patientId, document: sourceDocument });
+    const sourceDocumentRecord = await patientClinicalService.upsertDocumentMetadata({ clinicId, patientId, document: sourceDocument });
     await patientClinicalRepository.updateClinicalNote({
       id: existing.id,
       clinicId,
@@ -328,11 +341,15 @@ const patientClinicalService = {
         noteDate: normalizeIsoDate(sourceDocument?.documentDate),
       },
     });
-    return patientClinicalRepository.findClinicalNoteBySourceDocumentId({
+    const updated = await patientClinicalRepository.findClinicalNoteBySourceDocumentId({
       clinicId,
       patientId,
       sourceDocumentId,
     });
+    return {
+      record: updated,
+      sourceDocument: sourceDocumentRecord,
+    };
   },
 };
 
