@@ -28,10 +28,9 @@ services:
       - key: BACKEND_INTERNAL_API_TOKEN
         sync: false
       - key: PUBLIC_APP_BASE_URL
-        fromService:
-          type: web
-          name: voithos-web
-          envVarKey: RENDER_EXTERNAL_URL
+        sync: false
+      - key: PUBLIC_APP_ALLOWED_ORIGINS
+        sync: false
       - key: APPOINTMENT_ACTION_BASE_URL
         fromService:
           type: web
@@ -95,16 +94,3 @@ services:
         value: .sessions
       - key: WHATSAPP_ENGINE_SKIP_DOCKER
         value: "1"
-
-  - type: web
-    name: voithos-web
-    runtime: static
-    rootDir: .
-    buildCommand: node scripts/build-render-web.mjs
-    staticPublishPath: ./render-static
-    envVars:
-      - key: WEB_CENTRAL_BACKEND_BASE_URL
-        fromService:
-          type: web
-          name: voithos-backend
-          envVarKey: RENDER_EXTERNAL_URL

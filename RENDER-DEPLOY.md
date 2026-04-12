@@ -4,7 +4,7 @@
 
 Para a fase inicial de lancamento da Voithos na Render, o desenho mais seguro e simples e:
 
-- `voithos-web`: Static Site
+- frontend web publicado como Static Site manual, por exemplo `voithos-platform-web2`
 - `voithos-backend`: Web Service Node
 - `voithos-whatsapp-ng`: Web Service Node com `API + worker` no mesmo servico
 - PostgreSQL externo ou gerenciado
@@ -37,6 +37,7 @@ Minimo obrigatorio em `voithos-backend`:
 
 Recomendadas:
 
+- `PUBLIC_APP_ALLOWED_ORIGINS=https://SEU-FRONTEND.onrender.com`
 - `CLINICAL_DOCUMENTS_STORAGE_ROOT=/var/data/patient-documents`
 - `PLAN_MESSAGE_SCHEDULER_ENABLED=true`
 - `APPOINTMENT_REMINDER_SCHEDULER_ENABLED=true`
@@ -47,9 +48,7 @@ Minimo obrigatorio em `voithos-whatsapp-ng`:
 
 - `DATABASE_URL`
 - `DIRECT_DATABASE_URL`
-- `REDIS_HOST`
-- `REDIS_PORT`
-- `REDIS_PASSWORD` se houver
+- `REDIS_URL`
 - `INTERNAL_API_TOKEN`
 - `SERVICE_INTERNAL_API_TOKEN`
 - `CENTRAL_BACKEND_BASE_URL`
@@ -73,11 +72,16 @@ Observacao operacional:
 - se o `migrate deploy` falhar com `P1001` no host direto do Neon, adicionar `connect_timeout=15` ou maior na `DIRECT_DATABASE_URL`
 - o deploy do `voithos-whatsapp-ng` nao deve mais depender de migration no `preDeploy`; a migracao deve rodar como etapa separada de release
 
-## Variavel do frontend web
+## Variaveis do frontend web manual
 
-Em `voithos-web`:
+No Static Site do frontend web ativo, por exemplo `voithos-platform-web2`:
 
 - `WEB_CENTRAL_BACKEND_BASE_URL=https://SEU-BACKEND.onrender.com`
+
+No `voithos-backend`:
+
+- `PUBLIC_APP_BASE_URL=https://SEU-FRONTEND.onrender.com`
+- `PUBLIC_APP_ALLOWED_ORIGINS=https://SEU-FRONTEND.onrender.com`
 
 O build gera `render-static/runtime-config.js` e injeta esse arquivo nas paginas HTML para o web adapter saber qual backend central usar.
 
@@ -87,23 +91,24 @@ O build gera `render-static/runtime-config.js` e injeta esse arquivo nas paginas
 2. Criar o Redis
 3. Criar `voithos-whatsapp-ng`
 4. Criar `voithos-backend`
-5. Criar `voithos-web`
+5. Criar o Static Site manual do frontend web
 
 ## Ordem de configuracao
 
 1. Configurar `DATABASE_URL` do NG
 2. Configurar `DIRECT_DATABASE_URL` do NG
 3. Configurar `DATABASE_URL` do backend
-4. Configurar `REDIS_*` do NG
+4. Configurar `REDIS_URL` do NG
 5. Configurar tokens internos em backend e NG
-6. Rodar `npx prisma migrate deploy` do NG fora do fluxo do Render
-7. Publicar NG
-8. Publicar backend apontando para o NG
-9. Publicar frontend apontando para o backend
+6. Configurar `PUBLIC_APP_BASE_URL` do backend para a URL publica do frontend web
+7. Rodar `npx prisma migrate deploy` do NG fora do fluxo do Render
+8. Publicar NG
+9. Publicar backend apontando para o NG
+10. Publicar frontend apontando para o backend
 
 ## Topologia de dominio recomendada
 
-- `app.voithos...` -> `voithos-web`
+- `app.voithos...` -> frontend web ativo
 - `api.voithos...` -> `voithos-backend`
 - `ng.voithos...` -> `voithos-whatsapp-ng`
 

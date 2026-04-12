@@ -7,10 +7,8 @@ Com o blueprint economico atual, a Render continua preenchendo automaticamente:
 - `WHATSAPP_NG_BASE_URL`
 - `WHATSAPP_NG_SERVICE_TOKEN`
 - `CENTRAL_BACKEND_SERVICE_TOKEN`
-- `PUBLIC_APP_BASE_URL`
 - `APPOINTMENT_ACTION_BASE_URL`
 - `CENTRAL_BACKEND_BASE_URL`
-- `WEB_CENTRAL_BACKEND_BASE_URL`
 
 ## Campos manuais restantes
 
@@ -19,6 +17,8 @@ Com o blueprint economico atual, a Render continua preenchendo automaticamente:
 ```env
 DATABASE_URL=COLE_AQUI_A_DATABASE_URL_DO_BANCO_VOITHOS_NO_NEON
 BACKEND_INTERNAL_API_TOKEN=COLE_UM_TOKEN_LONGO_AQUI
+PUBLIC_APP_BASE_URL=https://voithos-platform-web2.onrender.com
+PUBLIC_APP_ALLOWED_ORIGINS=https://voithos-platform-web2.onrender.com
 VOITHOS_SUPERADMIN_EMAIL=superadmin@voithos.local
 VOITHOS_SUPERADMIN_PASSWORD=COLE_UMA_SENHA_FORTE_AQUI
 VOITHOS_SUPERADMIN_CLINIC_EMAIL=platform@voithos.local
@@ -38,9 +38,11 @@ ADMIN_PANEL_READONLY_TOKEN=COLE_UM_TOKEN_READONLY_DO_NG
 AUTH_ENCRYPTION_KEY_HEX=COLE_UMA_CHAVE_HEX_64_AQUI
 ```
 
-### voithos-web
+### frontend web manual
 
-Nenhum segredo manual obrigatorio.
+```env
+WEB_CENTRAL_BACKEND_BASE_URL=https://voithos-backend.onrender.com
+```
 
 ## Regras que nao precisam ser iguais
 

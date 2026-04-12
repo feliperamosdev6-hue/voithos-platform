@@ -42,7 +42,6 @@ Com o blueprint economico, a Render deve criar:
 
 - `voithos-backend`
 - `voithos-whatsapp-ng`
-- `voithos-web`
 
 Ela nao deve mais criar:
 
@@ -78,7 +77,10 @@ Observacao:
 
 ### Web
 
-- normalmente nenhum segredo manual obrigatorio
+- o frontend web deve ser criado como `Static Site` manual
+- `WEB_CENTRAL_BACKEND_BASE_URL=https://voithos-backend.onrender.com`
+- no backend, configurar `PUBLIC_APP_BASE_URL=https://voithos-platform-web2.onrender.com`
+- no backend, configurar `PUBLIC_APP_ALLOWED_ORIGINS=https://voithos-platform-web2.onrender.com`
 
 ## Parte 5. Regras criticas
 
@@ -109,13 +111,13 @@ Observacao:
 ## Parte 6. Criar os servicos
 
 1. clicar em `Apply`
-2. aguardar a Render criar os 3 servicos
+2. aguardar a Render criar `voithos-whatsapp-ng` e `voithos-backend`
 3. abrir primeiro `voithos-whatsapp-ng`
 4. esperar o health ficar verde
 5. abrir `voithos-backend`
 6. esperar o health ficar verde
-7. abrir `voithos-web`
-8. abrir a URL publica
+7. criar o frontend web manual como `Static Site`
+8. abrir a URL publica do frontend web
 
 ## Parte 7. Teste minimo logo apos deploy
 
@@ -144,6 +146,7 @@ Revisar:
 
 - `WEB_CENTRAL_BACKEND_BASE_URL`
 - `PUBLIC_APP_BASE_URL`
+- `PUBLIC_APP_ALLOWED_ORIGINS`
 - CORS do backend
 
 ### Se o backend subir mas o NG falhar

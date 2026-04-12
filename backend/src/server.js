@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const { AppError } = require('./errors/AppError');
 const clinicRoutes = require('./routes/clinicRoutes');
 const campaignRoutes = require('./routes/campaignRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -47,14 +48,23 @@ const corsOriginAllowlist = new Set([
   'http://localhost:4000',
   'http://127.0.0.1:4000',
 ]);
-const publicAppBaseUrl = String(process.env.PUBLIC_APP_BASE_URL || '').trim();
-if (publicAppBaseUrl) {
-  try {
-    corsOriginAllowlist.add(new URL(publicAppBaseUrl).origin);
-  } catch (_error) {
-    console.warn('[backend] invalid PUBLIC_APP_BASE_URL for CORS allowlist');
-  }
-}
+
+const addCorsOrigins = (rawValue, label) => {
+  String(rawValue || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((value) => {
+      try {
+        corsOriginAllowlist.add(new URL(value).origin);
+      } catch (_error) {
+        console.warn(`[backend] invalid ${label} entry for CORS allowlist`);
+      }
+    });
+};
+
+addCorsOrigins(process.env.PUBLIC_APP_BASE_URL, 'PUBLIC_APP_BASE_URL');
+addCorsOrigins(process.env.PUBLIC_APP_ALLOWED_ORIGINS, 'PUBLIC_APP_ALLOWED_ORIGINS');
 
 app.use(cors({
   origin(origin, callback) {
@@ -70,7 +80,7 @@ app.use(cors({
       callback(null, true);
       return;
     }
-    callback(new Error('CORS origin blocked'));
+    callback(new AppError(403, 'CORS_ORIGIN_BLOCKED', `CORS origin blocked: ${origin}`));
   },
   credentials: true,
 }));
