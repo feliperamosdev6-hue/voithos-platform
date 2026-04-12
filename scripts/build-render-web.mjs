@@ -24,6 +24,10 @@ const rootExtensions = new Set([
   '.webmanifest',
 ]);
 
+const publicRootFiles = new Set([
+  'Procedimentos.json',
+]);
+
 const copyDirectories = [
   'assets',
   'shared',
@@ -91,7 +95,7 @@ const copyRootFiles = async () => {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     const ext = path.extname(entry.name).toLowerCase();
-    if (!rootExtensions.has(ext)) continue;
+    if (!rootExtensions.has(ext) && !publicRootFiles.has(entry.name)) continue;
     const sourcePath = path.join(repoRoot, entry.name);
     const targetPath = path.join(outDir, entry.name);
     if (ext === '.html') {

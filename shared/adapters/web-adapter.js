@@ -3,6 +3,8 @@
   const WEB_SESSION_TOKEN_KEY = 'voithos.web.session.token';
   const WEB_SESSION_USER_KEY = 'voithos.web.session.user';
   const WEB_SESSION_CLINIC_KEY = 'voithos.web.session.clinic';
+  let staticProcedureCatalogCache = null;
+  let staticProcedureCatalogLoading = null;
 
   const cleanText = (value) => String(value || '').trim();
   const getBaseUrl = () => cleanText(window.__APP_API_BASE__ || DEFAULT_BASE || '').replace(/\/+$/, '');
@@ -256,16 +258,66 @@
     categoria: cleanText(item?.categoria || item?.category || ''),
     ativo: item?.ativo !== false,
   });
+  const extractProcedureCatalogItems = (payload = null) => {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.servicos)) return payload.servicos;
+    if (Array.isArray(payload?.procedimentos)) return payload.procedimentos;
+    return [];
+  };
+  const getProcedureCatalogKey = (item = {}) => cleanText(item?.codigo || item?.id || item?.nome).toLowerCase();
+  const sanitizeProcedureOverrides = (items = []) => (
+    (Array.isArray(items) ? items : [])
+      .map((item) => normalizeProcedureItem(item))
+      .filter((item) => cleanText(item.codigo || item.id))
+  );
+  const isSameProcedureDefinition = (left = {}, right = {}) => (
+    cleanText(left?.codigo || left?.id).toLowerCase() === cleanText(right?.codigo || right?.id).toLowerCase()
+    && cleanText(left?.nome) === cleanText(right?.nome)
+    && Number(left?.preco ?? 0) === Number(right?.preco ?? 0)
+    && cleanText(left?.categoria) === cleanText(right?.categoria)
+    && left?.ativo !== false
+    && right?.ativo !== false
+  );
   const mergeProcedureCatalog = (base = [], custom = []) => {
-    const map = new Map();
-    [...(Array.isArray(base) ? base : []), ...(Array.isArray(custom) ? custom : [])]
+    const overrideMap = new Map();
+    sanitizeProcedureOverrides(custom).forEach((item) => {
+      overrideMap.set(getProcedureCatalogKey(item), item);
+    });
+
+    const merged = [];
+    (Array.isArray(base) ? base : [])
       .map((item) => normalizeProcedureItem(item))
       .filter((item) => item.nome)
       .forEach((item) => {
-        const key = cleanText(item.codigo || item.id || item.nome).toLowerCase();
-        map.set(key, item);
+        const key = getProcedureCatalogKey(item);
+        const override = overrideMap.get(key);
+        if (override?.ativo === false) {
+          overrideMap.delete(key);
+          return;
+        }
+        merged.push({
+          ...item,
+          ...override,
+          id: cleanText(override?.id || item.id || item.codigo || createLocalId('proc')),
+          codigo: cleanText(override?.codigo || item.codigo || override?.id),
+          nome: cleanText(override?.nome || item.nome || 'Procedimento'),
+          preco: Number(override?.preco ?? item.preco ?? 0) || 0,
+          categoria: cleanText(override?.categoria || item.categoria),
+          ativo: true,
+          origem: 'base',
+        });
+        overrideMap.delete(key);
       });
-    return Array.from(map.values());
+
+    overrideMap.forEach((item) => {
+      if (item?.ativo === false || !item?.nome) return;
+      merged.push({
+        ...item,
+        origem: 'custom',
+      });
+    });
+
+    return merged.sort((left, right) => String(left?.nome || '').localeCompare(String(right?.nome || ''), 'pt-BR', { sensitivity: 'base' }));
   };
   const buildDocumentPreviewMarkup = (document = {}) => {
     const data = document?.data && typeof document.data === 'object' ? document.data : {};
@@ -538,17 +590,35 @@
     return settings;
   };
   const fetchStaticProcedureCatalog = async () => {
-    const candidates = ['Procedimentos.json', './Procedimentos.json', '/Procedimentos.json'];
-    for (const candidate of candidates) {
-      try {
-        const response = await fetch(candidate, { method: 'GET' });
-        if (!response.ok) continue;
-        const payload = await response.json();
-        if (Array.isArray(payload)) return payload.map(normalizeProcedureItem);
-      } catch (_error) {
-      }
+    if (Array.isArray(staticProcedureCatalogCache)) {
+      return staticProcedureCatalogCache;
     }
-    return [];
+    if (staticProcedureCatalogLoading) {
+      return staticProcedureCatalogLoading;
+    }
+    const candidates = ['Procedimentos.json', './Procedimentos.json', '/Procedimentos.json'];
+    staticProcedureCatalogLoading = (async () => {
+      for (const candidate of candidates) {
+        try {
+          const response = await fetch(candidate, { method: 'GET' });
+          if (!response.ok) continue;
+          const payload = await response.json();
+          const items = extractProcedureCatalogItems(payload);
+          if (items.length) {
+            staticProcedureCatalogCache = items.map((item) => normalizeProcedureItem(item));
+            return staticProcedureCatalogCache;
+          }
+        } catch (_error) {
+        }
+      }
+      staticProcedureCatalogCache = [];
+      return staticProcedureCatalogCache;
+    })();
+    try {
+      return await staticProcedureCatalogLoading;
+    } finally {
+      staticProcedureCatalogLoading = null;
+    }
   };
   const resolvePatientId = (payload = {}) => cleanText(payload?.patientId || payload?.prontuario || payload?.id);
   const buildDocumentRecord = ({
@@ -1566,29 +1636,60 @@
 
   const procedures = {
     list: async () => {
-      const settings = await getOperationalSettings();
-      const central = Array.isArray(settings?.proceduresCatalog) ? settings.proceduresCatalog : [];
-      const fallback = await fetchStaticProcedureCatalog();
-      return mergeProcedureCatalog(fallback, central);
+      const [settings, fallback] = await Promise.all([
+        getOperationalSettings(),
+        fetchStaticProcedureCatalog(),
+      ]);
+      const overrides = sanitizeProcedureOverrides(settings?.proceduresCatalog);
+      return mergeProcedureCatalog(fallback, overrides);
     },
     upsert: async (payload = {}) => {
-      const current = await procedures.list();
       const normalized = normalizeProcedureItem(payload);
-      const next = current.filter((item) => {
-        const sameCode = normalized.codigo && cleanText(item.codigo).toLowerCase() === cleanText(normalized.codigo).toLowerCase();
-        const sameId = cleanText(item.id) === cleanText(normalized.id);
-        return !(sameCode || sameId);
-      });
-      next.push(normalized);
+      const [settings, fallback] = await Promise.all([
+        getOperationalSettings(),
+        fetchStaticProcedureCatalog(),
+      ]);
+      const key = getProcedureCatalogKey(normalized);
+      const overrides = sanitizeProcedureOverrides(settings?.proceduresCatalog);
+      const baseMatch = (Array.isArray(fallback) ? fallback : [])
+        .map((item) => normalizeProcedureItem(item))
+        .find((item) => getProcedureCatalogKey(item) === key);
+      const next = overrides.filter((item) => getProcedureCatalogKey(item) !== key);
+
+      if (!baseMatch || !isSameProcedureDefinition(normalized, baseMatch)) {
+        next.push({
+          ...normalized,
+          ativo: true,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       const updated = await patchOperationalSettings({ proceduresCatalog: next });
-      return mergeProcedureCatalog([], updated?.proceduresCatalog || []);
+      return mergeProcedureCatalog(fallback, updated?.proceduresCatalog || next);
     },
     remove: async (payload = {}) => {
-      const current = await procedures.list();
       const normalizedId = cleanText(payload?.id || payload?.codigo || payload);
-      const next = current.filter((item) => cleanText(item.id || item.codigo || item.nome) !== normalizedId);
+      const [settings, fallback] = await Promise.all([
+        getOperationalSettings(),
+        fetchStaticProcedureCatalog(),
+      ]);
+      const key = normalizedId.toLowerCase();
+      const overrides = sanitizeProcedureOverrides(settings?.proceduresCatalog);
+      const next = overrides.filter((item) => getProcedureCatalogKey(item) !== key);
+      const existsInBase = (Array.isArray(fallback) ? fallback : [])
+        .map((item) => normalizeProcedureItem(item))
+        .some((item) => getProcedureCatalogKey(item) === key);
+
+      if (existsInBase) {
+        next.push({
+          codigo: normalizedId,
+          ativo: false,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
       const updated = await patchOperationalSettings({ proceduresCatalog: next });
-      return mergeProcedureCatalog([], updated?.proceduresCatalog || []);
+      return mergeProcedureCatalog(fallback, updated?.proceduresCatalog || next);
     },
   };
 
