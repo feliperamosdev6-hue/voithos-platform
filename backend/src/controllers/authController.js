@@ -1,6 +1,7 @@
 const { AppError } = require('../errors/AppError');
 const { authService } = require('../services/authService');
 const { clinicService } = require('../services/clinicService');
+const { requireSuperAdmin } = require('../utils/accessControl');
 
 const login = async (req, res, next) => {
   try {
@@ -85,10 +86,28 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+const impersonateClinicAdmin = async (req, res, next) => {
+  try {
+    if (!req.auth) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+    }
+    requireSuperAdmin(req);
+
+    const data = await authService.impersonateClinicAdmin(req.body?.clinicId || req.query?.clinicId || '');
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   login,
   signup,
   me,
   logout,
   changePassword,
+  impersonateClinicAdmin,
 };

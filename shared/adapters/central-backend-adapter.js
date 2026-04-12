@@ -603,7 +603,10 @@ const createCentralBackendAdapter = (options = {}) => {
   const listClinicsPublic = async () => {
     const response = await withTimeout(`${config.baseUrl}/clinics`, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...(config.internalServiceToken ? { 'x-service-token': config.internalServiceToken } : {}),
+      },
     });
     await ensureOk(response);
     const payload = await response.json();

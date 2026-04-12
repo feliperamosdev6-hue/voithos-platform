@@ -8,6 +8,16 @@ const extractBearerToken = (authorizationHeader) => {
   return match ? String(match[1] || '').trim() : '';
 };
 
+const attachAuthContext = (req, token, user) => {
+  req.auth = {
+    token,
+    userId: user.id,
+    clinicId: user.clinicId,
+    role: user.role,
+    isClinicAdmin: user.isClinicAdmin === true,
+  };
+};
+
 const authenticate = async (req, _res, next) => {
   try {
     const token = extractBearerToken(req.header('authorization'));
@@ -20,13 +30,7 @@ const authenticate = async (req, _res, next) => {
       throw new AppError(401, 'UNAUTHORIZED', 'Invalid or expired session.');
     }
 
-    req.auth = {
-      token,
-      userId: user.id,
-      clinicId: user.clinicId,
-      role: user.role,
-      isClinicAdmin: user.isClinicAdmin === true,
-    };
+    attachAuthContext(req, token, user);
 
     return next();
   } catch (error) {
@@ -34,4 +38,8 @@ const authenticate = async (req, _res, next) => {
   }
 };
 
-module.exports = { authenticate };
+module.exports = {
+  authenticate,
+  attachAuthContext,
+  extractBearerToken,
+};

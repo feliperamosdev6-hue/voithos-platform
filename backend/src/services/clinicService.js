@@ -386,6 +386,13 @@ const validateDocument = (documentType, documentNumber) => {
   };
 };
 
+const inferDocumentType = (documentNumber) => {
+  const normalizedNumber = normalizeDocument(documentNumber);
+  if (normalizedNumber.length === 11) return 'CPF';
+  if (normalizedNumber.length === 14) return 'CNPJ';
+  return '';
+};
+
 const clinicService = {
   list: async () => {
     try {
@@ -668,55 +675,94 @@ const clinicService = {
 
   createWithAdmin: async ({ clinic = {}, admin = {} } = {}) => {
     const nomeFantasia = String(clinic?.nomeFantasia || '').trim();
+    const razaoSocial = String(clinic?.razaoSocial || '').trim() || nomeFantasia;
+    const clinicEmail = normalizeEmail(clinic?.emailClinica || clinic?.email || '');
+    const clinicPhone = String(clinic?.telefone || clinic?.telefoneComercial || '').trim();
+    const clinicWhatsapp = String(clinic?.whatsapp || '').trim();
+    const clinicAddress = String(clinic?.endereco || '').trim();
     const adminNome = String(admin?.nome || '').trim();
-    const adminEmail = String(admin?.email || '').trim().toLowerCase();
-    if (!nomeFantasia || !adminNome || !adminEmail) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'clinic.nomeFantasia, admin.nome and admin.email are required.');
+    const adminEmail = normalizeEmail(admin?.email || '');
+    const document = validateDocument(
+      inferDocumentType(clinic?.cnpjOuCpf || clinic?.cnpjCpf || ''),
+      clinic?.cnpjOuCpf || clinic?.cnpjCpf || ''
+    );
+
+    if (!nomeFantasia || !adminNome || !adminEmail || !document.documentNumber) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinic.nomeFantasia, clinic.cnpjOuCpf, admin.nome and admin.email are required.');
     }
 
-    const duplicatedClinic = clinic?.emailClinica
-      ? await clinicRepository.findByEmail(String(clinic.emailClinica || '').trim().toLowerCase())
-      : null;
-    if (duplicatedClinic) {
-      throw new AppError(409, 'CLINIC_EMAIL_EXISTS', 'Clinic email already exists.');
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const duplicatedClinicByDocument = await tx.clinic.findFirst({
+          where: { cnpjCpf: document.documentNumber },
+        });
+        if (duplicatedClinicByDocument) {
+          throw new AppError(409, 'CLINIC_DOCUMENT_EXISTS', 'CPF/CNPJ already exists.');
+        }
+
+        if (clinicEmail) {
+          const duplicatedClinicByEmail = await tx.clinic.findFirst({
+            where: { email: clinicEmail },
+          });
+          if (duplicatedClinicByEmail) {
+            throw new AppError(409, 'CLINIC_EMAIL_EXISTS', 'Clinic email already exists.');
+          }
+        }
+
+        const duplicatedUser = await tx.user.findUnique({
+          where: { email: adminEmail },
+        });
+        if (duplicatedUser) {
+          throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
+        }
+
+        const createdClinic = await tx.clinic.create({
+          data: {
+            nomeFantasia,
+            razaoSocial,
+            cnpjCpf: document.documentNumber,
+            email: clinicEmail || null,
+            telefoneComercial: clinicPhone || null,
+            endereco: clinicAddress || null,
+            operationalSettings: mergeOperationalSettings(getDefaultOperationalSettings(), {
+              clinicProfile: {
+                whatsapp: clinicWhatsapp,
+              },
+            }),
+          },
+        });
+
+        const tempPassword = crypto.randomBytes(6).toString('hex');
+        const passwordHash = await authService.hashPassword(tempPassword);
+        await tx.user.create({
+          data: {
+            clinicId: createdClinic.id,
+            nome: adminNome,
+            email: adminEmail,
+            passwordHash,
+            role: 'ADMIN',
+            isClinicAdmin: true,
+            ativo: true,
+          },
+        });
+
+        return {
+          clinic: {
+            ...createdClinic,
+            clinicId: createdClinic.id,
+          },
+          credentials: {
+            email: adminEmail,
+            senhaTemporaria: tempPassword,
+          },
+        };
+      });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
     }
-
-    const duplicatedUser = await userRepository.findByEmail(adminEmail);
-    if (duplicatedUser) {
-      throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
-    }
-
-    const createdClinic = await clinicRepository.create({
-      nomeFantasia,
-      razaoSocial: clinic?.razaoSocial || nomeFantasia,
-      cnpjCpf: clinic?.cnpjOuCpf || clinic?.cnpjCpf || '',
-      email: clinic?.emailClinica || clinic?.email || '',
-      telefoneComercial: clinic?.telefone || clinic?.telefoneComercial || '',
-      endereco: clinic?.endereco || '',
-    });
-
-    const tempPassword = crypto.randomBytes(6).toString('hex');
-    const passwordHash = await authService.hashPassword(tempPassword);
-    await userRepository.create({
-      clinicId: createdClinic.id,
-      nome: adminNome,
-      email: adminEmail,
-      passwordHash,
-      role: 'ADMIN',
-      isClinicAdmin: true,
-      ativo: true,
-    });
-
-    return {
-      clinic: {
-        ...createdClinic,
-        clinicId: createdClinic.id,
-      },
-      credentials: {
-        email: adminEmail,
-        senhaTemporaria: tempPassword,
-      },
-    };
   },
 
   publicSignup: async (payload = {}) => {

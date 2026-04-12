@@ -1,7 +1,9 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { authenticateOptional } = require('../middlewares/authenticateOptional');
 const {
   listClinics,
+  createClinicBootstrap,
   getMyOperationalSettings,
   updateMyOperationalSettings,
   getMyClinicProfile,
@@ -15,8 +17,9 @@ const {
 
 const router = express.Router();
 
-router.get('/', listClinics);
+router.get('/', authenticateOptional, listClinics);
 router.use(authenticate);
+router.post('/bootstrap', createClinicBootstrap);
 router.get('/me/operational-settings', getMyOperationalSettings);
 router.patch('/me/operational-settings', updateMyOperationalSettings);
 router.get('/me/profile', getMyClinicProfile);

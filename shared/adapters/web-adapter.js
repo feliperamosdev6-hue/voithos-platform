@@ -422,6 +422,21 @@
     clinic,
   });
 
+  const mapClinicSummary = (clinic = {}) => ({
+    ...clinic,
+    id: cleanText(clinic?.id || clinic?.clinicId),
+    clinicId: cleanText(clinic?.clinicId || clinic?.id),
+    nomeFantasia: cleanText(clinic?.nomeFantasia),
+    razaoSocial: cleanText(clinic?.razaoSocial),
+    cnpjOuCpf: cleanText(clinic?.cnpjOuCpf || clinic?.cnpjCpf),
+    cnpjCpf: cleanText(clinic?.cnpjCpf || clinic?.cnpjOuCpf),
+    emailClinica: cleanText(clinic?.emailClinica || clinic?.email),
+    email: cleanText(clinic?.email || clinic?.emailClinica),
+    telefone: cleanText(clinic?.telefone || clinic?.telefoneComercial),
+    telefoneComercial: cleanText(clinic?.telefoneComercial || clinic?.telefone),
+    status: cleanText(clinic?.status || 'active').toLowerCase() || 'active',
+  });
+
   const buildAuthContext = (user = null, clinic = null) => ({
     accessProfile: user?.tipo === 'super_admin' ? 'SUPERADMIN' : user ? 'AUTHENTICATED' : 'ANONYMOUS',
     tenantScope: user?.tipo === 'super_admin' ? 'global' : user ? 'clinic' : 'anonymous',
@@ -703,7 +718,11 @@
       try {
         const user = await request('GET', '/auth/me', null, { auth: true, token });
         const clinic = getStoredClinic();
-        const mappedUser = mapCentralUserToDesktop(user || {}, clinic);
+        const storedUser = getStoredUser();
+        const mappedUser = {
+          ...mapCentralUserToDesktop(user || {}, clinic),
+          isImpersonatedSession: storedUser?.isImpersonatedSession === true && cleanText(storedUser?.id) === cleanText(user?.id),
+        };
         persistWebSession({ token, user: mappedUser, clinic });
         return mappedUser;
       } catch (error) {
@@ -719,7 +738,10 @@
       if (!user) return buildAuthContext(null, null);
       try {
         const clinic = await clinicApi.get();
-        const normalizedUser = mapCentralUserToDesktop(user, clinic);
+        const normalizedUser = {
+          ...mapCentralUserToDesktop(user, clinic),
+          isImpersonatedSession: user?.isImpersonatedSession === true,
+        };
         persistWebSession({ token: getStoredToken(), user: normalizedUser, clinic });
         return buildAuthContext(normalizedUser, clinic);
       } catch (_error) {
@@ -738,9 +760,33 @@
       }, { auth: true });
       return { success: result?.changed === true || result?.success === true };
     },
-    impersonateClinic: async () => notImplemented('auth.impersonateClinic'),
-    listClinics: async () => request('GET', '/clinics', null, { auth: false }),
-    createClinic: async () => notImplemented('auth.createClinic'),
+    impersonateClinic: async (clinicId) => {
+      const result = await request('POST', '/auth/impersonate-clinic-admin', {
+        clinicId: cleanText(clinicId),
+      }, { auth: true });
+      const token = cleanText(result?.token);
+      if (!token) {
+        throw new Error('Token de sessao da clinica nao retornado pelo backend.');
+      }
+      const clinic = await request('GET', '/clinics/me/profile', null, { auth: true, token }).catch(() => null);
+      const mappedUser = {
+        ...mapCentralUserToDesktop(result?.user || {}, clinic),
+        isImpersonatedSession: true,
+      };
+      persistWebSession({ token, user: mappedUser, clinic });
+      return { success: true, user: mappedUser, clinic, token };
+    },
+    listClinics: async () => {
+      const data = await request('GET', '/clinics', null, { auth: true });
+      return (Array.isArray(data) ? data : []).map(mapClinicSummary);
+    },
+    createClinic: async (payload = {}) => {
+      const result = await request('POST', '/clinics/bootstrap', payload || {}, { auth: true });
+      return {
+        ...result,
+        clinic: mapClinicSummary(result?.clinic || {}),
+      };
+    },
   };
 
   const patients = {

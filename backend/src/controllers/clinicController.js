@@ -1,12 +1,33 @@
 const { clinicService } = require('../services/clinicService');
 const { campaignService } = require('../services/campaignService');
+const { AppError } = require('../errors/AppError');
+const { isInternalServiceRequest, requireSuperAdmin } = require('../utils/accessControl');
 
-const listClinics = async (_req, res, next) => {
+const listClinics = async (req, res, next) => {
   try {
+    if (!isInternalServiceRequest(req)) {
+      if (!req?.auth) {
+        throw new AppError(401, 'UNAUTHORIZED', 'Authentication required.');
+      }
+      requireSuperAdmin(req);
+    }
     const clinics = await clinicService.list();
     return res.status(200).json({
       ok: true,
       data: clinics,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createClinicBootstrap = async (req, res, next) => {
+  try {
+    requireSuperAdmin(req);
+    const data = await clinicService.createWithAdmin(req.body || {});
+    return res.status(201).json({
+      ok: true,
+      data,
     });
   } catch (error) {
     return next(error);
@@ -136,6 +157,7 @@ const deleteMyCampaign = async (req, res, next) => {
 
 module.exports = {
   listClinics,
+  createClinicBootstrap,
   getMyOperationalSettings,
   updateMyOperationalSettings,
   getMyClinicProfile,

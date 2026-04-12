@@ -414,7 +414,9 @@ async function main() {
   const backendHealth = await fetchJson(buildUrl(backendBaseUrl, '/health'));
   const backendApiHealth = backendHealth.ok ? null : await fetchJson(buildUrl(backendBaseUrl, '/api/health'));
   const backendClinics = (backendHealth.ok || backendApiHealth?.ok)
-    ? await fetchJson(buildUrl(backendBaseUrl, '/clinics'))
+    ? await fetchJson(buildUrl(backendBaseUrl, '/clinics'), {
+        headers: backendInternalToken ? { 'x-service-token': backendInternalToken } : {},
+      })
     : { ok: false, status: 0, error: 'backend unavailable', data: null };
   const ngHealth = await fetchJson(buildUrl(ngBaseUrl, '/health'));
   const overview = serviceToken
