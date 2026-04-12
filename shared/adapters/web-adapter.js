@@ -269,6 +269,33 @@
     month: 'long',
     year: 'numeric',
   }).format(toDisplayDate(value));
+  const formatDocumentNumberPtBr = (value) => {
+    const digits = normalizeDigits(value).slice(0, 14);
+    if (!digits) return '';
+    if (digits.length <= 11) {
+      return digits
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
+    }
+    return digits
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4')
+      .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d{1,2})$/, '$1.$2.$3/$4-$5');
+  };
+  const formatPhonePtBr = (value) => {
+    const digits = normalizeDigits(value).slice(0, 11);
+    if (!digits) return '';
+    if (digits.length <= 10) {
+      return digits
+        .replace(/^(\d{2})(\d)/, '($1) $2')
+        .replace(/^(\d{2})\s(\d{4})(\d)/, '($1) $2-$3');
+    }
+    return digits
+      .replace(/^(\d{2})(\d)/, '($1) $2')
+      .replace(/^(\d{2})\s(\d{5})(\d)/, '($1) $2-$3');
+  };
   const normalizeReceituarioFavorites = (items = []) => (Array.isArray(items) ? items : [])
     .map((item) => ({
       nome: cleanText(item?.nome || item?.medicamento),
@@ -332,11 +359,12 @@
       ...raw,
       id: cleanText(raw?.id || raw?.clinicId),
       clinicId: cleanText(raw?.clinicId || raw?.id),
-      nomeFantasia: cleanText(raw?.nomeFantasia),
-      razaoSocial: cleanText(raw?.razaoSocial),
+      nomeFantasia: cleanText(raw?.nomeFantasia || raw?.nomeClinica),
+      razaoSocial: cleanText(raw?.razaoSocial || raw?.nomeFantasia || raw?.nomeClinica),
       nomeClinica: cleanText(raw?.nomeClinica || raw?.nomeFantasia || raw?.razaoSocial),
-      cnpjOuCpf: cleanText(raw?.cnpjOuCpf || raw?.cnpjCpf),
-      cnpjCpf: cleanText(raw?.cnpjCpf || raw?.cnpjOuCpf),
+      cnpj: cleanText(raw?.cnpj || raw?.cnpjCpf || raw?.cnpjOuCpf),
+      cnpjOuCpf: cleanText(raw?.cnpjOuCpf || raw?.cnpjCpf || raw?.cnpj),
+      cnpjCpf: cleanText(raw?.cnpjCpf || raw?.cnpjOuCpf || raw?.cnpj),
       emailClinica: cleanText(raw?.emailClinica || raw?.email),
       email: cleanText(raw?.email || raw?.emailClinica),
       telefone: cleanText(raw?.telefone || raw?.telefoneComercial),
@@ -525,11 +553,13 @@
     const normalizedClinic = normalizeClinicSessionData(clinic);
     const logoDataUrl = cleanText(normalizedClinic?.logoData || normalizedClinic?.logoDataUrlCache || normalizedClinic?.logoDataUrl);
     const nome = cleanText(normalizedClinic?.razaoSocial || normalizedClinic?.nomeFantasia || normalizedClinic?.nomeClinica) || 'Clinica';
-    const cnpj = cleanText(normalizedClinic?.cnpjCpf || normalizedClinic?.cnpjOuCpf);
-    const telefone = cleanText(normalizedClinic?.telefone || normalizedClinic?.telefoneComercial);
+    const cnpj = formatDocumentNumberPtBr(normalizedClinic?.cnpjCpf || normalizedClinic?.cnpjOuCpf || normalizedClinic?.cnpj);
+    const telefone = formatPhonePtBr(normalizedClinic?.telefone || normalizedClinic?.telefoneComercial);
     const email = cleanText(normalizedClinic?.email || normalizedClinic?.emailClinica);
     const responsavelTecnico = cleanText(normalizedClinic?.responsavelTecnico);
     const cro = cleanText(normalizedClinic?.cro);
+    const professionalName = cleanText(clinic?.professionalName);
+    const professionalCro = cleanText(clinic?.professionalCro);
     const endereco = normalizedClinic?.endereco && typeof normalizedClinic.endereco === 'object'
       ? normalizedClinic.endereco
       : {};
@@ -549,6 +579,10 @@
       responsavelTecnico ? `Responsavel tecnico: ${responsavelTecnico}` : '',
       cro ? `CRO: ${cro}` : '',
     ].filter(Boolean).join(' | ');
+    const professionalLine = [
+      professionalName ? `Dentista emissor: ${professionalName}` : '',
+      professionalCro ? `CRO emissor: ${professionalCro}` : '',
+    ].filter(Boolean).join(' | ');
     return `
       <header class="vx-brand-header">
         <div class="vx-brand-logo-box">
@@ -559,6 +593,7 @@
           ${contactLine ? `<p class="vx-brand-line">${escapeHtml(contactLine)}</p>` : ''}
           ${addressLine ? `<p class="vx-brand-line">${escapeHtml(addressLine)}</p>` : ''}
           ${technicalLine ? `<p class="vx-brand-line">${escapeHtml(technicalLine)}</p>` : ''}
+          ${professionalLine ? `<p class="vx-brand-line">${escapeHtml(professionalLine)}</p>` : ''}
         </div>
       </header>
     `;
@@ -591,7 +626,11 @@
       title: document?.title || document?.titulo || 'Receita',
       body: `
         <article class="vx-medical-doc vx-medical-doc--receita">
-          ${buildClinicDocumentHeaderMarkup(clinic)}
+          ${buildClinicDocumentHeaderMarkup({
+            ...clinic,
+            professionalName: data.profissionalNome || document?.createdBy?.nome,
+            professionalCro: receituario.assinaturaRegistro,
+          })}
           ${receituario.cabecalho ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.cabecalho))}</div></div>` : ''}
           <div class="doc-head">
             <h1>Receita</h1>
@@ -653,7 +692,11 @@
       title: document?.title || document?.titulo || 'Atestado',
       body: `
         <article class="vx-medical-doc vx-medical-doc--atestado">
-          ${buildClinicDocumentHeaderMarkup(clinic)}
+          ${buildClinicDocumentHeaderMarkup({
+            ...clinic,
+            professionalName: data.profissionalNome || document?.createdBy?.nome,
+            professionalCro: receituario.assinaturaRegistro,
+          })}
           <div class="doc-head">
             <h1>Atestado</h1>
           </div>
@@ -975,7 +1018,7 @@
     const profilePatch = {
       nomeFantasia: cleanText(raw?.nomeFantasia || raw?.nomeClinica || current?.nomeFantasia || current?.nomeClinica),
       razaoSocial: cleanText(raw?.razaoSocial || current?.razaoSocial),
-      cnpj: cleanText(raw?.cnpj || raw?.cnpjCpf || raw?.cnpjOuCpf || current?.cnpjCpf || current?.cnpjOuCpf),
+      cnpj: cleanText(raw?.cnpj || raw?.cnpjCpf || raw?.cnpjOuCpf || current?.cnpj || current?.cnpjCpf || current?.cnpjOuCpf),
       email: cleanText(raw?.email || raw?.emailClinica || current?.email || current?.emailClinica),
       telefone: cleanText(raw?.telefone || raw?.telefoneComercial || current?.telefone || current?.telefoneComercial),
       whatsapp: cleanText(raw?.whatsapp || current?.whatsapp || currentProfile?.whatsapp),
