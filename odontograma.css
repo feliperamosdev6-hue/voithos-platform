@@ -1,0 +1,297 @@
+body {
+  margin: 0;
+  overflow-x: hidden;
+  font-family: Arial, sans-serif;
+}
+
+:root {
+  --tooth-outline: #1fa87a;
+  --tooth-outline-hover: #27c08b;
+  --tooth-outline-fill-selected: rgba(126, 72, 192, 0.28);
+  --tooth-outline-width: 1.35;
+  --tooth-outline-width-hover: 1.7;
+  --tooth-outline-width-selected: 2.2;
+  --tooth-outline-shadow: rgba(0, 0, 0, 0.28);
+  --tooth-outline-shadow-blur: 2.4px;
+  --tooth-outline-shadow-offset-y: 0.9px;
+  --tooth-outline-shadow-hover: rgba(0, 0, 0, 0.38);
+  --tooth-outline-shadow-hover-blur: 3.4px;
+  --tooth-outline-shadow-hover-offset-y: 1.2px;
+  --tooth-selected-bg: rgba(126, 72, 192, 0.12);
+  --tooth-selected-glow: rgba(126, 72, 192, 0.22);
+}
+
+:root {
+  --tooth-w: 37px;
+  --tooth-h: 47px;
+  --tooth-gap: 5px;
+}
+
+#odontograma-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 8px 6px;
+  max-width: calc((16 * var(--tooth-w)) + (15 * var(--tooth-gap)) + 16px);
+  margin: 0 auto;
+}
+
+.odontograma-linha {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.odontograma-linha.inferior {
+  margin-top: 10px;
+}
+
+.quadrante {
+  display: grid;
+  grid-template-columns: repeat(16, var(--tooth-w));
+  column-gap: var(--tooth-gap);
+  justify-content: center;
+  align-items: start;
+}
+
+.linha-meio {
+  width: 100%;
+  border-top: 2px dotted rgba(0, 0, 0, 0.18);
+  display: none;
+}
+
+.tooth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: var(--tooth-w);
+  cursor: pointer;
+  position: relative;
+}
+
+.tooth-label {
+  display: block;
+  width: 100%;
+  min-height: 10px;
+  line-height: 10px;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--tooth-outline);
+  margin: 0 0 2px;
+  position: relative;
+  z-index: 2;
+}
+
+.tooth svg {
+  width: var(--tooth-w);
+  height: var(--tooth-h);
+  display: block;
+  overflow: visible;
+  transform: translateY(var(--tooth-offset-y, 0px)) scale(var(--tooth-scale, 1));
+  transform-origin: center;
+}
+
+.tooth svg {
+  filter: drop-shadow(0 var(--tooth-outline-shadow-offset-y) var(--tooth-outline-shadow-blur) var(--tooth-outline-shadow));
+  transition: filter 160ms ease;
+}
+
+.odontograma-linha.inferior .tooth svg {
+  transform: translateY(var(--tooth-offset-y, 0px)) scaleY(-1) scale(var(--tooth-scale, 1));
+  transform-origin: center;
+}
+
+.tooth.tooth-molar {
+  --tooth-scale: 1.35;
+  --tooth-offset-y: 0px;
+}
+
+.odontograma-linha:not(.inferior) .tooth.tooth-molar {
+  --tooth-offset-y: 4px;
+}
+
+.odontograma-linha.inferior .tooth.tooth-molar {
+  --tooth-offset-y: -4px;
+}
+
+.tooth-outline {
+  vector-effect: non-scaling-stroke;
+  stroke: var(--tooth-outline);
+  stroke-width: var(--tooth-outline-width);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-miterlimit: 3;
+  shape-rendering: geometricPrecision;
+  transition: stroke 160ms ease, fill 160ms ease, stroke-width 160ms ease;
+}
+
+.tooth .tooth-fill {
+  fill: none;
+  stroke: none !important;
+  transition: fill 160ms ease;
+}
+
+.tooth .tooth-stroke {
+  vector-effect: non-scaling-stroke;
+  fill: none;
+  stroke: var(--tooth-outline);
+  stroke-width: var(--tooth-outline-width);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-miterlimit: 3;
+  shape-rendering: geometricPrecision;
+  transition: stroke 160ms ease, fill 160ms ease, stroke-width 160ms ease;
+}
+
+.face {
+  display: none;
+}
+
+.tooth:hover svg {
+  filter: drop-shadow(0 var(--tooth-outline-shadow-hover-offset-y) var(--tooth-outline-shadow-hover-blur) var(--tooth-outline-shadow-hover));
+}
+
+.tooth:hover .tooth-outline,
+.tooth:hover .tooth-stroke {
+  stroke: var(--tooth-outline-hover);
+  stroke-width: var(--tooth-outline-width-hover);
+}
+
+.tooth.is-selected .tooth-outline,
+.tooth.is-selected .tooth-stroke {
+  stroke: #1fa87a;
+  stroke-width: var(--tooth-outline-width-selected);
+}
+
+.tooth.is-selected .tooth-fill {
+  fill: var(--tooth-outline-fill-selected);
+}
+
+.tooth.is-selected .tooth-stroke {
+  fill: var(--tooth-outline-fill-selected);
+}
+
+.tooth.is-history-selection:not(.is-working-selection) .tooth-fill {
+  fill: rgba(126, 72, 192, 0.22);
+}
+
+.tooth.is-history-selection:not(.is-working-selection) .tooth-stroke {
+  fill: rgba(126, 72, 192, 0.22);
+}
+
+.tooth.is-history-selection:not(.is-working-selection) .tooth-outline,
+.tooth.is-history-selection:not(.is-working-selection) .tooth-stroke {
+  stroke: #7e48c0;
+  stroke-width: calc(var(--tooth-outline-width-selected) - 0.2);
+  opacity: 0.95;
+}
+
+.tooth.is-working-selection .tooth-fill {
+  fill: rgba(126, 72, 192, 0.38);
+}
+
+.tooth.is-working-selection .tooth-stroke {
+  fill: rgba(126, 72, 192, 0.38);
+}
+
+.tooth.is-working-selection .tooth-outline,
+.tooth.is-working-selection .tooth-stroke {
+  stroke: #7e48c0;
+  stroke-width: var(--tooth-outline-width-selected);
+  opacity: 1;
+  filter: none;
+}
+
+.tooth.is-working-selection svg {
+  filter: drop-shadow(0 0 0.5px rgba(126, 72, 192, 0.9))
+          drop-shadow(0 2px 8px rgba(126, 72, 192, 0.3));
+}
+
+.tooth.tooth-molar .tooth-outline,
+.tooth.tooth-molar .tooth-stroke {
+  stroke: #25b183 !important;
+  stroke-width: calc(var(--tooth-outline-width) / 1.35) !important;
+}
+
+.tooth.tooth-molar:hover .tooth-outline,
+.tooth.tooth-molar:hover .tooth-stroke {
+  stroke: #29ba89 !important;
+  stroke-width: calc(var(--tooth-outline-width-hover) / 1.35) !important;
+}
+
+.tooth.tooth-molar.is-selected .tooth-outline,
+.tooth.tooth-molar.is-selected .tooth-stroke,
+.tooth.tooth-molar.is-history-selection:not(.is-working-selection) .tooth-outline,
+.tooth.tooth-molar.is-history-selection:not(.is-working-selection) .tooth-stroke,
+.tooth.tooth-molar.is-working-selection .tooth-outline,
+.tooth.tooth-molar.is-working-selection .tooth-stroke {
+  stroke-width: calc(var(--tooth-outline-width-selected) / 1.35) !important;
+}
+
+.tooth.tooth-molar.is-history-selection:not(.is-working-selection) .tooth-outline,
+.tooth.tooth-molar.is-history-selection:not(.is-working-selection) .tooth-stroke,
+.tooth.tooth-molar.is-working-selection .tooth-outline,
+.tooth.tooth-molar.is-working-selection .tooth-stroke {
+  stroke: #7e48c0 !important;
+}
+
+:root {
+  --tooth-w-small: 37px;
+  --tooth-h-small: 45px;
+  --tooth-gap-small: 4px;
+}
+
+.odontograma-title {
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4b5563;
+  margin: 2px 0 2px;
+}
+
+.linha-meio--leve {
+  border-top-style: dashed;
+  opacity: 0.6;
+}
+
+.quadrante.infantil {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--tooth-gap-small);
+  width: 100%;
+}
+
+.quadrante.infantil .tooth.infantil {
+  margin: 0;
+  flex: 0 0 var(--tooth-w-small);
+}
+
+.tooth.infantil {
+  width: var(--tooth-w-small);
+}
+
+.tooth.infantil .tooth-label {
+  font-size: 9px;
+}
+
+.tooth.infantil svg {
+  width: var(--tooth-w-small);
+  height: var(--tooth-h-small);
+}
+
+.odontograma-linha.infantil {
+  justify-content: flex-start;
+}
+
+.odontograma-linha.infantil .quadrante.infantil {
+  justify-content: flex-start;
+  margin-left: 250px;
+}
