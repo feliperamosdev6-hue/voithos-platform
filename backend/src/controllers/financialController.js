@@ -91,6 +91,44 @@ const getPatientSummary = async (req, res, next) => {
   }
 };
 
+const getDashboard = async (req, res, next) => {
+  try {
+    const data = await financialService.getFinancialDashboard({
+      clinicId: getAuthenticatedClinicId(req),
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getMonthlySummary = async (req, res, next) => {
+  try {
+    const now = new Date();
+    const month = Number(req.query?.month || req.query?.mes || (now.getMonth() + 1));
+    const year = Number(req.query?.year || req.query?.ano || now.getFullYear());
+    const data = await financialService.getMonthlySummary({
+      clinicId: getAuthenticatedClinicId(req),
+      month,
+      year,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getReminders = async (req, res, next) => {
+  try {
+    const data = await financialService.getFinancialReminders({
+      clinicId: getAuthenticatedClinicId(req),
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   listAccounts,
   createAccount,
@@ -99,4 +137,7 @@ module.exports = {
   deleteAccount,
   registerPayment,
   getPatientSummary,
+  getDashboard,
+  getMonthlySummary,
+  getReminders,
 };

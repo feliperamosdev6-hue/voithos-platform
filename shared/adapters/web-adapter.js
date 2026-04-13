@@ -1813,8 +1813,20 @@
   };
 
   const finance = {
-    getDashboard: async () => notImplemented('finance.getDashboard'),
-    getReminders: async () => notImplemented('finance.getReminders'),
+    getDashboard: async () => {
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      const [dashboard, monthlySummary] = await Promise.all([
+        request('GET', '/financial/dashboard', null, { auth: true }).catch(() => null),
+        request('GET', `/financial/summary?month=${encodeURIComponent(String(month))}&year=${encodeURIComponent(String(year))}`, null, { auth: true }).catch(() => null),
+      ]);
+      return {
+        ...(dashboard || {}),
+        monthlySummary: monthlySummary || null,
+      };
+    },
+    getReminders: async () => request('GET', '/financial/reminders', null, { auth: true }),
     list: async ({ patientId } = {}) => {
       const query = patientId ? `?patientId=${encodeURIComponent(cleanText(patientId))}` : '';
       return request('GET', `/financial/accounts${query}`, null, { auth: true });

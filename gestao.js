@@ -1086,7 +1086,12 @@
     try {
       const isAdmin = await ensureAdmin();
       if (!isAdmin) return;
-      const dashRaw = await financeApi.getDashboard?.();
+      let dashRaw = null;
+      try {
+        dashRaw = await financeApi.getDashboard?.();
+      } catch (dashboardError) {
+        console.warn('Falha ao carregar dashboard financeiro consolidado. Seguindo com a lista de lancamentos.', dashboardError);
+      }
       const dash = dashRaw || {
         hoje: { receitas: 0, despesas: 0, saldo: 0 },
         semana: { receitas: 0, despesas: 0, saldo: 0 },

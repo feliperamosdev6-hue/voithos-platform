@@ -927,7 +927,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 : currentPeriod === 'semana'
                     ? 'na semana'
                     : 'no mes';
-            financeSub.textContent = receitas || despesas ? label : `Sem lancamentos ${labelText}`;
+            if (receitas || despesas) {
+                financeSub.textContent = label;
+            } else if ((Number(bloco.pendentes) || 0) > 0 || (Number(bloco.inadimplencia) || 0) > 0) {
+                financeSub.textContent = `A receber ${labelText}: ${formatCurrency(Number(bloco.pendentes) || 0)}`;
+            } else {
+                financeSub.textContent = `Sem lancamentos ${labelText}`;
+            }
         }
         if (financeChart) {
             financeChart.setAttribute('aria-label', `Resumo financeiro de ${String(financePeriodLabel[currentPeriod] || 'Mes').toLowerCase()}`);
@@ -952,14 +958,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (financeLoading) return;
         setFinanceLoading(true);
         try {
-            const [dash, reminders, list] = await Promise.all([
+            const [dashResult, remindersResult, listResult] = await Promise.allSettled([
                 canLoadDashboard ? financeApi.getDashboard() : Promise.resolve(null),
                 canLoadReminders ? financeApi.getReminders() : Promise.resolve(null),
                 canLoadList ? financeApi.list() : Promise.resolve([]),
             ]);
-            financeCache = dash || null;
-            financeListCache = Array.isArray(list) ? list : [];
-            financeRemindersCache = reminders || null;
+            financeCache = dashResult.status === 'fulfilled' ? (dashResult.value || null) : null;
+            financeListCache = listResult.status === 'fulfilled' && Array.isArray(listResult.value) ? listResult.value : [];
+            financeRemindersCache = remindersResult.status === 'fulfilled' ? (remindersResult.value || null) : null;
             renderFinanceMini();
             updateHomeFinancePanel(financeCache, financeRemindersCache, financeListCache);
             refreshNotifications();
