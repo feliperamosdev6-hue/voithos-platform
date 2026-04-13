@@ -89,6 +89,38 @@ const SUPPORTED_SEGMENTS = new Set([
   'plan_overdue',
 ]);
 
+const TENANT_SENSITIVE_KEYS = new Set([
+  'clinicId',
+  'campaignId',
+  'patientId',
+  'patientIds',
+  'audienceSnapshotId',
+  'snapshotId',
+  'batchId',
+  'dispatchId',
+  'audienceMemberId',
+]);
+
+const sanitizeTenantPayload = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeTenantPayload(item));
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value;
+
+  return Object.entries(value).reduce((acc, [key, nestedValue]) => {
+    if (TENANT_SENSITIVE_KEYS.has(String(key || '').trim())) return acc;
+    acc[key] = sanitizeTenantPayload(nestedValue);
+    return acc;
+  }, {});
+};
+
+const sanitizeAudienceFilters = (filters = null) => {
+  if (!filters || typeof filters !== 'object' || Array.isArray(filters)) return null;
+  const sanitized = sanitizeTenantPayload(filters);
+  return Object.keys(sanitized).length ? sanitized : null;
+};
+
 const normalizeTemplateMetadata = (template = {}) => {
   if (!template || typeof template !== 'object') return null;
   const normalizedId = cleanText(template?.id);
@@ -112,7 +144,7 @@ const normalizeTemplateMetadata = (template = {}) => {
 
 const normalizeCampaignMetadata = (payload = {}) => {
   const baseMetadata = payload?.metadata && typeof payload.metadata === 'object'
-    ? { ...payload.metadata }
+    ? sanitizeTenantPayload(payload.metadata)
     : {};
   const templateMetadata = normalizeTemplateMetadata({
     ...(baseMetadata?.template && typeof baseMetadata.template === 'object' ? baseMetadata.template : {}),
@@ -160,9 +192,8 @@ const normalizeCampaignInput = (payload = {}, clinicId, actorName = '') => {
     channel: normalizeChannel(payload?.canal || payload?.channel),
     status: normalizeCampaignStatusToEnum(payload?.status),
     audienceSegmentKey: normalizeSegmentKey(payload?.segmentKey || payload?.segmento || 'all_active'),
-    audienceFilters: payload?.audienceFilters && typeof payload.audienceFilters === 'object'
-      ? payload.audienceFilters
-      : (payload?.filters && typeof payload.filters === 'object' ? payload.filters : null),
+    audienceFilters: sanitizeAudienceFilters(payload?.audienceFilters)
+      || sanitizeAudienceFilters(payload?.filters),
     sourceType: cleanText(payload?.sourceType || 'CAMPAIGN'),
     originType: cleanText(payload?.originType || 'MANUAL'),
     eventType: cleanText(payload?.eventType || 'CAMPAIGN_MANUAL_DISPATCH') || null,
@@ -535,6 +566,18 @@ campaignService.deleteCampaign = async ({ clinicId, campaignId }) => {
 campaignService.resolveAudiencePreview = async ({ clinicId, segmentKey, filters = {}, campaignId = '', actorName = '', templateId = '' }) => {
   const normalizedClinicId = cleanText(clinicId);
   if (!normalizedClinicId) throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  const normalizedCampaignId = cleanText(campaignId);
+  const sanitizedFilters = sanitizeAudienceFilters(filters) || {};
+
+  if (normalizedCampaignId) {
+    const campaign = await campaignRepository.findCampaignByIdAndClinic({
+      clinicId: normalizedClinicId,
+      campaignId: normalizedCampaignId,
+    });
+    if (!campaign) {
+      throw new AppError(404, 'CAMPAIGN_NOT_FOUND', 'Campaign not found.');
+    }
+  }
 
   const startedAt = Date.now();
   const templateContext = resolveTemplateContext({ templateId, segmentKey });
@@ -597,7 +640,7 @@ campaignService.resolveAudiencePreview = async ({ clinicId, segmentKey, filters 
     console.info('[CAMPAIGN]', JSON.stringify({
       action: 'campaign_template_audience_requested',
       clinicId: normalizedClinicId,
-      campaignId: cleanText(campaignId),
+      campaignId: normalizedCampaignId,
       templateId: normalizedTemplateId,
       segmentKey: normalizedSegmentKey,
       campaign_source: 'central',
@@ -607,7 +650,7 @@ campaignService.resolveAudiencePreview = async ({ clinicId, segmentKey, filters 
   const datasets = await loadAudienceDatasets({
     clinicId: normalizedClinicId,
     segmentKey: normalizedSegmentKey,
-    filters,
+    filters: sanitizedFilters,
   });
 
   if (!datasets.patients.length) {
@@ -640,9 +683,9 @@ campaignService.resolveAudiencePreview = async ({ clinicId, segmentKey, filters 
   const preview = resolveAudiencePreviewData({
     ...datasets,
     segmentKey: normalizedSegmentKey,
-    filters,
+    filters: sanitizedFilters,
     actorName,
-    campaignId,
+    campaignId: normalizedCampaignId,
     templateId: normalizedTemplateId,
     templateTitle: cleanText(templateContext.template?.title),
   });
@@ -666,7 +709,7 @@ campaignService.resolveAudiencePreview = async ({ clinicId, segmentKey, filters 
   console.info('[CAMPAIGN]', JSON.stringify({
     action: 'campaign_audience_resolved',
     clinicId: normalizedClinicId,
-    campaignId: cleanText(campaignId),
+    campaignId: normalizedCampaignId,
     segmentKey: normalizedSegmentKey,
     audienceSize: preview.total,
     includedCount: preview.includedCount,
@@ -679,7 +722,7 @@ campaignService.resolveAudiencePreview = async ({ clinicId, segmentKey, filters 
     console.info('[CAMPAIGN]', JSON.stringify({
       action: 'campaign_template_audience_resolved',
       clinicId: normalizedClinicId,
-      campaignId: cleanText(campaignId),
+      campaignId: normalizedCampaignId,
       templateId: normalizedTemplateId,
       suggestedAudienceSize: preview.total,
       includedCount: preview.includedCount,
@@ -795,13 +838,13 @@ campaignService.createBatch = async ({
       reasonLabel: duplicateBlocked
         ? 'Paciente ja possui envio ativo ou concluido para esta campanha.'
         : member.reasonLabel,
-      metadata: {
+      metadata: sanitizeTenantPayload({
         ...(member.metadata || {}),
         logicalKey,
         suggestionReasonCode: cleanText(member.suggestionReasonCode),
         suggestionReasonLabel: cleanText(member.suggestionReasonLabel),
         templateId: normalizedTemplateId,
-      },
+      }),
     };
   });
 
@@ -813,7 +856,7 @@ campaignService.createBatch = async ({
       clinicId: normalizedClinicId,
       campaignId: normalizedCampaignId,
       segmentKey: normalizeSegmentKey(campaign.audienceSegmentKey || 'all_active'),
-      filters: campaign.audienceFilters || {},
+      filters: sanitizeAudienceFilters(campaign.audienceFilters) || {},
       totalRecipients: members.length,
       includedRecipients: includedCount,
       blockedRecipients: blockedCount,
@@ -861,7 +904,7 @@ campaignService.createBatch = async ({
       attemptCount: 0,
       blockedAt: isBlocked ? now : null,
       lastError: isBlocked ? cleanText(member.reasonLabel || 'Dispatch blocked.') : null,
-      metadata: {
+      metadata: sanitizeTenantPayload({
         logicalKey: member.metadata?.logicalKey || buildIdempotencyLogicalKey({
           campaignId: normalizedCampaignId,
           patientId: member.patientId,
@@ -873,7 +916,7 @@ campaignService.createBatch = async ({
         suggestionReasonCode: cleanText(member.metadata?.suggestionReasonCode || member.suggestionReasonCode),
         suggestionReasonLabel: cleanText(member.metadata?.suggestionReasonLabel || member.suggestionReasonLabel),
         templateId: normalizedTemplateId || null,
-      },
+      }),
     };
   });
 
@@ -972,7 +1015,7 @@ campaignService.updateDispatchStatus = async ({
     provider,
     providerMessageId,
     errorMessage,
-    metadata,
+    metadata: sanitizeTenantPayload(metadata),
     logPrefix: 'campaign',
     logNamespace: 'CAMPAIGN',
   });

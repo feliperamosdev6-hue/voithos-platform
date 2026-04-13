@@ -135,6 +135,53 @@ register('financialController.getMonthlySummary usa tenant autenticado', async (
   }
 });
 
+register('campaignController.resolveAudience usa clinicId autenticado', async () => {
+  const calls = [];
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/campaignController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/campaignService.js')]: {
+        campaignService: {
+          resolveAudiencePreview: async (input) => {
+            calls.push(input);
+            return { total: 0, members: [] };
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    const req = {
+      auth: { clinicId: 'clinic-auth', userId: 'user-1' },
+      body: {
+        clinicId: 'clinic-evil',
+        segmentKey: 'inactive_90',
+        filters: { clinicId: 'clinic-evil', dentistId: 'dent-1' },
+        campaignId: 'camp-1',
+        templateId: 'tpl-1',
+      },
+    };
+    const res = createResponseDouble();
+    let forwardedError = null;
+    await controller.resolveAudience(req, res, (error) => {
+      forwardedError = error;
+    });
+    assert.equal(forwardedError, null);
+    assert.deepEqual(calls, [{
+      clinicId: 'clinic-auth',
+      segmentKey: 'inactive_90',
+      filters: { clinicId: 'clinic-evil', dentistId: 'dent-1' },
+      campaignId: 'camp-1',
+      actorName: 'user-1',
+      templateId: 'tpl-1',
+    }]);
+    assert.equal(res.statusCode, 200);
+  } finally {
+    restore();
+  }
+});
+
 register('clinicalController.upsertPatientProcedure ignora clinicId do body', async () => {
   const calls = [];
   const { module: controller, restore } = loadModuleWithMocks(
@@ -229,6 +276,44 @@ register('appointmentController.createAppointment usa clinicId autenticado', asy
     }]);
     assert.equal(res.statusCode, 201);
     assert.deepEqual(res.payload, { ok: true, data: { id: 'appt-1' } });
+  } finally {
+    restore();
+  }
+});
+
+register('relationshipController.getRelationshipOverview usa clinicId autenticado', async () => {
+  const calls = [];
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/relationshipController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/relationshipService.js')]: {
+        relationshipService: {
+          getOverview: async (input) => {
+            calls.push(input);
+            return { clinicId: input.clinicId };
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    const req = {
+      auth: { clinicId: 'clinic-auth' },
+      query: { clinicId: 'clinic-evil', date: '2026-04-13', dueSoonDays: '5' },
+    };
+    const res = createResponseDouble();
+    let forwardedError = null;
+    await controller.getRelationshipOverview(req, res, (error) => {
+      forwardedError = error;
+    });
+    assert.equal(forwardedError, null);
+    assert.deepEqual(calls, [{
+      clinicId: 'clinic-auth',
+      date: '2026-04-13',
+      dueSoonDays: '5',
+    }]);
+    assert.equal(res.statusCode, 200);
   } finally {
     restore();
   }
@@ -609,6 +694,201 @@ register('financialService.createPatientPlan usa clinicId explicito e ignora pay
       clinicId: 'clinic-auth',
       patientId: 'patient-1',
     }]);
+  } finally {
+    restore();
+  }
+});
+
+register('campaignService.createCampaign ignora clinicId do payload e saneia audienceFilters/metadata', async () => {
+  let createdPayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/campaignService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/campaignRepository.js')]: {
+        campaignRepository: {
+          countByClinic: async () => 1,
+          createCampaign: async (data) => {
+            createdPayload = data;
+            return data;
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/financialRepository.js')]: { financialRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/patientClinicalRepository.js')]: { patientClinicalRepository: {} },
+      [path.resolve(__dirname, '../backend/src/services/messagingDispatchService.js')]: { messagingDispatchService: {} },
+      [path.resolve(__dirname, '../backend/src/services/campaignAudienceResolver.js')]: { resolveAudiencePreviewData: () => ({}) },
+      [path.resolve(__dirname, '../shared/campaign-template-catalog.js')]: {
+        listCampaignTemplatesCatalog: () => ({ annualTemplates: [] }),
+        getCampaignTemplateById: () => null,
+      },
+    }
+  );
+
+  try {
+    const result = await serviceModule.campaignService.createCampaign({
+      clinicId: 'clinic-auth',
+      payload: {
+        clinicId: 'clinic-evil',
+        nome: 'Campanha Teste',
+        segmentKey: 'by_dentist',
+        audienceFilters: {
+          clinicId: 'clinic-evil',
+          dentistId: 'dent-1',
+          nested: {
+            patientId: 'patient-evil',
+            keep: 'ok',
+          },
+        },
+        metadata: {
+          clinicId: 'clinic-evil',
+          selection: {
+            patientIds: ['patient-evil'],
+            keep: true,
+          },
+        },
+      },
+      actorName: 'user-1',
+    });
+    assert.equal(createdPayload.clinicId, 'clinic-auth');
+    assert.deepEqual(createdPayload.audienceFilters, {
+      dentistId: 'dent-1',
+      nested: {
+        keep: 'ok',
+      },
+    });
+    assert.deepEqual(createdPayload.metadata, {
+      selection: {
+        keep: true,
+      },
+    });
+    assert.equal(result.clinicId, 'clinic-auth');
+  } finally {
+    restore();
+  }
+});
+
+register('campaignService.resolveAudiencePreview bloqueia campaignId fora do tenant antes de consultar datasets', async () => {
+  let patientsLookupCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/campaignService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/campaignRepository.js')]: {
+        campaignRepository: {
+          findCampaignByIdAndClinic: async () => null,
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          listAudienceBaseByClinic: async () => {
+            patientsLookupCalled = true;
+            return [];
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/financialRepository.js')]: { financialRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/patientClinicalRepository.js')]: { patientClinicalRepository: {} },
+      [path.resolve(__dirname, '../backend/src/services/messagingDispatchService.js')]: { messagingDispatchService: {} },
+      [path.resolve(__dirname, '../backend/src/services/campaignAudienceResolver.js')]: { resolveAudiencePreviewData: () => ({}) },
+      [path.resolve(__dirname, '../shared/campaign-template-catalog.js')]: {
+        listCampaignTemplatesCatalog: () => ({ annualTemplates: [] }),
+        getCampaignTemplateById: () => null,
+      },
+    }
+  );
+
+  try {
+    await assert.rejects(
+      () => serviceModule.campaignService.resolveAudiencePreview({
+        clinicId: 'clinic-auth',
+        campaignId: 'camp-foreign',
+        segmentKey: 'inactive_90',
+        filters: { clinicId: 'clinic-evil' },
+      }),
+      (error) => {
+        assert.equal(error?.code, 'CAMPAIGN_NOT_FOUND');
+        return true;
+      }
+    );
+    assert.equal(patientsLookupCalled, false);
+  } finally {
+    restore();
+  }
+});
+
+register('relationshipService.getOverview falha antes do fanout sem clinicId autenticado', async () => {
+  let downstreamCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/relationshipService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/patientService.js')]: {
+        patientService: {
+          listByClinic: async () => {
+            downstreamCalled = true;
+            return [];
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/appointmentService.js')]: {
+        appointmentService: {
+          listAppointments: async () => {
+            downstreamCalled = true;
+            return [];
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/campaignService.js')]: {
+        campaignService: {
+          getDashboard: async () => {
+            downstreamCalled = true;
+            return {};
+          },
+          listDispatchLogs: async () => {
+            downstreamCalled = true;
+            return { items: [] };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/financialService.js')]: {
+        financialService: {
+          getFinancialDashboard: async () => {
+            downstreamCalled = true;
+            return {};
+          },
+          listPatientPlans: async () => {
+            downstreamCalled = true;
+            return [];
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/planMessageService.js')]: { planMessageService: {} },
+      [path.resolve(__dirname, '../backend/src/services/clinicService.js')]: {
+        clinicService: {
+          getOperationalSettings: async () => {
+            downstreamCalled = true;
+            return {};
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    await assert.rejects(
+      () => serviceModule.relationshipService.getOverview({
+        clinicId: '',
+        date: '2026-04-13',
+      }),
+      (error) => {
+        assert.equal(error?.code, 'UNAUTHORIZED');
+        return true;
+      }
+    );
+    assert.equal(downstreamCalled, false);
   } finally {
     restore();
   }

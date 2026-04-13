@@ -1,3 +1,4 @@
+const { AppError } = require('../errors/AppError');
 const { patientService } = require('./patientService');
 const { appointmentService } = require('./appointmentService');
 const { campaignService } = require('./campaignService');
@@ -174,6 +175,9 @@ const loadPlanHistoryPreview = async ({ clinicId, items = [] }) => {
 const relationshipService = {
   getOverview: async ({ clinicId, date, dueSoonDays = 3 } = {}) => {
     const normalizedClinicId = cleanText(clinicId);
+    if (!normalizedClinicId) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Authenticated clinic context is required.');
+    }
     const dateIso = toDateOnly(date || new Date());
     const dueSoon = Math.max(1, Number(dueSoonDays) || 3);
     const thirtyDaysAgo = toDateOnly(addDays(parseDateOnly(dateIso) || new Date(), -30));
