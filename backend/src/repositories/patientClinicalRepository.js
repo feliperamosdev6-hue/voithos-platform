@@ -1,5 +1,15 @@
 const { prisma } = require('../db/prisma');
 
+const procedureFinancialInclude = {
+  financialAccounts: {
+    orderBy: { createdAt: 'desc' },
+    include: {
+      installments: { orderBy: { sequence: 'asc' } },
+      transactions: { orderBy: { createdAt: 'asc' } },
+    },
+  },
+};
+
 const patientClinicalRepository = {
   ensureClinicalRecord: async ({ clinicId, patientId }) => prisma.patientClinicalRecord.upsert({
     where: { patientId },
@@ -27,6 +37,7 @@ const patientClinicalRepository = {
 
   listProcedures: async ({ clinicId, patientId }) => prisma.patientProcedure.findMany({
     where: { clinicId, patientId },
+    include: procedureFinancialInclude,
     orderBy: { createdAt: 'desc' },
   }),
 
@@ -46,6 +57,7 @@ const patientClinicalRepository = {
 
   findProcedureByExternalId: async ({ clinicId, patientId, externalId }) => prisma.patientProcedure.findFirst({
     where: { clinicId, patientId, externalId },
+    include: procedureFinancialInclude,
   }),
 
   createProcedure: async (data) => prisma.patientProcedure.create({ data }),

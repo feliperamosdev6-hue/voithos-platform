@@ -1424,16 +1424,69 @@
     }, { auth: true }),
   };
 
+  const normalizeLegacyProcedurePayload = (service = {}) => {
+    const teeth = Array.isArray(service?.dentes)
+      ? service.dentes.map((item) => cleanText(item)).filter(Boolean)
+      : (cleanText(service?.dente) ? [cleanText(service.dente)] : []);
+    const faces = Array.isArray(service?.faces)
+      ? service.faces.map((item) => cleanText(item)).filter(Boolean)
+      : [];
+    const amount = Number(service?.valorCobrado ?? service?.valor ?? service?.price ?? 0) || 0;
+    const finance = service?.financeiro && typeof service.financeiro === 'object'
+      ? service.financeiro
+      : {};
+    return {
+      ...service,
+      id: cleanText(service?.id || service?.externalId || createLocalId('proc')),
+      externalId: cleanText(service?.externalId || service?.id || ''),
+      codigo: cleanText(service?.codigo || service?.code || ''),
+      nome: cleanText(service?.nome || service?.tipo || service?.procedimento || 'Procedimento'),
+      tipo: cleanText(service?.tipo || service?.nome || service?.procedimento || 'Procedimento'),
+      dentes: teeth,
+      dente: cleanText(service?.dente || teeth[0] || ''),
+      faces,
+      valor: amount,
+      valorCobrado: Number(service?.valorCobrado ?? amount) || amount,
+      gerarFinanceiro: service?.gerarFinanceiro !== false,
+      status: cleanText(service?.status || service?.estado || service?.situacao || 'a-realizar'),
+      financeiro: {
+        ...finance,
+        paymentStatus: cleanText(finance?.paymentStatus || service?.paymentStatus || ''),
+        paymentMethod: cleanText(finance?.paymentMethod || service?.paymentMethod || service?.metodoPagamento || ''),
+      },
+    };
+  };
+
+  const normalizeProcedureMutationResponse = (data = {}) => {
+    const service = data?.service || data?.procedure || data || null;
+    const financeId = cleanText(
+      data?.financeId
+      || service?.financeiroId
+      || service?.financeiro?.financeEntryId
+      || service?.financeiro?.accountId
+    );
+    return {
+      service,
+      financeId,
+      financeWarning: cleanText(data?.financeWarning || service?.financeiro?.warning || ''),
+      financeAction: cleanText(data?.financeAction || ''),
+      success: data?.success !== false,
+      transferRequired: data?.transferRequired === true,
+      conflict: data?.conflict || null,
+    };
+  };
+
   const services = {
     addToPatient: async ({ prontuario, service = {} } = {}) => {
       const patientId = resolvePatientId({ prontuario, patientId: service?.patientId });
+      const procedure = normalizeLegacyProcedurePayload(service || {});
       const data = await request(
         'POST',
         `/clinical/patients/${encodeURIComponent(patientId)}/procedures`,
-        { procedure: service || {} },
+        { procedure },
         { auth: true }
       );
-      return { service: data || null };
+      return normalizeProcedureMutationResponse(data || {});
     },
     listForPatient: async (prontuario) => {
       const patientId = resolvePatientId({ prontuario });
@@ -1445,16 +1498,14 @@
     },
     update: async ({ prontuario, service = {} } = {}) => {
       const patientId = resolvePatientId({ prontuario, patientId: service?.patientId });
+      const procedure = normalizeLegacyProcedurePayload(service || {});
       const data = await request(
         'POST',
         `/clinical/patients/${encodeURIComponent(patientId)}/procedures`,
-        { procedure: service || {} },
+        { procedure },
         { auth: true }
       );
-      return {
-        service: data || null,
-        financeId: cleanText(data?.financeiroId || data?.financeiro?.financeEntryId),
-      };
+      return normalizeProcedureMutationResponse(data || {});
     },
     delete: async ({ prontuario, id } = {}) => {
       const patientId = resolvePatientId({ prontuario });

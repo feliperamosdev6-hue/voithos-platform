@@ -155,6 +155,20 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => toast.remove(), 5000);
   };
 
+  const emitProcedureAndFinanceUpdated = (source = 'servicos') => {
+    try {
+      window.dispatchEvent(new CustomEvent('finance-updated', { detail: { source } }));
+      window.dispatchEvent(new CustomEvent('patient-clinical-updated', {
+        detail: {
+          source,
+          prontuario: hiddenProntuarioField?.value || '',
+          patientId: currentPatient?.id || currentPatient?.prontuario || '',
+        },
+      }));
+      localStorage.setItem('voithos-finance-updated', JSON.stringify({ at: Date.now(), source }));
+    } catch (_) {}
+  };
+
   const getFacesAtuais = () => (resumoDenteAtual ? (facesPorDente[resumoDenteAtual] || []) : []);
 
   const updateFacesUI = () => {
@@ -635,14 +649,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const montarObjetoService = (dentInfo) => {
     const tipo = serviceNameInput.value.trim() || 'Procedimento';
     const valor = parseMoney(serviceValueInput.value || '0');
+    const codigo = String(allProcedures.find((item) => item.nome === tipo)?.codigo || '').trim();
     return {
+      codigo,
+      nome: tipo,
       tipo,
       dentes: getDentesSelecionados(),
       faces: getFacesAtuais(),
       denteFaces: resumoDenteAtual || '',
       valor,
       valorCobrado: valor,
+      gerarFinanceiro: valor > 0,
       statusFinanceiroProcedimento: 'rascunho',
+      status: 'a-realizar',
       dentistaId: dentInfo?.id || '',
       dentistaNome: dentInfo?.nome || '',
     };
@@ -651,13 +670,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const montarServiceFromSelected = (selected, dentInfo) => {
     const valor = parseMoney(selected?.value || 0);
     return {
+      codigo: selected?.codigo || '',
+      nome: selected?.name || 'Procedimento',
       tipo: selected?.name || 'Procedimento',
       dentes: Array.isArray(selected?.dentes) ? selected.dentes : [],
       faces: Array.isArray(selected?.faces) ? selected.faces : [],
       denteFaces: selected?.denteFaces || '',
       valor,
       valorCobrado: valor,
+      gerarFinanceiro: valor > 0,
       statusFinanceiroProcedimento: 'rascunho',
+      status: 'a-realizar',
       dentistaId: dentInfo?.id || '',
       dentistaNome: dentInfo?.nome || '',
     };
@@ -731,6 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       let transferConfirmed = false;
+      let financeWarningDetected = false;
       for (let i = 0; i < queue.length; i += 1) {
         const service = {
           ...queue[i],
@@ -769,8 +793,21 @@ document.addEventListener('DOMContentLoaded', () => {
             },
           });
         }
+        if (result?.financeWarning) {
+          financeWarningDetected = true;
+          console.warn('[SERVICOS] procedimento salvo com alerta de sincronizacao financeira', {
+            procedureId: result?.service?.id || service?.id || '',
+            financeWarning: result.financeWarning,
+          });
+        }
       }
-      showToast('Procedimentos salvos com sucesso!', 'success');
+      emitProcedureAndFinanceUpdated('servicos');
+      showToast(
+        financeWarningDetected
+          ? 'Procedimentos salvos, mas houve alerta na sincronizacao com o financeiro.'
+          : 'Procedimentos salvos com sucesso!',
+        financeWarningDetected ? 'error' : 'success'
+      );
       selectedServices = [];
       renderSelectedServices();
       serviceNameInput.value = '';

@@ -1,7 +1,9 @@
 const { AppError } = require('../errors/AppError');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
+const { financialRepository } = require('../repositories/financialRepository');
 const { patientDocumentStorageService } = require('./patientDocumentStorageService');
+const { financialService, mapAccountToLegacy } = require('./financialService');
 
 const assertPatientBelongsToClinic = async ({ clinicId, patientId }) => {
   const patient = await patientRepository.findById(patientId);
@@ -21,8 +23,291 @@ const normalizeIsoDate = (value) => {
   return null;
 };
 
+const cleanText = (value) => String(value || '').trim();
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const PROCEDURE_FINANCIAL_SOURCE = 'procedimento';
+const PROCEDURE_FINANCIAL_CATEGORY = 'procedimentos';
+
+const normalizeProcedureStatus = (value) => {
+  const raw = cleanText(value).toLowerCase();
+  if (!raw || raw === 'em_aberto') return 'a-realizar';
+  if (['feito', 'concluido', 'concluído'].includes(raw)) return 'realizado';
+  return raw;
+};
+
+const normalizeProcedurePaymentStatus = (value) => {
+  const raw = cleanText(value).toUpperCase();
+  if (raw === 'PAID' || raw === 'PAGO') return 'PAID';
+  if (raw === 'CANCELLED' || raw === 'CANCELED' || raw === 'CANCELADO') return 'CANCELLED';
+  return 'PENDING';
+};
+
+const normalizeProcedurePaymentMethod = (value) => {
+  const raw = cleanText(value).toUpperCase();
+  if (!raw) return 'PIX';
+  if (raw === 'DINHEIRO') return 'CASH';
+  if (raw === 'CARTAO' || raw === 'CREDIT' || raw === 'DEBIT' || raw === 'CARD') return 'CARD';
+  if (raw === 'TRANSFERENCIA' || raw === 'TRANSFER') return 'TRANSFER';
+  if (raw === 'BOLETO') return 'BOLETO';
+  if (raw === 'PIX') return 'PIX';
+  return raw;
+};
+
+const normalizeProcedureTeeth = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => cleanText(item)).filter(Boolean);
+  }
+  const single = cleanText(value);
+  return single ? [single] : [];
+};
+
+const resolveProcedureAmount = (payload = {}) => {
+  const candidates = [
+    payload?.valorCobrado,
+    payload?.valor,
+    payload?.price,
+    payload?.preco,
+    payload?.financeiro?.valor,
+    payload?.financeiro?.totalAmount,
+  ];
+  for (const candidate of candidates) {
+    const amount = roundMoney(candidate);
+    if (amount > 0) return amount;
+  }
+  return 0;
+};
+
+const resolveProcedureInstallments = (payload = {}) => {
+  const count = Number(
+    payload?.financeiro?.installments
+    ?? payload?.financeiro?.installmentsCount
+    ?? payload?.parcelas
+    ?? payload?.installments
+    ?? 1
+  ) || 1;
+  return Math.max(1, count);
+};
+
+const buildProcedureDueDate = (payload = {}, fallback = new Date()) => {
+  return normalizeIsoDate(
+    payload?.financeiro?.dueDate
+    || payload?.vencimento
+    || payload?.dueDate
+    || payload?.dataRealizacao
+    || payload?.registeredAt
+    || payload?.createdAt
+    || payload?.dataRegistro
+  ) || fallback;
+};
+
+const shouldGenerateProcedureFinance = ({ payload = {}, amount = 0, status = '' } = {}) => {
+  if (payload?.gerarFinanceiro === false) return false;
+  if (amount <= 0) return false;
+  const normalizedStatus = normalizeProcedureStatus(status);
+  if (normalizedStatus === 'pre-existente' || normalizedStatus === 'cancelado') return false;
+  return true;
+};
+
+const pickLinkedFinancialAccount = (row = {}) => {
+  const accounts = Array.isArray(row?.financialAccounts) ? row.financialAccounts : [];
+  if (!accounts.length) return null;
+  return accounts.find((item) => cleanText(item?.status).toUpperCase() !== 'CANCELED') || accounts[0] || null;
+};
+
+const buildProcedureFinancialSnapshot = ({
+  payload = {},
+  financeAccount = null,
+  financeId = '',
+  financeWarning = '',
+  amount = 0,
+} = {}) => {
+  const baseSnapshot = payload?.financeiro && typeof payload.financeiro === 'object'
+    ? payload.financeiro
+    : {};
+  if (!financeAccount) {
+    return {
+      ...baseSnapshot,
+      financeEntryId: cleanText(baseSnapshot.financeEntryId || financeId),
+      paymentStatus: normalizeProcedurePaymentStatus(baseSnapshot.paymentStatus),
+      paymentMethod: normalizeProcedurePaymentMethod(baseSnapshot.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || 'PIX'),
+      dueDate: cleanText(baseSnapshot.dueDate || payload?.vencimento || payload?.dueDate || ''),
+      installments: Number(baseSnapshot.installments ?? resolveProcedureInstallments(payload)) || 1,
+      amount,
+      warning: cleanText(financeWarning),
+    };
+  }
+  return {
+    ...baseSnapshot,
+    financeEntryId: cleanText(financeAccount.id || financeId),
+    paymentStatus: cleanText(financeAccount.paymentStatus || 'PENDING'),
+    paymentMethod: cleanText(financeAccount.paymentMethod || financeAccount.metodoPagamento || ''),
+    dueDate: cleanText(financeAccount.dueDate || financeAccount.vencimento || ''),
+    paidAt: financeAccount.paidAt || null,
+    installments: Number(financeAccount.installmentsCount || baseSnapshot.installments || 1) || 1,
+    amount: roundMoney(financeAccount.totalAmount ?? financeAccount.valor ?? amount),
+    paidAmount: roundMoney(financeAccount.paidAmount ?? 0),
+    remainingAmount: roundMoney(financeAccount.remainingAmount ?? amount),
+    status: cleanText(financeAccount.status || ''),
+    warning: cleanText(financeWarning),
+  };
+};
+
+const mapLinkedFinanceToLegacy = (row = {}, payload = {}) => {
+  const linkedAccount = pickLinkedFinancialAccount(row);
+  const legacyAccount = linkedAccount ? mapAccountToLegacy(linkedAccount) : null;
+  const storedSnapshot = row?.financialSnapshot && typeof row.financialSnapshot === 'object'
+    ? row.financialSnapshot
+    : {};
+  const payloadFinance = payload?.financeiro && typeof payload.financeiro === 'object'
+    ? payload.financeiro
+    : {};
+  const merged = {
+    ...payloadFinance,
+    ...storedSnapshot,
+  };
+  if (!legacyAccount) {
+    return {
+      ...merged,
+      financeEntryId: cleanText(merged.financeEntryId || ''),
+      paymentStatus: normalizeProcedurePaymentStatus(merged.paymentStatus),
+      paymentMethod: cleanText(merged.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || ''),
+      dueDate: cleanText(merged.dueDate || payload?.vencimento || payload?.dueDate || ''),
+      installments: Number(merged.installments ?? resolveProcedureInstallments(payload)) || 1,
+      amount: resolveProcedureAmount(payload),
+      paidAmount: roundMoney(merged.paidAmount ?? 0),
+      remainingAmount: roundMoney(merged.remainingAmount ?? resolveProcedureAmount(payload)),
+    };
+  }
+  return {
+    ...merged,
+    financeEntryId: legacyAccount.id,
+    accountId: legacyAccount.id,
+    paymentStatus: legacyAccount.paymentStatus,
+    paymentMethod: legacyAccount.paymentMethod || legacyAccount.metodoPagamento || '',
+    dueDate: legacyAccount.dueDate || legacyAccount.vencimento || '',
+    paidAt: legacyAccount.paidAt || null,
+    installments: Number(legacyAccount.installmentsCount || merged.installments || 1) || 1,
+    amount: roundMoney(legacyAccount.totalAmount ?? legacyAccount.valor ?? resolveProcedureAmount(payload)),
+    paidAmount: roundMoney(legacyAccount.paidAmount ?? 0),
+    remainingAmount: roundMoney(legacyAccount.remainingAmount ?? 0),
+    status: legacyAccount.status || '',
+  };
+};
+
+const syncProcedureFinancialAccount = async ({
+  clinicId,
+  patient = {},
+  procedureRow = {},
+  payload = {},
+} = {}) => {
+  const linkedAccount = pickLinkedFinancialAccount(procedureRow)
+    || await financialRepository.findFinancialAccountByExternalReference({
+      clinicId,
+      externalReference: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
+    });
+  const amount = resolveProcedureAmount(payload);
+  const shouldGenerate = shouldGenerateProcedureFinance({
+    payload,
+    amount,
+    status: payload?.status || procedureRow?.status,
+  });
+
+  if (!shouldGenerate) {
+    if (linkedAccount) {
+      const hasPayments = Array.isArray(linkedAccount?.transactions) && linkedAccount.transactions.some((item) => roundMoney(item?.amount) > 0);
+      if (hasPayments) {
+        const cancelled = await financialService.updateFinancialAccount({
+          clinicId,
+          accountId: linkedAccount.id,
+          payload: {
+            status: 'CANCELED',
+            metadata: {
+              ...(linkedAccount.metadata && typeof linkedAccount.metadata === 'object' ? linkedAccount.metadata : {}),
+              origin: PROCEDURE_FINANCIAL_SOURCE,
+              category: PROCEDURE_FINANCIAL_CATEGORY,
+            },
+          },
+        });
+        return { financeAccount: cancelled, financeId: cleanText(cancelled?.id), financeWarning: '' };
+      }
+      await financialService.deleteFinancialAccount({ clinicId, accountId: linkedAccount.id });
+    }
+    return { financeAccount: null, financeId: '', financeWarning: '' };
+  }
+
+  const procedureName = cleanText(
+    procedureRow?.name
+    || payload?.nome
+    || payload?.tipo
+    || payload?.procedimento
+    || 'Procedimento'
+  );
+  const dentistId = cleanText(procedureRow?.dentistId || payload?.dentistaId);
+  const dentistName = cleanText(procedureRow?.dentistName || payload?.dentistaNome);
+  const dueDate = buildProcedureDueDate(payload, procedureRow?.registeredAt || new Date());
+  const financePayload = {
+    patientId: cleanText(patient?.id || procedureRow?.patientId),
+    patientProcedureId: cleanText(procedureRow?.id),
+    procedureId: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
+    externalReference: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
+    patientName: cleanText(patient?.nome || payload?.pacienteNome || ''),
+    prontuario: cleanText(patient?.id || procedureRow?.patientId || payload?.prontuario || ''),
+    procedureName,
+    description: `Procedimento: ${procedureName}`,
+    totalAmount: amount,
+    valor: amount,
+    category: PROCEDURE_FINANCIAL_CATEGORY,
+    categoria: PROCEDURE_FINANCIAL_CATEGORY,
+    source: PROCEDURE_FINANCIAL_SOURCE,
+    origem: PROCEDURE_FINANCIAL_SOURCE,
+    type: 'receita',
+    tipo: 'receita',
+    dueDate,
+    vencimento: dueDate,
+    paymentMethod: normalizeProcedurePaymentMethod(payload?.financeiro?.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || 'PIX'),
+    parcelas: resolveProcedureInstallments(payload),
+    dentistaId: dentistId,
+    dentistaNome: dentistName,
+    metadata: {
+      prontuario: cleanText(patient?.id || procedureRow?.patientId || ''),
+      patientName: cleanText(patient?.nome || ''),
+      procedureName,
+      procedureId: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
+      dentistId,
+      dentistName,
+      funcionario: dentistName,
+      category: PROCEDURE_FINANCIAL_CATEGORY,
+      origin: PROCEDURE_FINANCIAL_SOURCE,
+      type: 'receita',
+      data: dueDate.toISOString().slice(0, 10),
+    },
+  };
+
+  const financeAccount = linkedAccount
+    ? await financialService.updateFinancialAccount({
+      clinicId,
+      accountId: linkedAccount.id,
+      payload: financePayload,
+    })
+    : await financialService.createFinancialAccount({
+      clinicId,
+      payload: financePayload,
+    });
+
+  return {
+    financeAccount,
+    financeId: cleanText(financeAccount?.id),
+    financeWarning: '',
+  };
+};
+
 const mapProcedureToLegacy = (row = {}) => {
   const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+  const linkedFinance = mapLinkedFinanceToLegacy(row, payload);
+  const resolvedName = row.name || payload.nome || payload.tipo || payload.procedimento || '';
+  const resolvedStatus = normalizeProcedureStatus(row.status || payload.status || payload.estado || payload.situacao || 'a-realizar');
+  const resolvedTeeth = normalizeProcedureTeeth(payload.dentes || row.tooth || payload.dente);
+  const resolvedAmount = resolveProcedureAmount(payload);
   return {
     ...payload,
     id: row.externalId || row.id,
@@ -31,15 +316,27 @@ const mapProcedureToLegacy = (row = {}) => {
     clinicId: row.clinicId,
     appointmentId: row.appointmentId || payload.appointmentId || '',
     codigo: row.procedureCode || payload.codigo || payload.code || '',
-    nome: row.name || payload.nome || payload.tipo || '',
-    tipo: payload.tipo || row.name || '',
-    status: row.status || payload.status || '',
+    nome: resolvedName,
+    tipo: payload.tipo || row.name || payload.nome || '',
+    procedimento: payload.procedimento || resolvedName,
+    status: resolvedStatus,
+    estado: payload.estado || resolvedStatus,
+    situacao: payload.situacao || resolvedStatus,
     observacoes: row.observations || payload.observacoes || payload.obs || '',
     dentistaId: row.dentistId || payload.dentistaId || '',
     dentistaNome: row.dentistName || payload.dentistaNome || '',
+    dentes: resolvedTeeth,
+    dente: row.tooth || payload.dente || resolvedTeeth[0] || '',
+    faces: Array.isArray(payload.faces) ? payload.faces : (Array.isArray(row.faces) ? row.faces : []),
+    valor: resolvedAmount,
+    valorCobrado: roundMoney(payload.valorCobrado ?? resolvedAmount),
+    gerarFinanceiro: payload.gerarFinanceiro !== false,
     registeredAt: row.registeredAt ? row.registeredAt.toISOString() : (payload.registeredAt || ''),
     dataRealizacao: row.performedAt ? row.performedAt.toISOString() : (payload.dataRealizacao || ''),
-    financeiro: payload.financeiro || {},
+    financeiroId: cleanText(linkedFinance.financeEntryId || payload.financeiroId || ''),
+    paymentStatus: cleanText(linkedFinance.paymentStatus || payload.paymentStatus || ''),
+    vencimento: cleanText(linkedFinance.dueDate || payload.vencimento || ''),
+    financeiro: linkedFinance,
     integracoes: payload.integracoes || {},
   };
 };
@@ -116,8 +413,8 @@ const patientClinicalService = {
 
   upsertProcedure: async ({ clinicId, patientId, procedure }) => {
     const record = await patientClinicalService.getClinicalRecord({ clinicId, patientId });
-    const externalId = String(procedure?.id || procedure?.externalId || '').trim();
-    if (!externalId) throw new AppError(400, 'VALIDATION_ERROR', 'procedure.id is required.');
+    const patient = await patientRepository.findByIdAndClinic(patientId, clinicId);
+    const externalId = cleanText(procedure?.id || procedure?.externalId || `proc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
 
     const payload = { ...(procedure || {}) };
     const existing = await patientClinicalRepository.findProcedureByExternalId({
@@ -125,25 +422,42 @@ const patientClinicalService = {
       patientId,
       externalId,
     });
+    const resolvedStatus = normalizeProcedureStatus(payload.status || payload.estado || payload.situacao || 'a-realizar');
+    const resolvedTeeth = normalizeProcedureTeeth(payload.dentes || payload.dente);
+    const resolvedAmount = resolveProcedureAmount(payload);
+    const payloadWithIdentity = {
+      ...payload,
+      id: externalId,
+      externalId,
+      nome: cleanText(payload.nome || payload.tipo || payload.procedimento || 'Procedimento'),
+      tipo: cleanText(payload.tipo || payload.nome || payload.procedimento || 'Procedimento'),
+      dentes: resolvedTeeth,
+      dente: cleanText(payload.dente || resolvedTeeth[0] || ''),
+      faces: Array.isArray(payload.faces) ? payload.faces.map((item) => cleanText(item)).filter(Boolean) : [],
+      status: resolvedStatus,
+      valor: resolvedAmount,
+      valorCobrado: roundMoney(payload.valorCobrado ?? resolvedAmount),
+      gerarFinanceiro: payload.gerarFinanceiro !== false,
+    };
 
     const data = {
       clinicId,
       patientId,
       clinicalRecordId: record.id,
-      appointmentId: String(payload.appointmentId || '').trim() || null,
+      appointmentId: cleanText(payload.appointmentId) || null,
       externalId,
-      procedureCode: String(payload.codigo || payload.code || '').trim() || null,
-      name: String(payload.nome || payload.tipo || payload.procedimento || 'Procedimento').trim(),
-      status: String(payload.status || 'em_aberto').trim(),
-      dentistId: String(payload.dentistaId || '').trim() || null,
-      dentistName: String(payload.dentistaNome || '').trim() || null,
-      tooth: String(payload.dentes || payload.dente || '').trim() || null,
-      faces: Array.isArray(payload.faces) ? payload.faces.map((item) => String(item || '').trim()).filter(Boolean) : [],
-      observations: String(payload.observacoes || payload.obs || payload.observacao || '').trim() || null,
-      registeredAt: normalizeIsoDate(payload.registeredAt || payload.createdAt || payload.dataRegistro),
+      procedureCode: cleanText(payload.codigo || payload.code) || null,
+      name: cleanText(payload.nome || payload.tipo || payload.procedimento || 'Procedimento'),
+      status: resolvedStatus,
+      dentistId: cleanText(payload.dentistaId) || null,
+      dentistName: cleanText(payload.dentistaNome) || null,
+      tooth: cleanText(resolvedTeeth[0] || payload.dente) || null,
+      faces: payloadWithIdentity.faces,
+      observations: cleanText(payload.observacoes || payload.obs || payload.observacao) || null,
+      registeredAt: normalizeIsoDate(payload.registeredAt || payload.createdAt || payload.dataRegistro) || new Date(),
       performedAt: normalizeIsoDate(payload.dataRealizacao || payload.finishedAt),
       financialSnapshot: payload.financeiro || null,
-      payload,
+      payload: payloadWithIdentity,
     };
 
     if (existing) {
@@ -153,18 +467,129 @@ const patientClinicalService = {
         patientId,
         data,
       });
-      const updated = await patientClinicalRepository.findProcedureByExternalId({ clinicId, patientId, externalId });
-      return mapProcedureToLegacy(updated);
+      let updated = await patientClinicalRepository.findProcedureByExternalId({ clinicId, patientId, externalId });
+      let financeId = cleanText(updated?.financialSnapshot?.financeEntryId || '');
+      let financeWarning = '';
+      try {
+        const syncResult = await syncProcedureFinancialAccount({
+          clinicId,
+          patient,
+          procedureRow: updated,
+          payload: payloadWithIdentity,
+        });
+        financeId = cleanText(syncResult?.financeId || financeId);
+        financeWarning = cleanText(syncResult?.financeWarning || '');
+        const nextSnapshot = buildProcedureFinancialSnapshot({
+          payload: payloadWithIdentity,
+          financeAccount: syncResult?.financeAccount || null,
+          financeId,
+          financeWarning,
+          amount: resolvedAmount,
+        });
+        await patientClinicalRepository.updateProcedure({
+          id: updated.id,
+          clinicId,
+          patientId,
+          data: {
+            financialSnapshot: nextSnapshot,
+            payload: {
+              ...payloadWithIdentity,
+              financeiro: nextSnapshot,
+            },
+          },
+        });
+      } catch (error) {
+        financeWarning = error?.message || 'Nao foi possivel sincronizar o procedimento no financeiro.';
+      }
+      updated = await patientClinicalRepository.findProcedureByExternalId({ clinicId, patientId, externalId });
+      return {
+        service: mapProcedureToLegacy(updated),
+        financeId: cleanText(updated?.financialSnapshot?.financeEntryId || financeId),
+        financeWarning: cleanText(updated?.financialSnapshot?.warning || financeWarning),
+      };
     }
 
     const created = await patientClinicalRepository.createProcedure(data);
-    return mapProcedureToLegacy(created);
+    let financeId = '';
+    let financeWarning = '';
+    try {
+      const syncResult = await syncProcedureFinancialAccount({
+        clinicId,
+        patient,
+        procedureRow: created,
+        payload: payloadWithIdentity,
+      });
+      financeId = cleanText(syncResult?.financeId || '');
+      financeWarning = cleanText(syncResult?.financeWarning || '');
+      const nextSnapshot = buildProcedureFinancialSnapshot({
+        payload: payloadWithIdentity,
+        financeAccount: syncResult?.financeAccount || null,
+        financeId,
+        financeWarning,
+        amount: resolvedAmount,
+      });
+      await patientClinicalRepository.updateProcedure({
+        id: created.id,
+        clinicId,
+        patientId,
+        data: {
+          financialSnapshot: nextSnapshot,
+          payload: {
+            ...payloadWithIdentity,
+            financeiro: nextSnapshot,
+          },
+        },
+      });
+    } catch (error) {
+      financeWarning = error?.message || 'Nao foi possivel sincronizar o procedimento no financeiro.';
+    }
+    const refreshed = await patientClinicalRepository.findProcedureByExternalId({ clinicId, patientId, externalId });
+    return {
+      service: mapProcedureToLegacy(refreshed),
+      financeId: cleanText(refreshed?.financialSnapshot?.financeEntryId || financeId),
+      financeWarning: cleanText(refreshed?.financialSnapshot?.warning || financeWarning),
+    };
   },
 
   deleteProcedure: async ({ clinicId, patientId, externalId }) => {
     await patientClinicalService.getClinicalRecord({ clinicId, patientId });
+    const existing = await patientClinicalRepository.findProcedureByExternalId({ clinicId, patientId, externalId });
+    let financeId = '';
+    let financeAction = '';
+    let financeWarning = '';
+    if (existing) {
+      try {
+        const linkedAccount = pickLinkedFinancialAccount(existing)
+          || await financialRepository.findFinancialAccountByExternalReference({
+            clinicId,
+            externalReference: cleanText(existing.externalId || externalId),
+          });
+        if (linkedAccount) {
+          financeId = cleanText(linkedAccount.id);
+          const hasPayments = Array.isArray(linkedAccount.transactions) && linkedAccount.transactions.some((item) => roundMoney(item?.amount) > 0);
+          if (hasPayments) {
+            await financialService.updateFinancialAccount({
+              clinicId,
+              accountId: linkedAccount.id,
+              payload: { status: 'CANCELED' },
+            });
+            financeAction = 'canceled';
+          } else {
+            await financialService.deleteFinancialAccount({ clinicId, accountId: linkedAccount.id });
+            financeAction = 'deleted';
+          }
+        }
+      } catch (error) {
+        financeWarning = error?.message || 'Nao foi possivel sincronizar a exclusao do financeiro.';
+      }
+    }
     const result = await patientClinicalRepository.deleteProcedure({ clinicId, patientId, externalId });
-    return { success: result.count > 0 };
+    return {
+      success: result.count > 0,
+      financeId,
+      financeAction,
+      financeWarning,
+    };
   },
 
   listDocuments: async ({ clinicId, patientId, includeArchived }) => {

@@ -34,6 +34,7 @@ const CENTRAL_TO_LEGACY_ATTENDANCE = {
 
 const normalizeDigits = (value) => String(value || '').replace(/\D/g, '');
 const cleanText = (value) => String(value || '').trim();
+const createLocalId = (prefix = 'id') => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const normalizeDateOnly = (value) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -1239,19 +1240,39 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || [];
   };
 
+  const normalizeProcedureMutationResult = (data = {}) => {
+    const service = data?.service || data?.procedure || data || null;
+    return {
+      service,
+      financeId: cleanText(
+        data?.financeId
+        || service?.financeiroId
+        || service?.financeiro?.financeEntryId
+        || service?.financeiro?.accountId
+      ),
+      financeWarning: cleanText(data?.financeWarning || service?.financeiro?.warning || ''),
+      financeAction: cleanText(data?.financeAction || ''),
+      success: data?.success !== false,
+    };
+  };
+
   const upsertPatientProcedure = async ({ clinicId, patient = {}, appointment = {}, procedure = {} } = {}) => {
     const context = await resolveClinicalPatientContext({ clinicId, patient, appointment, allowCreate: true });
+    const normalizedProcedure = {
+      ...procedure,
+      id: cleanText(procedure?.id || procedure?.externalId || createLocalId('proc')),
+    };
     const payload = await requestInternalJson(
       `/internal/clinical/patients/${encodeURIComponent(context.patient.id)}/procedures`,
       {
         method: 'POST',
         body: JSON.stringify({
           clinicId: context.clinicId,
-          procedure,
+          procedure: normalizedProcedure,
         }),
       }
     );
-    return payload?.data || null;
+    return normalizeProcedureMutationResult(payload?.data || {});
   };
 
   const deletePatientProcedure = async ({ clinicId, patient = {}, appointment = {}, externalId } = {}) => {
