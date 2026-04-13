@@ -390,6 +390,31 @@ const mapDocumentToLegacy = (row = {}) => {
   };
 };
 
+const sanitizeDocumentPayload = (document = {}) => {
+  if (!document || typeof document !== 'object' || Array.isArray(document)) return {};
+  const {
+    clinicId: _clinicId,
+    patientId: _patientId,
+    clinicalRecordId: _clinicalRecordId,
+    metadata,
+    ...rest
+  } = document;
+
+  const sanitizedNestedMetadata = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? (({
+      clinicId: __clinicId,
+      patientId: __patientId,
+      clinicalRecordId: __clinicalRecordId,
+      ...nestedRest
+    }) => nestedRest)(metadata)
+    : metadata;
+
+  return {
+    ...rest,
+    ...(sanitizedNestedMetadata !== undefined ? { metadata: sanitizedNestedMetadata } : {}),
+  };
+};
+
 const patientClinicalService = {
   getClinicalRecord: async ({ clinicId, patientId }) => {
     const normalizedClinicId = String(clinicId || '').trim();
@@ -602,7 +627,7 @@ const patientClinicalService = {
     const record = await patientClinicalService.getClinicalRecord({ clinicId, patientId });
     const externalDocumentId = String(document?.id || document?.externalDocumentId || '').trim();
     if (!externalDocumentId) throw new AppError(400, 'VALIDATION_ERROR', 'document.id is required.');
-    const metadata = { ...(document || {}) };
+    const metadata = sanitizeDocumentPayload(document);
     const existing = await patientClinicalRepository.findDocumentByExternalId({
       clinicId,
       patientId,

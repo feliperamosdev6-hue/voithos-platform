@@ -120,6 +120,17 @@ const ensureClinicPatient = async ({ clinicId, patientId }) => {
   return patient;
 };
 
+const sanitizeTenantMetadata = (value = {}) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const {
+    clinicId: _clinicId,
+    patientId: _patientId,
+    planId: _planId,
+    ...rest
+  } = value;
+  return rest;
+};
+
 const resolveProcedureLink = async ({ clinicId, patientId, procedureId }) => {
   const normalized = cleanText(procedureId);
   if (!normalized) return null;
@@ -1310,7 +1321,7 @@ const financialService = {
   },
 
   createPatientPlan: async ({ clinicId, payload = {} }) => {
-    const normalizedClinicId = cleanText(clinicId || payload.clinicId);
+    const normalizedClinicId = cleanText(clinicId);
     const patientId = cleanText(payload.patientId);
     if (!normalizedClinicId || !patientId) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId and patientId are required.');
@@ -1335,7 +1346,7 @@ const financialService = {
       || 'PIX',
     ).toUpperCase() || 'PIX';
     const metadata = {
-      ...(payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+      ...sanitizeTenantMetadata(payload.metadata),
       patientName: payload.patientName || patient.nome || '',
       prontuario: payload.prontuario || patient.id || '',
       dentistName: cleanText(payload.dentistName || payload.dentista || ''),
@@ -1392,20 +1403,27 @@ const financialService = {
   },
 
   listPatientPlans: async ({ clinicId, patientId }) => {
-    const rows = patientId
-      ? await financialRepository.listPatientPlansByPatient({ clinicId: cleanText(clinicId), patientId: cleanText(patientId) })
-      : await financialRepository.listPatientPlansByClinic({ clinicId: cleanText(clinicId) });
-    let accountRows = patientId
+    const normalizedClinicId = cleanText(clinicId);
+    const normalizedPatientId = cleanText(patientId);
+
+    if (normalizedPatientId) {
+      await ensureClinicPatient({ clinicId: normalizedClinicId, patientId: normalizedPatientId });
+    }
+
+    const rows = normalizedPatientId
+      ? await financialRepository.listPatientPlansByPatient({ clinicId: normalizedClinicId, patientId: normalizedPatientId })
+      : await financialRepository.listPatientPlansByClinic({ clinicId: normalizedClinicId });
+    let accountRows = normalizedPatientId
       ? (await financialRepository.listFinancialAccountsByPatient({
-        clinicId: cleanText(clinicId),
-        patientId: cleanText(patientId),
+        clinicId: normalizedClinicId,
+        patientId: normalizedPatientId,
       })).filter((item) => extractPlanIdFromAccountRow(item))
-      : await financialRepository.listPlanFinancialAccountsByClinic({ clinicId: cleanText(clinicId) });
+      : await financialRepository.listPlanFinancialAccountsByClinic({ clinicId: normalizedClinicId });
     let accountsByPlanId = buildPlanAccountMap(accountRows);
     const missingPlans = rows.filter((item) => !accountsByPlanId.has(cleanText(item.id)));
     if (missingPlans.length) {
       const repaired = await ensurePlanFinancialAccounts({
-        clinicId: cleanText(clinicId),
+        clinicId: normalizedClinicId,
         planRows: missingPlans,
       });
       accountRows = [...accountRows, ...(Array.isArray(repaired) ? repaired : [])];
@@ -1445,6 +1463,10 @@ const financialService = {
       planId: cleanText(planId),
     });
     if (!existing) throw new AppError(404, 'PATIENT_PLAN_NOT_FOUND', 'Patient plan not found.');
+    const requestedPatientId = cleanText(payload.patientId);
+    if (requestedPatientId && requestedPatientId !== cleanText(existing.patientId)) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'patientId cannot be reassigned.');
+    }
 
     const nextInstallments = payload.installments !== undefined || payload.installmentsCount !== undefined || payload.parcelas !== undefined
       ? Math.max(1, Number(payload.installments ?? payload.installmentsCount ?? payload.parcelas ?? existing.installments) || existing.installments)
@@ -1461,7 +1483,7 @@ const financialService = {
     }, new Date());
     const nextMetadata = {
       ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
-      ...((payload.metadata && typeof payload.metadata === 'object') ? payload.metadata : {}),
+      ...sanitizeTenantMetadata(payload.metadata),
       patientName: cleanText(payload.patientName || existing?.metadata?.patientName || existing?.patient?.nome || ''),
       prontuario: cleanText(payload.prontuario || existing?.metadata?.prontuario || existing?.patient?.id || existing.patientId),
       dentistName: cleanText(payload.dentistName || payload.dentista || existing?.metadata?.dentistName || ''),

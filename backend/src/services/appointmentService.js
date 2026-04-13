@@ -64,8 +64,13 @@ const attachConfirmationState = async (clinicId, appointments = []) => {
 };
 
 const ensurePatientBelongsToClinic = async (clinicId, patientId) => {
-  const patient = await patientRepository.findById(patientId);
+  const patient = await patientRepository.findByIdAndClinic(patientId, clinicId);
   return assertRecordBelongsToClinic(patient, clinicId, 'PATIENT_NOT_FOUND');
+};
+
+const ensureAppointmentBelongsToClinic = async (clinicId, appointmentId) => {
+  const appointment = await appointmentRepository.findByIdAndClinic(appointmentId, clinicId);
+  return assertRecordBelongsToClinic(appointment, clinicId, 'APPOINTMENT_NOT_FOUND');
 };
 
 const appointmentService = {
@@ -104,8 +109,7 @@ const appointmentService = {
     }
 
     try {
-      const appointment = await appointmentRepository.findById(normalizedId);
-      const scopedAppointment = assertRecordBelongsToClinic(appointment, normalizedClinicId, 'APPOINTMENT_NOT_FOUND');
+      const scopedAppointment = await ensureAppointmentBelongsToClinic(normalizedClinicId, normalizedId);
       const [enriched] = await attachConfirmationState(normalizedClinicId, scopedAppointment ? [scopedAppointment] : []);
       return enriched || null;
     } catch (error) {
@@ -167,8 +171,7 @@ const appointmentService = {
     }
 
     try {
-      const current = await appointmentRepository.findById(normalizedId);
-      assertRecordBelongsToClinic(current, normalizedClinicId, 'APPOINTMENT_NOT_FOUND');
+      await ensureAppointmentBelongsToClinic(normalizedClinicId, normalizedId);
 
       const result = await appointmentRepository.updateStatus({
         id: normalizedId,
@@ -181,7 +184,7 @@ const appointmentService = {
         throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
       }
 
-      return appointmentRepository.findById(normalizedId);
+      return appointmentRepository.findByIdAndClinic(normalizedId, normalizedClinicId);
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -205,8 +208,7 @@ const appointmentService = {
     }
 
     try {
-      const current = await appointmentRepository.findById(normalizedId);
-      assertRecordBelongsToClinic(current, normalizedClinicId, 'APPOINTMENT_NOT_FOUND');
+      await ensureAppointmentBelongsToClinic(normalizedClinicId, normalizedId);
 
       const result = await appointmentRepository.updateAttendanceStatus({
         id: normalizedId,
@@ -218,7 +220,7 @@ const appointmentService = {
         throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
       }
 
-      return appointmentRepository.findById(normalizedId);
+      return appointmentRepository.findByIdAndClinic(normalizedId, normalizedClinicId);
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -252,8 +254,7 @@ const appointmentService = {
     }
 
     try {
-      const current = await appointmentRepository.findById(normalizedId);
-      assertRecordBelongsToClinic(current, normalizedClinicId, 'APPOINTMENT_NOT_FOUND');
+      const current = await ensureAppointmentBelongsToClinic(normalizedClinicId, normalizedId);
 
       const patientId = normalizedPatientId || current?.patientId;
       await ensurePatientBelongsToClinic(normalizedClinicId, patientId);
@@ -278,7 +279,7 @@ const appointmentService = {
         throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
       }
 
-      return appointmentRepository.findById(normalizedId);
+      return appointmentRepository.findByIdAndClinic(normalizedId, normalizedClinicId);
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -299,8 +300,7 @@ const appointmentService = {
     }
 
     try {
-      const current = await appointmentRepository.findById(normalizedId);
-      assertRecordBelongsToClinic(current, normalizedClinicId, 'APPOINTMENT_NOT_FOUND');
+      await ensureAppointmentBelongsToClinic(normalizedClinicId, normalizedId);
 
       const result = await appointmentRepository.delete({
         id: normalizedId,
