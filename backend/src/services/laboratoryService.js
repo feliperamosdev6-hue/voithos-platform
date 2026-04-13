@@ -109,6 +109,29 @@ const mapOrder = (row = {}) => {
   };
 };
 
+const TENANT_SENSITIVE_KEYS = new Set([
+  'clinicId',
+  'patientId',
+  'orderId',
+  'itemId',
+  'appointmentId',
+  'procedureId',
+]);
+
+const sanitizeTenantMetadata = (value = {}) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeTenantMetadata(item));
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value;
+
+  return Object.entries(value).reduce((acc, [key, nestedValue]) => {
+    if (TENANT_SENSITIVE_KEYS.has(cleanText(key))) return acc;
+    acc[key] = sanitizeTenantMetadata(nestedValue);
+    return acc;
+  }, {});
+};
+
 const createOrderEvent = async ({ orderId, clinicId, type, description }) => {
   if (!cleanText(orderId) || !cleanText(clinicId)) return;
   await laboratoryRepository.createEvent({
@@ -121,7 +144,7 @@ const createOrderEvent = async ({ orderId, clinicId, type, description }) => {
 
 const laboratoryService = {
   createOrder: async ({ clinicId, payload = {} }) => {
-    const normalizedClinicId = cleanText(clinicId || payload.clinicId);
+    const normalizedClinicId = cleanText(clinicId);
     const patientId = cleanText(payload.patientId);
     if (!normalizedClinicId || !patientId) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId and patientId are required.');
@@ -174,7 +197,7 @@ const laboratoryService = {
       notes: cleanText(payload.notes || payload.observacoes || '') || null,
       totalCost: payload.totalCost !== undefined || payload.valor !== undefined ? roundMoney(payload.totalCost ?? payload.valor ?? 0) : null,
       metadata: {
-        ...(payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+        ...sanitizeTenantMetadata(payload.metadata),
         patientName: payload.paciente || patient.nome || '',
         piece: payload.peca || '',
         procedureExternalId: cleanText(payload.procedureId || procedure?.externalId || ''),
@@ -243,20 +266,40 @@ const laboratoryService = {
   },
 
   updateOrder: async ({ clinicId, orderId, payload = {} }) => {
+    const normalizedClinicId = cleanText(clinicId);
     const existing = await laboratoryRepository.findOrderByIdAndClinic({
-      clinicId: cleanText(clinicId),
+      clinicId: normalizedClinicId,
       orderId: cleanText(orderId),
     });
     if (!existing) throw new AppError(404, 'LABORATORY_ORDER_NOT_FOUND', 'Laboratory order not found.');
+    const requestedPatientId = cleanText(payload.patientId);
+    if (requestedPatientId && requestedPatientId !== cleanText(existing.patientId)) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'patientId cannot be reassigned.');
+    }
 
     let procedureId = existing.procedureId;
     if (payload.procedureId !== undefined) {
       const procedure = await resolveProcedure({
-        clinicId: cleanText(clinicId),
+        clinicId: normalizedClinicId,
         patientId: existing.patientId,
         procedureId: payload.procedureId,
       });
       procedureId = procedure?.id || cleanText(payload.procedureId) || null;
+    }
+
+    let appointmentId = existing.appointmentId;
+    if (payload.appointmentId !== undefined) {
+      const normalizedAppointmentId = cleanText(payload.appointmentId);
+      if (!normalizedAppointmentId) {
+        appointmentId = null;
+      } else {
+        const appointment = await laboratoryRepository.findAppointmentByIdAndClinic({
+          clinicId: normalizedClinicId,
+          appointmentId: normalizedAppointmentId,
+        });
+        if (!appointment) throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found for this clinic.');
+        appointmentId = appointment.id;
+      }
     }
 
     const updated = await laboratoryRepository.updateOrder({
@@ -282,11 +325,11 @@ const laboratoryService = {
         totalCost: payload.totalCost !== undefined || payload.valor !== undefined
           ? roundMoney(payload.totalCost ?? payload.valor ?? 0)
           : existing.totalCost,
-        appointmentId: payload.appointmentId !== undefined ? cleanText(payload.appointmentId) || null : existing.appointmentId,
+        appointmentId,
         procedureId,
         metadata: {
           ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
-          ...((payload.metadata && typeof payload.metadata === 'object') ? payload.metadata : {}),
+          ...sanitizeTenantMetadata(payload.metadata),
           patientName: payload.paciente !== undefined ? cleanText(payload.paciente || '') : (existing.metadata?.patientName || ''),
           piece: payload.peca !== undefined ? cleanText(payload.peca || '') : (existing.metadata?.piece || ''),
           procedureExternalId: payload.procedureId !== undefined ? cleanText(payload.procedureId || '') : (existing.metadata?.procedureExternalId || ''),
@@ -300,7 +343,7 @@ const laboratoryService = {
 
     await createOrderEvent({
       orderId: existing.id,
-      clinicId: cleanText(clinicId),
+      clinicId: normalizedClinicId,
       type: 'ORDER_UPDATED',
       description: 'Pedido laboratorial atualizado.',
     });

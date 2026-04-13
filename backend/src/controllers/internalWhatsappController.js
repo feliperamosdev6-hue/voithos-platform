@@ -3,7 +3,13 @@ const { outboundMessageService } = require('../services/outboundMessageService')
 
 const receiveInboundWhatsapp = async (req, res, next) => {
   try {
-    const data = await inboundMessageService.receiveWhatsappInbound(req.body || {});
+    const data = await inboundMessageService.receiveWhatsappInbound({
+      clinicId: req.body?.clinicId,
+      fromPhone: req.body?.fromPhone,
+      body: req.body?.body,
+      providerMessageId: req.body?.providerMessageId,
+      rawPayload: req.body?.rawPayload,
+    });
     return res.status(201).json({
       ok: true,
       data,

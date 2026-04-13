@@ -3,6 +3,30 @@ const { campaignRepository } = require('../repositories/campaignRepository');
 
 const cleanText = (value) => String(value || '').trim();
 
+const TENANT_SENSITIVE_KEYS = new Set([
+  'clinicId',
+  'campaignId',
+  'patientId',
+  'dispatchId',
+  'batchId',
+  'audienceSnapshotId',
+  'audienceMemberId',
+]);
+
+const sanitizeTenantMetadata = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeTenantMetadata(item));
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value;
+
+  return Object.entries(value).reduce((acc, [key, nestedValue]) => {
+    if (TENANT_SENSITIVE_KEYS.has(cleanText(key))) return acc;
+    acc[key] = sanitizeTenantMetadata(nestedValue);
+    return acc;
+  }, {});
+};
+
 const normalizeDispatchStatus = (value) => {
   const normalized = cleanText(value).toUpperCase();
   if (['PENDING', 'PROCESSING', 'SENT', 'FAILED', 'BLOCKED'].includes(normalized)) return normalized;
@@ -110,7 +134,10 @@ const messagingDispatchService = {
           ? cleanText(errorMessage) || current.lastError || 'Dispatch failed.'
           : null,
         metadata: metadata && typeof metadata === 'object'
-          ? { ...(current.metadata && typeof current.metadata === 'object' ? current.metadata : {}), ...metadata }
+          ? {
+            ...(current.metadata && typeof current.metadata === 'object' ? current.metadata : {}),
+            ...sanitizeTenantMetadata(metadata),
+          }
           : current.metadata,
         attemptCount: Math.max(Number(current.attemptCount || 0) + 1, 1),
         lastAttemptAt: now,

@@ -7,7 +7,6 @@ const { outboundMessageRepository } = require('../repositories/outboundMessageRe
 const { patientRepository } = require('../repositories/patientRepository');
 const { appointmentActionTokenService } = require('./appointmentActionTokenService');
 const { notificationEventService } = require('./notificationEventService');
-const { assertRecordBelongsToClinic } = require('../utils/tenantScope');
 
 const OUTBOUND_STATUS = {
   PENDING: 'PENDING',
@@ -137,7 +136,10 @@ const dispatchOutboundRecord = async ({ outbound, clinicId, patientId, appointme
       type,
     }));
 
-    return outboundMessageRepository.findById(outbound.id);
+    return outboundMessageRepository.findByIdAndClinic({
+      id: outbound.id,
+      clinicId,
+    });
   } catch (error) {
     await outboundMessageRepository.updateStatus({
       id: outbound.id,
@@ -168,8 +170,18 @@ const outboundMessageService = {
   },
 
   getByIdForClinic: async ({ id, clinicId }) => {
-    const message = await outboundMessageRepository.findById(String(id || '').trim());
-    return assertRecordBelongsToClinic(message, String(clinicId || '').trim(), 'OUTBOUND_MESSAGE_NOT_FOUND');
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Authenticated clinic context is required.');
+    }
+    const message = await outboundMessageRepository.findByIdAndClinic({
+      id: String(id || '').trim(),
+      clinicId: normalizedClinicId,
+    });
+    if (!message) {
+      throw new AppError(404, 'OUTBOUND_MESSAGE_NOT_FOUND', 'Outbound message not found.');
+    }
+    return message;
   },
 
   sendAppointmentConfirmation: async ({ clinicId, appointmentId }) => {
@@ -183,16 +195,14 @@ const outboundMessageService = {
       throw new AppError(400, 'VALIDATION_ERROR', 'appointmentId is required.');
     }
 
-    const appointment = assertRecordBelongsToClinic(
-      await appointmentRepository.findById(normalizedAppointmentId),
-      normalizedClinicId,
-      'APPOINTMENT_NOT_FOUND',
-    );
-    const patient = assertRecordBelongsToClinic(
-      await patientRepository.findById(String(appointment.patientId || '').trim()),
-      normalizedClinicId,
-      'PATIENT_NOT_FOUND',
-    );
+    const appointment = await appointmentRepository.findByIdAndClinic(normalizedAppointmentId, normalizedClinicId);
+    if (!appointment) {
+      throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+    }
+    const patient = await patientRepository.findByIdAndClinic(String(appointment.patientId || '').trim(), normalizedClinicId);
+    if (!patient) {
+      throw new AppError(404, 'PATIENT_NOT_FOUND', 'Patient not found.');
+    }
     const clinic = await clinicRepository.findById(normalizedClinicId);
     const phone = normalizePhone(patient?.telefone);
     if (!phone) {
@@ -308,16 +318,14 @@ const outboundMessageService = {
       throw new AppError(400, 'VALIDATION_ERROR', 'appointmentId is required.');
     }
 
-    const appointment = assertRecordBelongsToClinic(
-      await appointmentRepository.findById(normalizedAppointmentId),
-      normalizedClinicId,
-      'APPOINTMENT_NOT_FOUND',
-    );
-    const patient = assertRecordBelongsToClinic(
-      await patientRepository.findById(String(appointment.patientId || '').trim()),
-      normalizedClinicId,
-      'PATIENT_NOT_FOUND',
-    );
+    const appointment = await appointmentRepository.findByIdAndClinic(normalizedAppointmentId, normalizedClinicId);
+    if (!appointment) {
+      throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+    }
+    const patient = await patientRepository.findByIdAndClinic(String(appointment.patientId || '').trim(), normalizedClinicId);
+    if (!patient) {
+      throw new AppError(404, 'PATIENT_NOT_FOUND', 'Patient not found.');
+    }
     const clinic = await clinicRepository.findById(normalizedClinicId);
     const phone = normalizePhone(patient?.telefone);
     if (!phone) {

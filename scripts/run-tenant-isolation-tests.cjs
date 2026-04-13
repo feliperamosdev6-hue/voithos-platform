@@ -894,6 +894,560 @@ register('relationshipService.getOverview falha antes do fanout sem clinicId aut
   }
 });
 
+register('laboratoryService.createOrder ignora clinicId do payload e saneia metadata tenant-sensivel', async () => {
+  let createdPayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/laboratoryService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/laboratoryRepository.js')]: {
+        laboratoryRepository: {
+          findPatientByIdAndClinic: async () => ({ id: 'patient-1', clinicId: 'clinic-auth', nome: 'Paciente Teste' }),
+          findProcedureByIdAndClinic: async () => ({ id: 'proc-1', clinicId: 'clinic-auth', externalId: 'PROC-EX' }),
+          findProcedureByExternalId: async () => null,
+          createOrder: async (input) => {
+            createdPayload = input;
+            return {
+              id: 'order-1',
+              ...input,
+              patient: { nome: 'Paciente Teste' },
+              items: [],
+              events: [],
+            };
+          },
+          findOrderByIdAndClinic: async ({ clinicId, orderId }) => ({
+            id: orderId,
+            clinicId,
+            patientId: 'patient-1',
+            appointmentId: null,
+            procedureId: 'proc-1',
+            labName: 'Laboratorio',
+            externalReference: null,
+            description: 'Pedido laboratorial',
+            status: 'REQUESTED',
+            requestedAt: new Date('2026-04-13T10:00:00.000Z'),
+            expectedAt: null,
+            completedAt: null,
+            notes: null,
+            totalCost: null,
+            metadata: createdPayload.metadata,
+            patient: { nome: 'Paciente Teste' },
+            items: [],
+            events: [],
+          }),
+          createEvent: async () => null,
+        },
+      },
+    }
+  );
+
+  try {
+    await serviceModule.laboratoryService.createOrder({
+      clinicId: 'clinic-auth',
+      payload: {
+        clinicId: 'clinic-evil',
+        patientId: 'patient-1',
+        procedureId: 'proc-legacy',
+        metadata: {
+          clinicId: 'clinic-evil',
+          nested: {
+            patientId: 'patient-evil',
+            keep: 'ok',
+          },
+          keepTop: 'yes',
+        },
+      },
+    });
+
+    assert.equal(createdPayload.clinicId, 'clinic-auth');
+    assert.deepEqual(createdPayload.metadata, {
+      keepTop: 'yes',
+      nested: {
+        keep: 'ok',
+      },
+      patientName: 'Paciente Teste',
+      piece: '',
+      procedureExternalId: 'proc-legacy',
+      financeExpenseId: '',
+      prontuario: 'patient-1',
+    });
+  } finally {
+    restore();
+  }
+});
+
+register('laboratoryService.updateOrder bloqueia reatribuicao de patientId antes de atualizar o dominio', async () => {
+  let updateCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/laboratoryService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/laboratoryRepository.js')]: {
+        laboratoryRepository: {
+          findOrderByIdAndClinic: async () => ({
+            id: 'order-1',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            procedureId: null,
+            appointmentId: null,
+            metadata: {},
+          }),
+          updateOrder: async () => {
+            updateCalled = true;
+            return null;
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    await assert.rejects(
+      () => serviceModule.laboratoryService.updateOrder({
+        clinicId: 'clinic-auth',
+        orderId: 'order-1',
+        payload: {
+          patientId: 'patient-evil',
+        },
+      }),
+      (error) => {
+        assert.equal(error?.code, 'VALIDATION_ERROR');
+        return true;
+      }
+    );
+    assert.equal(updateCalled, false);
+  } finally {
+    restore();
+  }
+});
+
+register('inboundMessageService.receiveWhatsappInbound saneia rawPayload tenant-sensivel na ingestao', async () => {
+  let createdPayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/inboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/inboundMessageRepository.js')]: {
+        inboundMessageRepository: {
+          findByClinicAndProviderMessageId: async () => null,
+          create: async (input) => {
+            createdPayload = input;
+            return { id: 'inbound-1', clinicId: input.clinicId };
+          },
+          updateProcessing: async () => ({ count: 1 }),
+          findByIdAndClinic: async () => ({ id: 'inbound-1', clinicId: 'clinic-auth', status: 'IGNORED' }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findLatestReplyEnabledByClinicAndPhone: async () => null,
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
+      [path.resolve(__dirname, '../backend/src/services/notificationEventService.js')]: {
+        notificationEventService: {
+          create: async () => null,
+        },
+      },
+    }
+  );
+
+  try {
+    await serviceModule.inboundMessageService.receiveWhatsappInbound({
+      clinicId: 'clinic-auth',
+      fromPhone: '11999999999',
+      body: 'oi',
+      rawPayload: {
+        clinicId: 'clinic-evil',
+        dispatchId: 'dispatch-evil',
+        nested: {
+          patientId: 'patient-evil',
+          keep: 'ok',
+        },
+      },
+    });
+
+    assert.deepEqual(createdPayload.rawPayload, {
+      nested: {
+        keep: 'ok',
+      },
+    });
+  } finally {
+    restore();
+  }
+});
+
+register('inboundMessageService.receiveWhatsappInbound usa lookups scoped por clinicId para paciente e mensagem persistida', async () => {
+  const patientCalls = [];
+  const storedCalls = [];
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/inboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/inboundMessageRepository.js')]: {
+        inboundMessageRepository: {
+          findByClinicAndProviderMessageId: async () => null,
+          create: async (input) => ({ id: 'inbound-1', clinicId: input.clinicId }),
+          updateProcessing: async () => ({ count: 1 }),
+          findById: async () => {
+            throw new Error('global inbound lookup should not run');
+          },
+          findByIdAndClinic: async ({ id, clinicId }) => {
+            storedCalls.push({ id, clinicId });
+            return { id, clinicId, status: 'PROCESSED' };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findLatestReplyEnabledByClinicAndPhone: async () => ({
+            id: 'out-1',
+            patientId: 'patient-1',
+            appointmentId: 'appt-1',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: {
+        appointmentRepository: {
+          findByIdAndClinic: async () => ({
+            id: 'appt-1',
+            clinicId: 'clinic-auth',
+            status: 'AGENDADO',
+            confirmado: false,
+          }),
+          updateStatus: async () => ({ count: 1 }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => {
+            throw new Error('global patient lookup should not run');
+          },
+          findByIdAndClinic: async (patientId, clinicId) => {
+            patientCalls.push({ patientId, clinicId });
+            return { id: patientId, clinicId, telefone: '5511999999999' };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/notificationEventService.js')]: {
+        notificationEventService: {
+          create: async () => null,
+        },
+      },
+    }
+  );
+
+  try {
+    const result = await serviceModule.inboundMessageService.receiveWhatsappInbound({
+      clinicId: 'clinic-auth',
+      fromPhone: '11999999999',
+      body: '1',
+      providerMessageId: 'provider-1',
+      rawPayload: {},
+    });
+
+    assert.deepEqual(patientCalls, [{ patientId: 'patient-1', clinicId: 'clinic-auth' }]);
+    assert.deepEqual(storedCalls, [{ id: 'inbound-1', clinicId: 'clinic-auth' }]);
+    assert.equal(result?.id, 'inbound-1');
+  } finally {
+    restore();
+  }
+});
+
+register('messagingDispatchService.updateDispatchStatus saneia metadata tenant-sensivel', async () => {
+  let updatedPayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/messagingDispatchService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/campaignRepository.js')]: {
+        campaignRepository: {
+          findDispatchByIdAndClinic: async () => ({
+            id: 'dispatch-1',
+            clinicId: 'clinic-auth',
+            campaignId: 'campaign-1',
+            batchId: 'batch-1',
+            status: 'PENDING',
+            provider: null,
+            providerMessageId: null,
+            lastError: null,
+            metadata: {
+              keepExisting: 'value',
+            },
+            attemptCount: 0,
+            sentAt: null,
+            failedAt: null,
+            blockedAt: null,
+          }),
+          updateDispatch: async ({ data }) => {
+            updatedPayload = data;
+            return {
+              id: 'dispatch-1',
+              clinicId: 'clinic-auth',
+              campaignId: 'campaign-1',
+              batchId: 'batch-1',
+              ...data,
+            };
+          },
+          listDispatchesByBatch: async () => [{ status: 'SENT' }],
+          updateBatch: async ({ data }) => ({ id: 'batch-1', ...data }),
+        },
+      },
+    }
+  );
+
+  try {
+    await serviceModule.messagingDispatchService.updateDispatchStatus({
+      clinicId: 'clinic-auth',
+      dispatchId: 'dispatch-1',
+      status: 'SENT',
+      metadata: {
+        clinicId: 'clinic-evil',
+        keepTop: 'yes',
+        nested: {
+          batchId: 'batch-evil',
+          keep: 'ok',
+        },
+      },
+    });
+
+    assert.deepEqual(updatedPayload.metadata, {
+      keepExisting: 'value',
+      keepTop: 'yes',
+      nested: {
+        keep: 'ok',
+      },
+    });
+  } finally {
+    restore();
+  }
+});
+
+register('outboundMessageService.getByIdForClinic usa lookup scoped por clinicId', async () => {
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/outboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findById: async () => {
+            throw new Error('global outbound lookup should not run');
+          },
+          findByIdAndClinic: async ({ id, clinicId }) => ({ id, clinicId }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
+      [path.resolve(__dirname, '../backend/src/services/appointmentActionTokenService.js')]: { appointmentActionTokenService: {} },
+      [path.resolve(__dirname, '../backend/src/services/notificationEventService.js')]: { notificationEventService: {} },
+      [path.resolve(__dirname, '../backend/src/adapters/whatsappNgClient.js')]: { whatsappNgClient: {} },
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: { appEnv: { appointmentActionLinksEnabled: false } },
+    }
+  );
+
+  try {
+    const result = await serviceModule.outboundMessageService.getByIdForClinic({
+      id: 'out-1',
+      clinicId: 'clinic-auth',
+    });
+
+    assert.deepEqual(result, {
+      id: 'out-1',
+      clinicId: 'clinic-auth',
+    });
+  } finally {
+    restore();
+  }
+});
+
+register('outboundMessageService.sendAppointmentConfirmation usa lookups scoped por clinicId', async () => {
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/outboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: {
+        appointmentRepository: {
+          findById: async () => {
+            throw new Error('global appointment lookup should not run');
+          },
+          findByIdAndClinic: async () => ({
+            id: 'appt-1',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            dataHora: '2026-04-13T10:00:00.000Z',
+            status: 'AGENDADO',
+            confirmado: false,
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => {
+            throw new Error('global patient lookup should not run');
+          },
+          findByIdAndClinic: async () => ({
+            id: 'patient-1',
+            clinicId: 'clinic-auth',
+            nome: 'Paciente',
+            telefone: '11999999999',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findLatestActiveConfirmationByAppointment: async () => ({
+            id: 'out-existing',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            appointmentId: 'appt-1',
+            createdAt: new Date('2026-04-13T09:00:00.000Z'),
+            status: 'SENT',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {
+          findById: async () => ({
+            id: 'clinic-auth',
+            nomeFantasia: 'Clinica Teste',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/appointmentActionTokenService.js')]: { appointmentActionTokenService: {} },
+      [path.resolve(__dirname, '../backend/src/services/notificationEventService.js')]: { notificationEventService: {} },
+      [path.resolve(__dirname, '../backend/src/adapters/whatsappNgClient.js')]: { whatsappNgClient: {} },
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: { appEnv: { appointmentActionLinksEnabled: false } },
+    }
+  );
+
+  try {
+    const result = await serviceModule.outboundMessageService.sendAppointmentConfirmation({
+      clinicId: 'clinic-auth',
+      appointmentId: 'appt-1',
+    });
+
+    assert.equal(result?.deduped, true);
+    assert.equal(result?.appointmentId, 'appt-1');
+  } finally {
+    restore();
+  }
+});
+
+register('internalWhatsappController.receiveInboundWhatsapp encaminha apenas campos allowlisted', async () => {
+  let receivedPayload = null;
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/internalWhatsappController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/inboundMessageService.js')]: {
+        inboundMessageService: {
+          receiveWhatsappInbound: async (input) => {
+            receivedPayload = input;
+            return { id: 'inbound-1' };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/outboundMessageService.js')]: { outboundMessageService: {} },
+    }
+  );
+
+  try {
+    const req = {
+      body: {
+        clinicId: 'clinic-auth',
+        fromPhone: '11999999999',
+        body: '1',
+        providerMessageId: 'provider-1',
+        rawPayload: { keep: 'ok' },
+        injected: 'should-not-pass',
+      },
+    };
+    const res = createResponseDouble();
+    let forwardedError = null;
+
+    await controller.receiveInboundWhatsapp(req, res, (error) => {
+      forwardedError = error;
+    });
+
+    assert.equal(forwardedError, null);
+    assert.deepEqual(receivedPayload, {
+      clinicId: 'clinic-auth',
+      fromPhone: '11999999999',
+      body: '1',
+      providerMessageId: 'provider-1',
+      rawPayload: { keep: 'ok' },
+    });
+    assert.equal(res.statusCode, 201);
+  } finally {
+    restore();
+  }
+});
+
+register('internalAppointmentController.resolveInternalAppointmentId usa lookup de paciente scoped por clinicId', async () => {
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/internalAppointmentController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: {
+        appointmentRepository: {
+          findByIdAndClinic: async () => null,
+          listByClinic: async () => [{
+            id: 'appt-1',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            profissionalId: '',
+            dataHora: '2026-04-13T10:00:00.000Z',
+          }],
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => {
+            throw new Error('global patient lookup should not run');
+          },
+          findByIdAndClinic: async () => ({
+            id: 'patient-1',
+            clinicId: 'clinic-auth',
+            nome: 'Maria',
+            telefone: '5511999999999',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/outboundMessageService.js')]: { outboundMessageService: {} },
+      [path.resolve(__dirname, '../backend/src/services/appointmentService.js')]: { appointmentService: {} },
+    }
+  );
+
+  try {
+    const req = {
+      body: {
+        clinicId: 'clinic-auth',
+        appointment: {
+          data: '2026-04-13',
+          horaInicio: '10:00',
+          pacienteNome: 'Maria',
+        },
+        patient: {
+          nome: 'Maria',
+          telefone: '11999999999',
+        },
+      },
+    };
+    const res = createResponseDouble();
+    let forwardedError = null;
+
+    await controller.resolveInternalAppointmentId(req, res, (error) => {
+      forwardedError = error;
+    });
+
+    assert.equal(forwardedError, null);
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.payload, {
+      ok: true,
+      data: {
+        id: 'appt-1',
+        clinicId: 'clinic-auth',
+        patientId: 'patient-1',
+      },
+    });
+  } finally {
+    restore();
+  }
+});
+
 const main = async () => {
   let passed = 0;
   for (const entry of tests) {

@@ -39,6 +39,13 @@ const inboundMessageRepository = {
     where: { id: toRequiredString(id, 'id') },
   }),
 
+  findByIdAndClinic: async ({ id, clinicId }) => prisma.inboundMessage.findFirst({
+    where: {
+      id: toRequiredString(id, 'id'),
+      clinicId: toRequiredString(clinicId, 'clinicId'),
+    },
+  }),
+
   findByClinicAndProviderMessageId: async ({ clinicId, providerMessageId }) => prisma.inboundMessage.findFirst({
     where: {
       clinicId: toRequiredString(clinicId, 'clinicId'),

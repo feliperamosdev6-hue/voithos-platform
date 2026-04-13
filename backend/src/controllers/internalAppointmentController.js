@@ -57,7 +57,7 @@ const resolveInternalAppointment = async ({ clinicId, appointment = {}, patient 
     if (expectedProfessionalId && String(candidate.profissionalId || '').trim() !== expectedProfessionalId) continue;
     if (expectedPatientId && String(candidate.patientId || '').trim() === expectedPatientId) return candidate;
 
-    const candidatePatient = await patientRepository.findById(candidate.patientId).catch(() => null);
+    const candidatePatient = await patientRepository.findByIdAndClinic(candidate.patientId, clinicId).catch(() => null);
     const candidateName = normalizeText(candidatePatient?.nome);
     const candidatePhone = normalizeDigits(candidatePatient?.telefone);
     if (expectedPhone && candidatePhone && expectedPhone === candidatePhone) return candidate;

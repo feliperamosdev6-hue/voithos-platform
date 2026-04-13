@@ -69,6 +69,30 @@ const parseIntent = (normalizedBody) => {
   return INBOUND_INTENT.UNKNOWN;
 };
 
+const TENANT_SENSITIVE_KEYS = new Set([
+  'clinicId',
+  'patientId',
+  'appointmentId',
+  'outboundMessageId',
+  'dispatchId',
+  'batchId',
+  'campaignId',
+]);
+
+const sanitizeTenantPayload = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeTenantPayload(item));
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date) return value;
+
+  return Object.entries(value).reduce((acc, [key, nestedValue]) => {
+    if (TENANT_SENSITIVE_KEYS.has(String(key || '').trim())) return acc;
+    acc[key] = sanitizeTenantPayload(nestedValue);
+    return acc;
+  }, {});
+};
+
 const inboundMessageService = {
   listRecent: async ({ clinicId, status, intent, limit }) => inboundMessageRepository.listRecent({
     clinicId,
@@ -110,7 +134,7 @@ const inboundMessageService = {
       status: INBOUND_STATUS.RECEIVED,
       intent: INBOUND_INTENT.UNKNOWN,
       providerMessageId,
-      rawPayload,
+      rawPayload: sanitizeTenantPayload(rawPayload),
     });
 
     try {
@@ -128,7 +152,10 @@ const inboundMessageService = {
           intent,
           processingNotes: 'No matching outbound confirmation was found for this phone.',
         });
-        const stored = await inboundMessageRepository.findById(inbound.id);
+        const stored = await inboundMessageRepository.findByIdAndClinic({
+          id: inbound.id,
+          clinicId: normalizedClinicId,
+        });
         return {
           ...stored,
           replyText: buildReplyText({ intent, status: INBOUND_STATUS.IGNORED }),
@@ -147,7 +174,10 @@ const inboundMessageService = {
           intent,
           processingNotes: 'Matching outbound exists, but appointment is no longer available for this clinic.',
         });
-        const stored = await inboundMessageRepository.findById(inbound.id);
+        const stored = await inboundMessageRepository.findByIdAndClinic({
+          id: inbound.id,
+          clinicId: normalizedClinicId,
+        });
         return {
           ...stored,
           replyText: buildReplyText({ intent, status: INBOUND_STATUS.IGNORED }),
@@ -165,14 +195,17 @@ const inboundMessageService = {
           intent,
           processingNotes: 'Inbound message did not match a supported confirmation intent.',
         });
-        return inboundMessageRepository.findById(inbound.id);
+        return inboundMessageRepository.findByIdAndClinic({
+          id: inbound.id,
+          clinicId: normalizedClinicId,
+        });
       }
 
       const nextStatus = intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION ? 'CONFIRMADO' : 'REMARCAR';
       const confirmado = intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION;
 
       const patient = outbound.patientId
-        ? await patientRepository.findById(outbound.patientId).catch(() => null)
+        ? await patientRepository.findByIdAndClinic(outbound.patientId, normalizedClinicId).catch(() => null)
         : null;
 
       const updateResult = await appointmentRepository.updateStatus({
@@ -213,7 +246,10 @@ const inboundMessageService = {
         },
       });
 
-      const stored = await inboundMessageRepository.findById(inbound.id);
+      const stored = await inboundMessageRepository.findByIdAndClinic({
+        id: inbound.id,
+        clinicId: normalizedClinicId,
+      });
       return {
         ...stored,
         replyText: buildReplyText({
