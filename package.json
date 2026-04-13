@@ -18,7 +18,8 @@
         "e2e:pilot": "node scripts/e2e-pilot-runner.mjs",
         "smoke:plans:automation": "node scripts/smoke-plan-message-automation.mjs",
         "smoke:relationship:central": "node scripts/smoke-relationship-central.mjs",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "npm run test:tenant-isolation",
+        "test:tenant-isolation": "node scripts/run-tenant-isolation-tests.cjs"
     },
     "keywords": [],
     "author": "",

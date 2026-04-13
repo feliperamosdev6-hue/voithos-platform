@@ -6,8 +6,8 @@ const { patientDocumentStorageService } = require('./patientDocumentStorageServi
 const { financialService, mapAccountToLegacy } = require('./financialService');
 
 const assertPatientBelongsToClinic = async ({ clinicId, patientId }) => {
-  const patient = await patientRepository.findById(patientId);
-  if (!patient || String(patient.clinicId || '').trim() !== String(clinicId || '').trim()) {
+  const patient = await patientRepository.findByIdAndClinic(patientId, clinicId);
+  if (!patient) {
     throw new AppError(404, 'PATIENT_NOT_FOUND', 'Patient not found for this clinic.');
   }
   return patient;
