@@ -611,32 +611,40 @@
     },
   };
 
-  window.__desktopAdapter = {
-    mode: 'desktop',
-    auth,
-    users,
-    patients,
-    services,
-    documents,
-    finance,
-    laboratorio,
-    plans,
-    campanhas,
-    campanhasGlobal,
-    clinic,
-    whatsapp,
-    anamneseModels,
-    files,
-    agenda,
-    birthdays,
-    relationship,
-    agendaSettings,
-    agendaAvailability,
-    notifications,
-    procedures,
-    documentModels,
-    loadProcedures,
-    openExternalUrl,
-    events,
-  };
+  // Só criar o desktop adapter se realmente estiver em Electron
+  // (window.auth, window.users, etc vêm do contexto do Electron)
+  const isElectronRenderer = typeof window.auth !== 'undefined' 
+    || typeof window.users !== 'undefined'
+    || typeof window.api !== 'undefined';
+
+  if (isElectronRenderer) {
+    window.__desktopAdapter = {
+      mode: 'desktop',
+      auth,
+      users,
+      patients,
+      services,
+      documents,
+      finance,
+      laboratorio,
+      plans,
+      campanhas,
+      campanhasGlobal,
+      clinic,
+      whatsapp,
+      anamneseModels,
+      files,
+      agenda,
+      birthdays,
+      relationship,
+      agendaSettings,
+      agendaAvailability,
+      notifications,
+      procedures,
+      documentModels,
+      loadProcedures,
+      openExternalUrl,
+      events,
+    };
+  }
 })();
