@@ -102,7 +102,6 @@ const buildProcedureDueDate = (payload = {}, fallback = new Date()) => {
 
 const shouldGenerateProcedureFinance = ({ payload = {}, amount = 0, status = '' } = {}) => {
   if (payload?.gerarFinanceiro === false) return false;
-  if (amount <= 0) return false;
   const normalizedStatus = normalizeProcedureStatus(status);
   if (normalizedStatus === 'pre-existente' || normalizedStatus === 'cancelado') return false;
   return true;
