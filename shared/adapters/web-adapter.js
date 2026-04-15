@@ -1,5 +1,11 @@
 (function () {
-  const DEFAULT_BASE = localStorage.getItem('apiBase') || '';
+  let DEFAULT_BASE = '';
+  try {
+    DEFAULT_BASE = localStorage.getItem('apiBase') || '';
+  } catch (_error) {
+    // localStorage indisponível (navegação privada, origem insegura, etc)
+    DEFAULT_BASE = '';
+  }
   const WEB_SESSION_TOKEN_KEY = 'voithos.web.session.token';
   const WEB_SESSION_USER_KEY = 'voithos.web.session.user';
   const WEB_SESSION_CLINIC_KEY = 'voithos.web.session.clinic';
@@ -779,7 +785,13 @@
     return openBlobInBrowser(new Blob([html], { type: 'text/html;charset=utf-8' }), 'text/html;charset=utf-8');
   };
 
-  const getStoredToken = () => cleanText(localStorage.getItem(WEB_SESSION_TOKEN_KEY));
+  const getStoredToken = () => {
+    try {
+      return cleanText(localStorage.getItem(WEB_SESSION_TOKEN_KEY));
+    } catch (_error) {
+      return '';
+    }
+  };
   const getStoredUser = () => {
     try {
       const raw = localStorage.getItem(WEB_SESSION_USER_KEY);
@@ -798,23 +810,31 @@
   };
 
   const persistWebSession = ({ token = '', user = null, clinic = null } = {}) => {
-    const normalizedToken = cleanText(token);
-    if (normalizedToken) localStorage.setItem(WEB_SESSION_TOKEN_KEY, normalizedToken);
-    else localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
+    try {
+      const normalizedToken = cleanText(token);
+      if (normalizedToken) localStorage.setItem(WEB_SESSION_TOKEN_KEY, normalizedToken);
+      else localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
 
-    if (user && typeof user === 'object') localStorage.setItem(WEB_SESSION_USER_KEY, JSON.stringify(user));
-    else localStorage.removeItem(WEB_SESSION_USER_KEY);
+      if (user && typeof user === 'object') localStorage.setItem(WEB_SESSION_USER_KEY, JSON.stringify(user));
+      else localStorage.removeItem(WEB_SESSION_USER_KEY);
 
-    if (clinic && typeof clinic === 'object') {
-      localStorage.setItem(WEB_SESSION_CLINIC_KEY, JSON.stringify(normalizeClinicSessionData(clinic)));
+      if (clinic && typeof clinic === 'object') {
+        localStorage.setItem(WEB_SESSION_CLINIC_KEY, JSON.stringify(normalizeClinicSessionData(clinic)));
+      }
+      else localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
+    } catch (_error) {
+      // localStorage indisponível - sessão não persistida mas não quebra execução
     }
-    else localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
   };
 
   const clearWebSession = () => {
-    localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
-    localStorage.removeItem(WEB_SESSION_USER_KEY);
-    localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
+    try {
+      localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
+      localStorage.removeItem(WEB_SESSION_USER_KEY);
+      localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
+    } catch (_error) {
+      // localStorage indisponível - não quebra execução
+    }
   };
 
   const mapCentralRoleToTipo = (role) => {

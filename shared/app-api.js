@@ -1,5 +1,7 @@
 (function () {
-  const hasDesktopBridge = Boolean(window.api || window.auth || window.users);
+  // Detectar ambiente verificando especificamente se desktop adapter foi criado
+  // Em vez de confiar em window.api/auth/users que podem vir de outras libs
+  const hasDesktopBridge = typeof window.__desktopAdapter !== 'undefined' && window.__desktopAdapter !== null;
 
   const desktopAdapter = window.__desktopAdapter || null;
   const webAdapter = window.__webAdapter || null;
