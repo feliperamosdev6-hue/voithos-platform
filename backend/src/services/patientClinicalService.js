@@ -100,6 +100,15 @@ const buildProcedureDueDate = (payload = {}, fallback = new Date()) => {
   ) || fallback;
 };
 
+const buildProcedurePaidAt = (payload = {}) => (
+  normalizeIsoDate(
+    payload?.financeiro?.paidAt
+    || payload?.paidAt
+    || payload?.dataPagamento
+    || payload?.dataRealizacao
+  ) || new Date()
+);
+
 const shouldGenerateProcedureFinance = ({ payload = {}, amount = 0, status = '' } = {}) => {
   if (payload?.gerarFinanceiro === false) return false;
   const normalizedStatus = normalizeProcedureStatus(status);
@@ -244,6 +253,9 @@ const syncProcedureFinancialAccount = async ({
   const dentistId = cleanText(procedureRow?.dentistId || payload?.dentistaId);
   const dentistName = cleanText(procedureRow?.dentistName || payload?.dentistaNome);
   const dueDate = buildProcedureDueDate(payload, procedureRow?.registeredAt || new Date());
+  const paymentStatus = normalizeProcedurePaymentStatus(payload?.financeiro?.paymentStatus || payload?.paymentStatus || payload?.statusPagamento);
+  const paidAt = paymentStatus === 'PAID' ? buildProcedurePaidAt(payload) : null;
+  const paymentMethod = normalizeProcedurePaymentMethod(payload?.financeiro?.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || 'PIX');
   const financePayload = {
     patientId: cleanText(patient?.id || procedureRow?.patientId),
     patientProcedureId: cleanText(procedureRow?.id),
@@ -263,7 +275,10 @@ const syncProcedureFinancialAccount = async ({
     tipo: 'receita',
     dueDate,
     vencimento: dueDate,
-    paymentMethod: normalizeProcedurePaymentMethod(payload?.financeiro?.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || 'PIX'),
+    status: paymentStatus === 'PAID' ? 'PAID' : 'OPEN',
+    paymentStatus,
+    paidAt,
+    paymentMethod,
     parcelas: resolveProcedureInstallments(payload),
     dentistaId: dentistId,
     dentistaNome: dentistName,
@@ -279,10 +294,12 @@ const syncProcedureFinancialAccount = async ({
       origin: PROCEDURE_FINANCIAL_SOURCE,
       type: 'receita',
       data: dueDate.toISOString().slice(0, 10),
+      paymentStatus,
+      paidAt: paidAt ? paidAt.toISOString() : null,
     },
   };
 
-  const financeAccount = linkedAccount
+  let financeAccount = linkedAccount
     ? await financialService.updateFinancialAccount({
       clinicId,
       accountId: linkedAccount.id,
@@ -292,6 +309,22 @@ const syncProcedureFinancialAccount = async ({
       clinicId,
       payload: financePayload,
     });
+
+  if (paymentStatus === 'PAID' && roundMoney(financeAccount?.remainingAmount ?? amount) > 0) {
+    financeAccount = await financialService.registerPayment({
+      clinicId,
+      accountId: financeAccount.id,
+      amount: roundMoney(financeAccount?.remainingAmount ?? amount),
+      method: paymentMethod,
+      paidAt,
+      metadata: {
+        origin: PROCEDURE_FINANCIAL_SOURCE,
+        category: PROCEDURE_FINANCIAL_CATEGORY,
+        procedureId: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
+        patientProcedureId: cleanText(procedureRow?.id),
+      },
+    });
+  }
 
   return {
     financeAccount,
