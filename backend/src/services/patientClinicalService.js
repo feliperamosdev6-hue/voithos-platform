@@ -223,6 +223,7 @@ const syncProcedureFinancialAccount = async ({
   patient = {},
   procedureRow = {},
   payload = {},
+  allowPaymentRegistration = true,
 } = {}) => {
   const linkedAccount = pickLinkedFinancialAccount(procedureRow)
     || await financialRepository.findFinancialAccountByExternalReference({
@@ -269,7 +270,8 @@ const syncProcedureFinancialAccount = async ({
   const dentistId = cleanText(procedureRow?.dentistId || payload?.dentistaId);
   const dentistName = cleanText(procedureRow?.dentistName || payload?.dentistaNome);
   const dueDate = buildProcedureDueDate(payload, procedureRow?.registeredAt || new Date());
-  const paymentStatus = normalizeProcedurePaymentStatus(payload?.financeiro?.paymentStatus || payload?.paymentStatus || payload?.statusPagamento);
+  const requestedPaymentStatus = normalizeProcedurePaymentStatus(payload?.financeiro?.paymentStatus || payload?.paymentStatus || payload?.statusPagamento);
+  const paymentStatus = allowPaymentRegistration ? requestedPaymentStatus : 'PENDING';
   const paidAt = paymentStatus === 'PAID' ? buildProcedurePaidAt(payload) : null;
   const paymentMethod = normalizeProcedurePaymentMethod(payload?.financeiro?.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || 'PIX');
   const financePayload = {
@@ -326,7 +328,7 @@ const syncProcedureFinancialAccount = async ({
       payload: financePayload,
     });
 
-  if (paymentStatus === 'PAID' && roundMoney(financeAccount?.remainingAmount ?? amount) > 0) {
+  if (allowPaymentRegistration && paymentStatus === 'PAID' && roundMoney(financeAccount?.remainingAmount ?? amount) > 0) {
     financeAccount = await financialService.registerPayment({
       clinicId,
       accountId: financeAccount.id,
@@ -495,41 +497,50 @@ const patientClinicalService = {
       patientId,
       externalId,
     });
-    const resolvedStatus = normalizeProcedureStatus(payload.status || payload.estado || payload.situacao || 'a-realizar');
-    const resolvedTeeth = normalizeProcedureTeeth(payload.dentes || payload.dente);
-    const resolvedAmount = resolveProcedureAmount(payload);
+    const existingPayload = existing?.payload && typeof existing.payload === 'object' ? existing.payload : {};
+    const mergedPayload = existing ? { ...existingPayload, ...payload } : payload;
+    const resolvedStatus = normalizeProcedureStatus(payload.status || payload.estado || payload.situacao || existing?.status || existingPayload.status || 'a-realizar');
+    const resolvedTeeth = normalizeProcedureTeeth(mergedPayload.dentes || existing?.tooth || mergedPayload.dente);
+    const resolvedAmount = resolveProcedureSyncAmount({ payload: mergedPayload, procedureRow: existing || {} });
+    const resolvedName = cleanText(
+      mergedPayload.nome
+      || mergedPayload.tipo
+      || mergedPayload.procedimento
+      || existing?.name
+      || 'Procedimento'
+    );
     const payloadWithIdentity = {
-      ...payload,
+      ...mergedPayload,
       id: externalId,
       externalId,
-      nome: cleanText(payload.nome || payload.tipo || payload.procedimento || 'Procedimento'),
-      tipo: cleanText(payload.tipo || payload.nome || payload.procedimento || 'Procedimento'),
+      nome: resolvedName,
+      tipo: cleanText(mergedPayload.tipo || mergedPayload.nome || mergedPayload.procedimento || resolvedName),
       dentes: resolvedTeeth,
-      dente: cleanText(payload.dente || resolvedTeeth[0] || ''),
-      faces: Array.isArray(payload.faces) ? payload.faces.map((item) => cleanText(item)).filter(Boolean) : [],
+      dente: cleanText(mergedPayload.dente || resolvedTeeth[0] || ''),
+      faces: Array.isArray(mergedPayload.faces) ? mergedPayload.faces.map((item) => cleanText(item)).filter(Boolean) : [],
       status: resolvedStatus,
       valor: resolvedAmount,
-      valorCobrado: roundMoney(payload.valorCobrado ?? resolvedAmount),
-      gerarFinanceiro: payload.gerarFinanceiro !== false,
+      valorCobrado: roundMoney(mergedPayload.valorCobrado ?? resolvedAmount),
+      gerarFinanceiro: mergedPayload.gerarFinanceiro !== false,
     };
 
     const data = {
       clinicId,
       patientId,
       clinicalRecordId: record.id,
-      appointmentId: cleanText(payload.appointmentId) || null,
+      appointmentId: cleanText(mergedPayload.appointmentId) || null,
       externalId,
-      procedureCode: cleanText(payload.codigo || payload.code) || null,
-      name: cleanText(payload.nome || payload.tipo || payload.procedimento || 'Procedimento'),
+      procedureCode: cleanText(mergedPayload.codigo || mergedPayload.code) || null,
+      name: resolvedName,
       status: resolvedStatus,
-      dentistId: cleanText(payload.dentistaId) || null,
-      dentistName: cleanText(payload.dentistaNome) || null,
-      tooth: cleanText(resolvedTeeth[0] || payload.dente) || null,
+      dentistId: cleanText(mergedPayload.dentistaId) || null,
+      dentistName: cleanText(mergedPayload.dentistaNome) || null,
+      tooth: cleanText(resolvedTeeth[0] || mergedPayload.dente) || null,
       faces: payloadWithIdentity.faces,
-      observations: cleanText(payload.observacoes || payload.obs || payload.observacao) || null,
-      registeredAt: normalizeIsoDate(payload.registeredAt || payload.createdAt || payload.dataRegistro) || new Date(),
-      performedAt: normalizeIsoDate(payload.dataRealizacao || payload.finishedAt),
-      financialSnapshot: payload.financeiro || null,
+      observations: cleanText(mergedPayload.observacoes || mergedPayload.obs || mergedPayload.observacao) || null,
+      registeredAt: normalizeIsoDate(mergedPayload.registeredAt || mergedPayload.createdAt || mergedPayload.dataRegistro) || existing?.registeredAt || new Date(),
+      performedAt: normalizeIsoDate(mergedPayload.dataRealizacao || mergedPayload.finishedAt),
+      financialSnapshot: mergedPayload.financeiro || existing?.financialSnapshot || null,
       payload: payloadWithIdentity,
     };
 
@@ -549,6 +560,7 @@ const patientClinicalService = {
           patient,
           procedureRow: updated,
           payload: payloadWithIdentity,
+          allowPaymentRegistration: true,
         });
         financeId = cleanText(syncResult?.financeId || financeId);
         financeWarning = cleanText(syncResult?.financeWarning || '');
@@ -591,6 +603,7 @@ const patientClinicalService = {
         patient,
         procedureRow: created,
         payload: payloadWithIdentity,
+        allowPaymentRegistration: false,
       });
       financeId = cleanText(syncResult?.financeId || '');
       financeWarning = cleanText(syncResult?.financeWarning || '');
