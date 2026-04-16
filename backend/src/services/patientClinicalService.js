@@ -77,6 +77,22 @@ const resolveProcedureAmount = (payload = {}) => {
   return 0;
 };
 
+const resolveProcedureSyncAmount = ({ payload = {}, procedureRow = {}, linkedAccount = null } = {}) => {
+  const candidates = [
+    resolveProcedureAmount(payload),
+    resolveProcedureAmount(procedureRow?.payload || {}),
+    procedureRow?.financialSnapshot?.amount,
+    procedureRow?.financialSnapshot?.totalAmount,
+    linkedAccount?.totalAmount,
+    linkedAccount?.valor,
+  ];
+  for (const candidate of candidates) {
+    const amount = roundMoney(candidate);
+    if (amount > 0) return amount;
+  }
+  return 0;
+};
+
 const resolveProcedureInstallments = (payload = {}) => {
   const count = Number(
     payload?.financeiro?.installments
@@ -213,7 +229,7 @@ const syncProcedureFinancialAccount = async ({
       clinicId,
       externalReference: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
     });
-  const amount = resolveProcedureAmount(payload);
+  const amount = resolveProcedureSyncAmount({ payload, procedureRow, linkedAccount });
   const shouldGenerate = shouldGenerateProcedureFinance({
     payload,
     amount,
