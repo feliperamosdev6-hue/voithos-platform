@@ -1536,9 +1536,10 @@
         { auth: true }
       );
     },
-    markDone: async ({ prontuario, serviceId, dateISO } = {}) => services.update({
+    markDone: async ({ prontuario, serviceId, dateISO, service = {} } = {}) => services.update({
       prontuario,
       service: {
+        ...(service || {}),
         id: cleanText(serviceId),
         status: 'realizado',
         dataRealizacao: cleanText(dateISO || new Date().toISOString()),

@@ -2249,10 +2249,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (action === 'proc-mark-done-today') {
       try {
+        const currentService = findServiceById(serviceId) || {};
         const payload = {
           prontuario: currentPatient.prontuario,
           serviceId,
           dateISO: new Date().toISOString(),
+          service: {
+            ...currentService,
+            id: serviceId,
+            status: 'realizado',
+            dataRealizacao: new Date().toISOString(),
+          },
         };
         if (servicesApi.markDone) {
           await servicesApi.markDone(payload);
@@ -2260,6 +2267,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await servicesApi.update?.({
             prontuario: currentPatient.prontuario,
             service: {
+              ...currentService,
               id: serviceId,
               status: 'realizado',
               dataRealizacao: payload.dateISO,
@@ -2283,10 +2291,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
       }
       try {
+        const currentService = findServiceById(serviceId) || {};
         const payload = {
           prontuario: currentPatient.prontuario,
           serviceId,
           dateISO: date.toISOString(),
+          service: {
+            ...currentService,
+            id: serviceId,
+            status: 'realizado',
+            dataRealizacao: date.toISOString(),
+          },
         };
         if (servicesApi.markDone) {
           await servicesApi.markDone(payload);
@@ -2294,6 +2309,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await servicesApi.update?.({
             prontuario: currentPatient.prontuario,
             service: {
+              ...currentService,
               id: serviceId,
               status: 'realizado',
               dataRealizacao: payload.dateISO,
