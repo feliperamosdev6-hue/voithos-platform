@@ -1,5 +1,6 @@
 const { clinicService } = require('../services/clinicService');
 const { campaignService } = require('../services/campaignService');
+const { whatsappNgClient } = require('../adapters/whatsappNgClient');
 const { AppError } = require('../errors/AppError');
 const { isInternalServiceRequest, requireSuperAdmin } = require('../utils/accessControl');
 
@@ -92,6 +93,48 @@ const updateMyClinicProfile = async (req, res, next) => {
   }
 };
 
+const getMyWhatsAppEngineHealth = async (_req, res, next) => {
+  try {
+    const data = await whatsappNgClient.getHealth();
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getMyWhatsAppConnection = async (req, res, next) => {
+  try {
+    const data = await whatsappNgClient.getConnectionByClinic({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const refreshMyWhatsAppConnection = async (req, res, next) => {
+  try {
+    const data = await whatsappNgClient.refreshConnectionByClinic({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const connectMyWhatsApp = async (req, res, next) => {
+  try {
+    const data = await whatsappNgClient.connectClinic({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const listMyCampaigns = async (req, res, next) => {
   try {
     const data = await campaignService.listCampaigns({
@@ -162,6 +205,10 @@ module.exports = {
   updateMyOperationalSettings,
   getMyClinicProfile,
   updateMyClinicProfile,
+  getMyWhatsAppEngineHealth,
+  getMyWhatsAppConnection,
+  refreshMyWhatsAppConnection,
+  connectMyWhatsApp,
   listMyCampaigns,
   replaceMyCampaigns,
   createMyCampaign,

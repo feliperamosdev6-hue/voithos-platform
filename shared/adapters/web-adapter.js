@@ -1268,10 +1268,10 @@
     testWhatsApp: async () => notImplemented('clinic.testWhatsApp'),
     listMessagingLogs: async () => notImplemented('clinic.listMessagingLogs'),
     queueWhatsApp: async () => notImplemented('clinic.queueWhatsApp'),
-    getWhatsAppEngineHealth: async () => notImplemented('clinic.getWhatsAppEngineHealth'),
-    getWhatsAppConnection: async () => notImplemented('clinic.getWhatsAppConnection'),
-    refreshWhatsAppConnection: async () => notImplemented('clinic.refreshWhatsAppConnection'),
-    connectWhatsApp: async () => notImplemented('clinic.connectWhatsApp'),
+    getWhatsAppEngineHealth: async () => request('GET', '/clinics/me/whatsapp/health', null, { auth: true }),
+    getWhatsAppConnection: async () => request('GET', '/clinics/me/whatsapp/connection', null, { auth: true }),
+    refreshWhatsAppConnection: async () => request('POST', '/clinics/me/whatsapp/connection/refresh', {}, { auth: true }),
+    connectWhatsApp: async () => request('POST', '/clinics/me/whatsapp/connect', {}, { auth: true }),
   };
 
   const auth = {

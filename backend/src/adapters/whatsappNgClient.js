@@ -64,6 +64,38 @@ const ensureOk = async (response) => {
   return payload?.data || payload;
 };
 
+const normalizeHealth = (health) => {
+  const data = health?.body?.data || health?.body || {};
+  const ready = Boolean(health?.ok && data?.health_ready === true);
+  return {
+    ready,
+    status: data?.status || (ready ? 'ok' : 'offline'),
+    message: ready
+      ? ''
+      : health?.error?.message || data?.message || 'WhatsApp NG is unavailable.',
+    durationMs: health?.durationMs || 0,
+    bootMode: data?.boot_mode || null,
+    startedAt: data?.startedAt || null,
+    completedAt: data?.completedAt || null,
+    runtimeRecoveryFinishedAt: data?.runtimeRecoveryFinishedAt || null,
+    runtimeRecoveryFailedAt: data?.runtimeRecoveryFailedAt || null,
+    timestamp: data?.timestamp || new Date().toISOString(),
+  };
+};
+
+const normalizeConnection = (payload = {}, clinicId = '') => {
+  const instanceId = String(payload?.instanceId || payload?.id || '').trim();
+  return {
+    ...payload,
+    id: payload?.id || instanceId || null,
+    instanceId: instanceId || null,
+    clinicId: String(payload?.clinicId || clinicId || '').trim(),
+    exists: Boolean(instanceId),
+    status: payload?.operationalStatus || payload?.status || (instanceId ? 'CREATED' : 'NOT_CONFIGURED'),
+    operationalStatus: payload?.operationalStatus || payload?.status || (instanceId ? 'CREATED' : 'NOT_CONFIGURED'),
+  };
+};
+
 const request = async (pathname, options = {}) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -136,6 +168,46 @@ const request = async (pathname, options = {}) => {
 };
 
 const whatsappNgClient = {
+  getHealth: async () => normalizeHealth(await probeHealth()),
+  getConnectionByClinic: async ({ clinicId }) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'CLINIC_ID_REQUIRED', 'clinicId is required.');
+    }
+    try {
+      const status = await request(`/instances/by-clinic/${encodeURIComponent(normalizedClinicId)}/status`);
+      return normalizeConnection(status, normalizedClinicId);
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 404) {
+        return normalizeConnection({
+          clinicId: normalizedClinicId,
+          status: 'NOT_CONFIGURED',
+          operationalStatus: 'NOT_CONFIGURED',
+        }, normalizedClinicId);
+      }
+      throw error;
+    }
+  },
+  refreshConnectionByClinic: async ({ clinicId }) => {
+    const connection = await whatsappNgClient.getConnectionByClinic({ clinicId });
+    if (!connection.instanceId || connection.operationalStatus === 'CONNECTED') return connection;
+    const qr = await request(`/instances/${encodeURIComponent(connection.instanceId)}/qr`);
+    return normalizeConnection({ ...connection, ...qr }, clinicId);
+  },
+  connectClinic: async ({ clinicId }) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'CLINIC_ID_REQUIRED', 'clinicId is required.');
+    }
+    const created = await request('/instances', {
+      method: 'POST',
+      body: { clinicId: normalizedClinicId },
+    });
+    const connection = normalizeConnection(created, normalizedClinicId);
+    if (!connection.instanceId) return connection;
+    const qr = await request(`/instances/${encodeURIComponent(connection.instanceId)}/qr`);
+    return normalizeConnection({ ...connection, ...qr }, normalizedClinicId);
+  },
   sendMessage: async ({ clinicId, phone, body, auditBody, appointmentId }) => request('/messages/send', {
     method: 'POST',
     body: {
