@@ -303,6 +303,11 @@ const resolveAudiencePreviewData = ({
   now = new Date(),
 }) => {
   const normalizedSegmentKey = cleanText(segmentKey).toLowerCase() || 'all_active';
+  const selectedPatientIds = new Set(
+    (Array.isArray(filters?.selectedPatientIds) ? filters.selectedPatientIds : [])
+      .map((value) => cleanText(value))
+      .filter(Boolean),
+  );
   const patientMap = new Map((Array.isArray(patients) ? patients : []).map((item) => [cleanText(item.id), item]));
   const appointmentMap = new Map();
   const procedureMap = new Map();
@@ -344,6 +349,7 @@ const resolveAudiencePreviewData = ({
   const members = [];
 
   patientMap.forEach((patient, patientId) => {
+    if (selectedPatientIds.size && !selectedPatientIds.has(patientId)) return;
     const signal = buildSignalFromPatient({
       patient,
       appointments: appointmentMap.get(patientId) || [],

@@ -226,6 +226,7 @@ const mapCampaignToLegacy = (row = {}) => {
     publico: 'pacientes_clinica',
     publicoLabel: 'Pacientes da clinica',
     segmentKey: normalizeSegmentKey(row?.audienceSegmentKey || template?.segmentType || 'all_active'),
+    audienceFilters: row?.audienceFilters && typeof row.audienceFilters === 'object' ? row.audienceFilters : {},
     templateId: cleanText(template?.id),
     templateTitle: cleanText(template?.title),
     templateCategory: cleanText(template?.category),

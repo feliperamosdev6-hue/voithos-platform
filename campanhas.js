@@ -1,4 +1,4 @@
-﻿const normalizeCampaign = (camp = {}) => ({
+const normalizeCampaign = (camp = {}) => ({
   ...camp,
   nome: camp.nome || 'Campanha',
   periodo: camp.periodo || '',
@@ -18,6 +18,7 @@
   publico: camp.publico || 'pacientes_clinica',
   publicoLabel: camp.publicoLabel || 'Pacientes da clinica',
   segmentKey: String(camp.segmentKey || camp.segmento || 'all_active').trim().toLowerCase(),
+  audienceFilters: camp.audienceFilters || camp.filters || {},
 });
 
 const emitCampaignsUpdated = (source = 'campanhas') => {
@@ -253,6 +254,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const selectPublico = document.getElementById('camp-publico');
   const selectSegmento = document.getElementById('camp-segmento');
   const segmentPreview = document.getElementById('segment-preview');
+  const campaignPatientSearch = document.getElementById('camp-patient-search');
+  const campaignPatientPicker = document.getElementById('camp-patient-picker');
+  const campaignSelectedPatients = document.getElementById('camp-selected-patients');
 
   const globalsModal = document.getElementById('campanhas-globais-modal');
   const globalsCloseBtn = document.getElementById('close-globais-modal');
@@ -332,6 +336,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let campanhas = [];
   let templatesData = { monthly: null, annualTemplates: [] };
   let campaignResults = new Map();
+  let campaignPatients = [];
+  let selectedCampaignPatientIds = new Set();
   let editingCampaignId = null;
   let templateFlowState = {
     open: false,
@@ -417,6 +423,98 @@ document.addEventListener('DOMContentLoaded', () => {
     campaignResults = map;
   };
 
+  const getCampaignPatientId = (patient = {}) => String(patient?.id || patient?.patientId || patient?.prontuario || '').trim();
+
+  const getCampaignPatientLabel = (patient = {}) => String(
+    patient?.nome || patient?.fullName || patient?.patientName || 'Paciente',
+  ).trim() || 'Paciente';
+
+  const loadCampaignPatients = async () => {
+    if (!patientsApi.list) {
+      campaignPatients = [];
+      return;
+    }
+    try {
+      const list = await patientsApi.list();
+      campaignPatients = (Array.isArray(list) ? list : [])
+        .filter((patient) => getCampaignPatientId(patient))
+        .sort((left, right) => getCampaignPatientLabel(left).localeCompare(getCampaignPatientLabel(right), 'pt-BR'));
+    } catch (err) {
+      console.warn('Erro ao carregar pacientes para campanhas', err);
+      campaignPatients = [];
+    }
+  };
+
+  const getSelectedCampaignPatients = () => campaignPatients
+    .filter((patient) => selectedCampaignPatientIds.has(getCampaignPatientId(patient)));
+
+  const renderSelectedCampaignPatients = () => {
+    if (!campaignSelectedPatients) return;
+    const selected = getSelectedCampaignPatients();
+    if (!selected.length) {
+      campaignSelectedPatients.innerHTML = '<span class="campaign-selected-empty">Nenhum paciente especifico selecionado.</span>';
+      return;
+    }
+    campaignSelectedPatients.innerHTML = selected.map((patient) => {
+      const patientId = getCampaignPatientId(patient);
+      return `
+        <button type="button" class="campaign-patient-chip" data-remove-campaign-patient="${escapeHtml(patientId)}">
+          <span>${escapeHtml(getCampaignPatientLabel(patient))}</span>
+          <strong aria-hidden="true">&times;</strong>
+        </button>
+      `;
+    }).join('');
+  };
+
+  const renderCampaignPatientPicker = () => {
+    if (!campaignPatientPicker) return;
+    const query = String(campaignPatientSearch?.value || '').trim().toLowerCase();
+    const terms = query.split(/\s+/).filter(Boolean);
+    const matches = campaignPatients
+      .filter((patient) => {
+        if (!terms.length) return true;
+        const haystack = [
+          getCampaignPatientLabel(patient),
+          patient?.telefone,
+          patient?.phone,
+          patient?.email,
+          patient?.cpf,
+          patient?.prontuario,
+          patient?.id,
+        ].map((value) => String(value || '').toLowerCase()).join(' ');
+        return terms.every((term) => haystack.includes(term));
+      })
+      .slice(0, 8);
+
+    if (!campaignPatients.length) {
+      campaignPatientPicker.innerHTML = '<div class="empty-state">Nenhum paciente cadastrado nesta clinica.</div>';
+      return;
+    }
+    if (!matches.length) {
+      campaignPatientPicker.innerHTML = '<div class="empty-state">Nenhum paciente encontrado.</div>';
+      return;
+    }
+
+    campaignPatientPicker.innerHTML = matches.map((patient) => {
+      const patientId = getCampaignPatientId(patient);
+      const selected = selectedCampaignPatientIds.has(patientId);
+      return `
+        <button type="button" class="campaign-patient-option${selected ? ' selected' : ''}" data-campaign-patient-id="${escapeHtml(patientId)}">
+          <span>
+            <strong>${escapeHtml(getCampaignPatientLabel(patient))}</strong>
+            <small>${escapeHtml(patient?.telefone || patient?.phone || patient?.email || patientId)}</small>
+          </span>
+          <em>${selected ? 'Selecionado' : 'Adicionar'}</em>
+        </button>
+      `;
+    }).join('');
+  };
+
+  const renderCampaignManualAudience = () => {
+    renderCampaignPatientPicker();
+    renderSelectedCampaignPatients();
+  };
+
   const refreshSegmentPreview = async () => {
     if (!segmentPreview) return;
     if (!campanhasApi.resolveAudience) {
@@ -424,15 +522,20 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const segmentKey = String(selectSegmento?.value || 'all_active').trim().toLowerCase();
+    const selectedPatientIds = Array.from(selectedCampaignPatientIds);
     segmentPreview.textContent = 'Calculando audiencia...';
     try {
-      const data = await campanhasApi.resolveAudience({ segmentKey });
+      const data = await campanhasApi.resolveAudience({
+        segmentKey,
+        filters: selectedPatientIds.length ? { selectedPatientIds } : {},
+      });
       if (data?.unavailable) {
         segmentPreview.textContent = data?.reason || 'Segmento indisponivel.';
         segmentPreview.title = data?.reason || 'Segmento indisponivel.';
         return;
       }
-      segmentPreview.textContent = `${data?.total ?? 0} pacientes selecionados`;
+      const manualSuffix = selectedPatientIds.length ? ` de ${selectedPatientIds.length} escolhidos manualmente` : '';
+      segmentPreview.textContent = `${data?.total ?? 0} pacientes selecionados${manualSuffix}`;
       segmentPreview.title = '';
     } catch (err) {
       segmentPreview.textContent = 'Falha ao calcular audiencia.';
@@ -1618,9 +1721,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (inputCor) inputCor.value = camp.cor || '#2a9d8f';
       if (selectStatus) selectStatus.value = camp.status || 'ativa';
       if (selectSegmento) selectSegmento.value = camp.segmentKey || 'all_active';
+      selectedCampaignPatientIds = new Set(
+        (Array.isArray(camp?.audienceFilters?.selectedPatientIds) ? camp.audienceFilters.selectedPatientIds : [])
+          .map((value) => String(value || '').trim())
+          .filter(Boolean),
+      );
+      if (campaignPatientSearch) campaignPatientSearch.value = '';
       setSubmitLabel('Salvar');
     } else {
       editingCampaignId = null;
+      selectedCampaignPatientIds = new Set();
+      if (campaignPatientSearch) campaignPatientSearch.value = '';
       const today = getTodayValues();
       if (inputInicio && !inputInicio.value) inputInicio.value = today.date;
       if (inputFim && !inputFim.value) inputFim.value = today.date;
@@ -1630,6 +1741,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (selectSegmento && !selectSegmento.value) selectSegmento.value = 'all_active';
       setSubmitLabel('Adicionar');
     }
+    renderCampaignManualAudience();
     refreshSegmentPreview();
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
@@ -1641,6 +1753,9 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.setAttribute('aria-hidden', 'true');
     form?.reset();
     editingCampaignId = null;
+    selectedCampaignPatientIds = new Set();
+    if (campaignPatientSearch) campaignPatientSearch.value = '';
+    renderCampaignManualAudience();
     setSubmitLabel('Adicionar');
     if (selectPublico) selectPublico.value = 'pacientes_clinica';
     if (selectSegmento) selectSegmento.value = 'all_active';
@@ -1712,6 +1827,10 @@ document.addEventListener('DOMContentLoaded', () => {
       publico: 'pacientes_clinica',
       segmentKey: String(selectSegmento?.value || 'all_active').trim().toLowerCase(),
     };
+    const manualPatientIds = Array.from(selectedCampaignPatientIds);
+    if (manualPatientIds.length) {
+      payload.audienceFilters = { selectedPatientIds: manualPatientIds };
+    }
 
     try {
       if (editingCampaignId) {
@@ -2047,6 +2166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!canOperateCampaigns && activateMonthlyTemplateBtn) {
       activateMonthlyTemplateBtn.style.display = 'none';
     }
+    await loadCampaignPatients();
     campanhas = await loadCampaigns();
     await loadCampaignResults();
     await loadTemplates();
@@ -2206,6 +2326,28 @@ document.addEventListener('DOMContentLoaded', () => {
   openStrategyVideoBtn?.addEventListener('click', openStrategyVideoModal);
   closeStrategyVideoModalBtn?.addEventListener('click', closeStrategyVideoModal);
   selectSegmento?.addEventListener('change', refreshSegmentPreview);
+  campaignPatientSearch?.addEventListener('input', renderCampaignPatientPicker);
+  campaignPatientPicker?.addEventListener('click', (ev) => {
+    const target = ev.target;
+    const option = target instanceof HTMLElement ? target.closest('[data-campaign-patient-id]') : null;
+    if (!option) return;
+    const patientId = String(option.dataset.campaignPatientId || '').trim();
+    if (!patientId) return;
+    if (selectedCampaignPatientIds.has(patientId)) selectedCampaignPatientIds.delete(patientId);
+    else selectedCampaignPatientIds.add(patientId);
+    renderCampaignManualAudience();
+    refreshSegmentPreview();
+  });
+  campaignSelectedPatients?.addEventListener('click', (ev) => {
+    const target = ev.target;
+    const button = target instanceof HTMLElement ? target.closest('[data-remove-campaign-patient]') : null;
+    if (!button) return;
+    const patientId = String(button.dataset.removeCampaignPatient || '').trim();
+    if (!patientId) return;
+    selectedCampaignPatientIds.delete(patientId);
+    renderCampaignManualAudience();
+    refreshSegmentPreview();
+  });
   templateFlowFilters?.addEventListener('click', (ev) => {
     const btn = ev.target instanceof HTMLElement ? ev.target.closest('[data-template-filter]') : null;
     if (!btn) return;

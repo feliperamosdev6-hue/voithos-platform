@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
   <meta charset="UTF-8">
@@ -257,6 +257,14 @@
             </select>
             <small id="segment-preview" class="segment-preview">Carregando segmento...</small>
           </label>
+          <div class="form-field full campaign-manual-audience">
+            <span class="field-label">Pacientes especificos</span>
+            <input type="search" id="camp-patient-search" placeholder="Buscar paciente por nome, telefone ou prontuario">
+            <div class="campaign-patient-picker" id="camp-patient-picker">
+              <div class="empty-state">Digite para buscar pacientes da clinica.</div>
+            </div>
+            <div class="campaign-selected-patients" id="camp-selected-patients"></div>
+          </div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn ghost" id="cancelar-modal">Cancelar</button>
