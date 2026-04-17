@@ -1879,9 +1879,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </label>
           <div class="procedimentos-actions">
             <button class="btn ghost" type="button" data-action="proc-view-details" data-service-id="${serviceId}">Detalhes</button>
-            ${estadoNormalizado !== 'realizado'
-              ? `<button class="btn primary" type="button" data-action="proc-mark-done-today" data-service-id="${serviceId}">Marcar realizado</button>`
-              : ''}
             <div class="menu-wrap">
               <button class="menu-trigger" type="button" aria-label="Acoes">&#8942;</button>
               <div class="menu">
@@ -2243,83 +2240,6 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
         console.warn('[PRONTUARIO] falha ao excluir procedimento', err);
         alert('Nao foi possivel excluir o procedimento.');
-      }
-      return true;
-    }
-
-    if (action === 'proc-mark-done-today') {
-      try {
-        const currentService = findServiceById(serviceId) || {};
-        const payload = {
-          prontuario: currentPatient.prontuario,
-          serviceId,
-          dateISO: new Date().toISOString(),
-          service: {
-            ...currentService,
-            id: serviceId,
-            status: 'realizado',
-            dataRealizacao: new Date().toISOString(),
-          },
-        };
-        if (servicesApi.markDone) {
-          await servicesApi.markDone(payload);
-        } else {
-          await servicesApi.update?.({
-            prontuario: currentPatient.prontuario,
-            service: {
-              ...currentService,
-              id: serviceId,
-              status: 'realizado',
-              dataRealizacao: payload.dateISO,
-            },
-          });
-        }
-        await refreshProcedimentos();
-      } catch (err) {
-        console.warn('[PRONTUARIO] falha ao marcar realizado', err);
-        alert('Nao foi possivel marcar como realizado.');
-      }
-      return true;
-    }
-
-    if (action === 'proc-mark-done-date') {
-      const input = prompt('Informe a data (dd/mm/aaaa):');
-      if (input === null) return true;
-      const date = parseDateBr(input);
-      if (!date) {
-        alert('Data invalida. Use dd/mm/aaaa.');
-        return true;
-      }
-      try {
-        const currentService = findServiceById(serviceId) || {};
-        const payload = {
-          prontuario: currentPatient.prontuario,
-          serviceId,
-          dateISO: date.toISOString(),
-          service: {
-            ...currentService,
-            id: serviceId,
-            status: 'realizado',
-            dataRealizacao: date.toISOString(),
-          },
-        };
-        if (servicesApi.markDone) {
-          await servicesApi.markDone(payload);
-        } else {
-          await servicesApi.update?.({
-            prontuario: currentPatient.prontuario,
-            service: {
-              ...currentService,
-              id: serviceId,
-              status: 'realizado',
-              dataRealizacao: payload.dateISO,
-            },
-          });
-        }
-        await refreshProcedimentos();
-      } catch (err) {
-        console.warn('[PRONTUARIO] falha ao marcar realizado', err);
-        alert('Nao foi possivel marcar como realizado.');
       }
       return true;
     }
