@@ -11,6 +11,11 @@ const {
   getDashboard,
   getMonthlySummary,
   getReminders,
+  listPlans,
+  createPlan,
+  getPlan,
+  updatePlan,
+  deletePlan,
 } = require('../controllers/financialController');
 
 const router = express.Router();
@@ -26,5 +31,10 @@ router.get('/patients/:patientId/summary', getPatientSummary);
 router.get('/dashboard', getDashboard);
 router.get('/summary', getMonthlySummary);
 router.get('/reminders', getReminders);
+router.get('/plans', listPlans);
+router.post('/plans', createPlan);
+router.get('/plans/:planId', getPlan);
+router.patch('/plans/:planId', updatePlan);
+router.delete('/plans/:planId', deletePlan);
 
 module.exports = router;

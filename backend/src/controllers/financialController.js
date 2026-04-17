@@ -129,6 +129,67 @@ const getReminders = async (req, res, next) => {
   }
 };
 
+const listPlans = async (req, res, next) => {
+  try {
+    const data = await financialService.listPatientPlans({
+      clinicId: getAuthenticatedClinicId(req),
+      patientId: String(req.query?.patientId || '').trim(),
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createPlan = async (req, res, next) => {
+  try {
+    const data = await financialService.createPatientPlan({
+      clinicId: getAuthenticatedClinicId(req),
+      payload: req.body || {},
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getPlan = async (req, res, next) => {
+  try {
+    const data = await financialService.getPatientPlanById({
+      clinicId: getAuthenticatedClinicId(req),
+      planId: req.params.planId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updatePlan = async (req, res, next) => {
+  try {
+    const data = await financialService.updatePatientPlan({
+      clinicId: getAuthenticatedClinicId(req),
+      planId: req.params.planId,
+      payload: req.body || {},
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const deletePlan = async (req, res, next) => {
+  try {
+    const data = await financialService.deletePatientPlan({
+      clinicId: getAuthenticatedClinicId(req),
+      planId: req.params.planId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   listAccounts,
   createAccount,
@@ -140,4 +201,9 @@ module.exports = {
   getDashboard,
   getMonthlySummary,
   getReminders,
+  listPlans,
+  createPlan,
+  getPlan,
+  updatePlan,
+  deletePlan,
 };

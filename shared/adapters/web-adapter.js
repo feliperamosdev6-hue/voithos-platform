@@ -1898,11 +1898,29 @@
   };
 
   const plans = {
-    list: async () => notImplemented('plans.list'),
-    getById: async () => notImplemented('plans.getById'),
-    create: async () => notImplemented('plans.create'),
-    update: async () => notImplemented('plans.update'),
-    remove: async () => notImplemented('plans.remove'),
+    list: async ({ patientId } = {}) => {
+      const query = patientId ? `?patientId=${encodeURIComponent(cleanText(patientId))}` : '';
+      return request('GET', `/financial/plans${query}`, null, { auth: true });
+    },
+    getById: async ({ planId } = {}) => request(
+      'GET',
+      `/financial/plans/${encodeURIComponent(cleanText(planId))}`,
+      null,
+      { auth: true }
+    ),
+    create: async (payload = {}) => request('POST', '/financial/plans', payload || {}, { auth: true }),
+    update: async ({ planId, patch, ...payload } = {}) => request(
+      'PATCH',
+      `/financial/plans/${encodeURIComponent(cleanText(planId || payload?.planId || payload?.id))}`,
+      patch || payload || {},
+      { auth: true }
+    ),
+    remove: async ({ planId, id } = {}) => request(
+      'DELETE',
+      `/financial/plans/${encodeURIComponent(cleanText(planId || id))}`,
+      null,
+      { auth: true }
+    ),
     dashboard: async () => notImplemented('plans.dashboard'),
     messageHistory: async () => notImplemented('plans.messageHistory'),
     messageSuggestions: async () => notImplemented('plans.messageSuggestions'),
