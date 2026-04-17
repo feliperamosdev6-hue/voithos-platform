@@ -308,6 +308,25 @@
                     </label>
                 </div>
 
+                <div class="section-title">Importacao e exportacao</div>
+                <section class="data-portability-card">
+                    <div>
+                        <h3>Backup da clinica</h3>
+                        <p>Exporte um arquivo JSON com dados cadastrais e configuracoes desta clinica.</p>
+                        <button class="btn-secondary" type="button" id="clinic-export-data">Exportar dados</button>
+                    </div>
+                    <div>
+                        <h3>Importar configuracoes</h3>
+                        <p>Envie um arquivo JSON e revise o preview antes de aplicar na clinica atual.</p>
+                        <input type="file" id="clinic-import-file" accept="application/json,.json">
+                        <div class="import-preview hidden" id="clinic-import-preview"></div>
+                        <div class="import-actions">
+                            <button class="btn-secondary" type="button" id="clinic-import-clear">Limpar</button>
+                            <button class="btn-primary" type="button" id="clinic-import-apply" disabled>Aplicar importacao</button>
+                        </div>
+                    </div>
+                </section>
+
                 <div class="form-actions">
                     <span class="form-status" id="clinic-status">Nenhuma alteracao pendente</span>
                     <button class="btn-primary" type="submit">Salvar alteracoes</button>

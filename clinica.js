@@ -7,6 +7,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const logoPreview = document.getElementById('logo-preview');
   const logoImage = document.getElementById('logo-image');
   const logoRemove = document.getElementById('logo-remove');
+  const exportDataButton = document.getElementById('clinic-export-data');
+  const importFileInput = document.getElementById('clinic-import-file');
+  const importPreview = document.getElementById('clinic-import-preview');
+  const importApplyButton = document.getElementById('clinic-import-apply');
+  const importClearButton = document.getElementById('clinic-import-clear');
 
   const fields = {
     cnpjCpf: document.getElementById('clinic-cnpj'),
@@ -59,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let logoData = '';
   let logoFile = '';
   let logoRemoved = false;
+  let pendingImportPayload = null;
   let whatsAppPollTimer = null;
   let whatsAppQrState = {
     qrDataUrl: '',
@@ -731,6 +737,116 @@ document.addEventListener('DOMContentLoaded', () => {
     if (logoPreview) logoPreview.classList.toggle('is-empty', !src);
   };
 
+  const renderImportPreview = (preview) => {
+    if (!importPreview) return;
+    const summary = preview?.summary || {};
+    const sections = Array.isArray(preview?.settingsSections) ? preview.settingsSections : [];
+    const fieldsCount = Number(summary.profileFields || 0) + Number(summary.addressFields || 0);
+    importPreview.classList.remove('hidden');
+    importPreview.innerHTML = `
+      <strong>Preview validado</strong>
+      <ul>
+        <li>${fieldsCount} campos cadastrais reconhecidos</li>
+        <li>${Number(summary.settingsSections || 0)} blocos de configuracao reconhecidos</li>
+        <li>${sections.length ? `Configuracoes: ${sections.join(', ')}` : 'Sem configuracoes extras'}</li>
+      </ul>
+    `;
+  };
+
+  const clearImportPreview = () => {
+    pendingImportPayload = null;
+    if (importFileInput) importFileInput.value = '';
+    if (importPreview) {
+      importPreview.innerHTML = '';
+      importPreview.classList.add('hidden');
+    }
+    if (importApplyButton) importApplyButton.disabled = true;
+  };
+
+  const readJsonFile = (file) => new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error('Selecione um arquivo JSON.'));
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      reject(new Error('Arquivo muito grande. Limite inicial: 1 MB.'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        resolve(JSON.parse(String(reader.result || '{}')));
+      } catch (_error) {
+        reject(new Error('Arquivo JSON invalido.'));
+      }
+    };
+    reader.onerror = () => reject(new Error('Nao foi possivel ler o arquivo.'));
+    reader.readAsText(file, 'utf-8');
+  });
+
+  const exportClinicData = async () => {
+    if (!clinicApi.exportData) {
+      setStatus('Exportacao ainda nao disponivel no backend web.', true);
+      return;
+    }
+    try {
+      setStatus('Preparando exportacao...', true);
+      const data = await clinicApi.exportData();
+      const clinicName = String(data?.clinic?.nomeFantasia || data?.clinic?.razaoSocial || 'clinica')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'clinica';
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `voithos-${clinicName}-export.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setStatus('Exportacao gerada com sucesso.', false);
+    } catch (err) {
+      console.error('[CLINICA] Erro ao exportar dados', err);
+      setStatus(err?.message || 'Erro ao exportar dados da clinica.', true);
+    }
+  };
+
+  const previewClinicImport = async (file) => {
+    if (!clinicApi.previewImport) {
+      setStatus('Importacao ainda nao disponivel no backend web.', true);
+      return;
+    }
+    try {
+      setStatus('Validando arquivo de importacao...', true);
+      const payload = await readJsonFile(file);
+      const preview = await clinicApi.previewImport(payload);
+      pendingImportPayload = payload;
+      renderImportPreview(preview);
+      if (importApplyButton) importApplyButton.disabled = false;
+      setStatus('Preview validado. Revise antes de aplicar.', true);
+    } catch (err) {
+      console.error('[CLINICA] Erro ao validar importacao', err);
+      clearImportPreview();
+      setStatus(err?.message || 'Arquivo de importacao invalido.', true);
+    }
+  };
+
+  const applyClinicImport = async () => {
+    if (!pendingImportPayload || !clinicApi.applyImport) return;
+    if (!window.confirm('Aplicar os dados importados nesta clinica? Esta acao atualiza apenas a clinica autenticada.')) return;
+    try {
+      setStatus('Aplicando importacao...', true);
+      await clinicApi.applyImport(pendingImportPayload);
+      clearImportPreview();
+      await loadClinic();
+      setStatus('Importacao aplicada com sucesso.', false);
+    } catch (err) {
+      console.error('[CLINICA] Erro ao aplicar importacao', err);
+      setStatus(err?.message || 'Erro ao aplicar importacao.', true);
+    }
+  };
+
   const readLogoFile = (file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -794,6 +910,24 @@ document.addEventListener('DOMContentLoaded', () => {
       setStatus('Logo removido. Salve para confirmar.', true);
     });
   }
+
+  exportDataButton?.addEventListener('click', () => {
+    void exportClinicData();
+  });
+
+  importFileInput?.addEventListener('change', (event) => {
+    const file = event.target.files && event.target.files[0];
+    void previewClinicImport(file);
+  });
+
+  importClearButton?.addEventListener('click', () => {
+    clearImportPreview();
+    setStatus('Importacao cancelada.', true);
+  });
+
+  importApplyButton?.addEventListener('click', () => {
+    void applyClinicImport();
+  });
 
   Object.values(fields).forEach((input) => {
     input?.addEventListener('input', () => {

@@ -420,6 +420,107 @@ const mergeOperationalSettings = (current = {}, patch = {}) => {
   });
 };
 
+const pickNonEmptyString = (value, maxLength = 4000) => {
+  const raw = String(value || '').trim();
+  return raw ? raw.slice(0, maxLength) : undefined;
+};
+
+const normalizeImportAddress = (value = {}) => {
+  const raw = isPlainObject(value) ? value : {};
+  const endereco = {
+    rua: pickNonEmptyString(raw.rua || raw.logradouro || raw.endereco, 200),
+    numero: pickNonEmptyString(raw.numero || raw.number, 40),
+    complemento: pickNonEmptyString(raw.complemento || raw.complement, 160),
+    bairro: pickNonEmptyString(raw.bairro || raw.district, 160),
+    cidade: pickNonEmptyString(raw.cidade || raw.city, 160),
+    uf: pickNonEmptyString(raw.uf || raw.estado || raw.state, 2),
+    cep: pickNonEmptyString(raw.cep || raw.zipCode, 20),
+  };
+  return Object.fromEntries(Object.entries(endereco).filter(([, item]) => item !== undefined));
+};
+
+const extractClinicImportPayload = (payload = {}) => {
+  const source = isPlainObject(payload?.clinic)
+    ? payload.clinic
+    : (isPlainObject(payload?.clinica) ? payload.clinica : payload);
+  const sourceAddress = isPlainObject(source?.endereco)
+    ? source.endereco
+    : {
+        rua: source?.rua || source?.logradouro || source?.endereco,
+        numero: source?.numero,
+        complemento: source?.complemento,
+        bairro: source?.bairro,
+        cidade: source?.cidade,
+        uf: source?.uf || source?.estado,
+        cep: source?.cep,
+      };
+  const profile = {
+    nomeFantasia: pickNonEmptyString(source?.nomeFantasia || source?.nomeClinica || source?.name, 160),
+    razaoSocial: pickNonEmptyString(source?.razaoSocial || source?.legalName, 160),
+    cnpjCpf: pickNonEmptyString(source?.cnpjCpf || source?.cnpjOuCpf || source?.cnpj || source?.cpfCnpj, 32),
+    telefone: pickNonEmptyString(source?.telefone || source?.telefoneComercial || source?.phone, 40),
+    email: pickNonEmptyString(source?.email || source?.emailClinica, 160),
+    cro: pickNonEmptyString(source?.cro, 80),
+    responsavelTecnico: pickNonEmptyString(source?.responsavelTecnico || source?.responsibleName, 160),
+    whatsapp: pickNonEmptyString(source?.whatsapp, 40),
+    logoDataUrlCache: pickNonEmptyString(source?.logoDataUrlCache || source?.logoData, RECEITUARIO_IMAGE_DATA_MAX_LENGTH),
+    logoVersion: pickNonEmptyString(source?.logoVersion, 80),
+    endereco: normalizeImportAddress(sourceAddress),
+  };
+  Object.keys(profile).forEach((key) => {
+    if (profile[key] === undefined || (isPlainObject(profile[key]) && !Object.keys(profile[key]).length)) {
+      delete profile[key];
+    }
+  });
+
+  const sourceSettings = isPlainObject(payload?.operationalSettings)
+    ? payload.operationalSettings
+    : (isPlainObject(payload?.settings) ? payload.settings : {});
+  const settings = {};
+  [
+    'agendaSettings',
+    'agendaAvailability',
+    'notificationPreferences',
+    'birthdayMessaging',
+    'clinicProfile',
+    'anamneseModels',
+    'documentModels',
+    'proceduresCatalog',
+    'receituario',
+  ].forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(sourceSettings, key)) {
+      settings[key] = sourceSettings[key];
+    }
+  });
+
+  return { profile, settings };
+};
+
+const buildClinicImportPreview = (payload = {}) => {
+  if (!isPlainObject(payload)) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo de importacao deve ser JSON valido.');
+  }
+  const { profile, settings } = extractClinicImportPayload(payload);
+  const profileFields = Object.keys(profile).filter((key) => key !== 'endereco');
+  const addressFields = Object.keys(profile.endereco || {});
+  const settingsSections = Object.keys(settings);
+  if (!profileFields.length && !addressFields.length && !settingsSections.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem dados reconhecidos para importar.');
+  }
+  return {
+    valid: true,
+    format: String(payload?.format || payload?.source || 'json').trim().slice(0, 80) || 'json',
+    profileFields,
+    addressFields,
+    settingsSections,
+    summary: {
+      profileFields: profileFields.length,
+      addressFields: addressFields.length,
+      settingsSections: settingsSections.length,
+    },
+  };
+};
+
 const validateDocument = (documentType, documentNumber) => {
   const normalizedType = String(documentType || '').trim().toUpperCase();
   const normalizedNumber = normalizeDocument(documentNumber);
@@ -642,6 +743,98 @@ const clinicService = {
         operationalSettings: mergedOperationalSettings,
       });
       return normalizeClinicProfile(updated);
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  exportData: async ({ clinicId } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+    try {
+      const profile = await clinicService.getProfile({ clinicId: normalizedClinicId });
+      const operationalSettings = await clinicService.getOperationalSettings({ clinicId: normalizedClinicId });
+      return {
+        format: 'voithos-clinic-export',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        clinic: {
+          nomeFantasia: profile.nomeFantasia || '',
+          razaoSocial: profile.razaoSocial || '',
+          cnpjCpf: profile.cnpjCpf || '',
+          telefone: profile.telefone || '',
+          email: profile.email || '',
+          cro: profile.cro || '',
+          responsavelTecnico: profile.responsavelTecnico || '',
+          whatsapp: profile.whatsapp || '',
+          logoDataUrlCache: profile.logoDataUrlCache || '',
+          logoVersion: profile.logoVersion || '',
+          endereco: profile.endereco || {},
+        },
+        operationalSettings,
+      };
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  previewImportData: async ({ clinicId, payload = {} } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+    try {
+      const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+      if (!clinic) {
+        throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+      }
+      return buildClinicImportPreview(payload);
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  applyImportData: async ({ clinicId, payload = {} } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+    const preview = buildClinicImportPreview(payload);
+    const { profile, settings } = extractClinicImportPayload(payload);
+    try {
+      let updatedProfile = await clinicService.getProfile({ clinicId: normalizedClinicId });
+      let updatedSettings = await clinicService.getOperationalSettings({ clinicId: normalizedClinicId });
+
+      if (Object.keys(profile).length) {
+        updatedProfile = await clinicService.updateProfile({
+          clinicId: normalizedClinicId,
+          patch: profile,
+        });
+      }
+      if (Object.keys(settings).length) {
+        updatedSettings = await clinicService.updateOperationalSettings({
+          clinicId: normalizedClinicId,
+          patch: settings,
+        });
+      }
+
+      return {
+        applied: true,
+        preview,
+        profile: updatedProfile,
+        operationalSettings: updatedSettings,
+      };
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');

@@ -8,6 +8,9 @@ const {
   updateMyOperationalSettings,
   getMyClinicProfile,
   updateMyClinicProfile,
+  exportMyClinicData,
+  previewMyClinicImport,
+  applyMyClinicImport,
   getMyWhatsAppEngineHealth,
   getMyWhatsAppConnection,
   refreshMyWhatsAppConnection,
@@ -28,6 +31,9 @@ router.get('/me/operational-settings', getMyOperationalSettings);
 router.patch('/me/operational-settings', updateMyOperationalSettings);
 router.get('/me/profile', getMyClinicProfile);
 router.patch('/me/profile', updateMyClinicProfile);
+router.get('/me/data-export', exportMyClinicData);
+router.post('/me/data-import/preview', previewMyClinicImport);
+router.post('/me/data-import/apply', applyMyClinicImport);
 router.get('/me/whatsapp/health', getMyWhatsAppEngineHealth);
 router.get('/me/whatsapp/connection', getMyWhatsAppConnection);
 router.post('/me/whatsapp/connection/refresh', refreshMyWhatsAppConnection);

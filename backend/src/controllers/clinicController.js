@@ -93,6 +93,50 @@ const updateMyClinicProfile = async (req, res, next) => {
   }
 };
 
+const exportMyClinicData = async (req, res, next) => {
+  try {
+    const data = await clinicService.exportData({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const previewMyClinicImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.previewImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: req?.body || {},
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const applyMyClinicImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.applyImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: req?.body || {},
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getMyWhatsAppEngineHealth = async (_req, res, next) => {
   try {
     const data = await whatsappNgClient.getHealth();
@@ -205,6 +249,9 @@ module.exports = {
   updateMyOperationalSettings,
   getMyClinicProfile,
   updateMyClinicProfile,
+  exportMyClinicData,
+  previewMyClinicImport,
+  applyMyClinicImport,
   getMyWhatsAppEngineHealth,
   getMyWhatsAppConnection,
   refreshMyWhatsAppConnection,
