@@ -300,19 +300,32 @@
   };
   const computeResumoPeriodoFromLancamentos = (periodo) => {
     let receitas = 0;
+    let pendentes = 0;
+    let atraso = 0;
     let despesas = 0;
+    const hoje = new Date();
+    const inicioHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
     lancamentos.forEach((item) => {
       if (isCancelled(item)) return;
       if (getNormalizedEntryType(item) === 'receita') {
         const ref = getEntryReferenceDate(item);
         if (ref && getDateInPeriod(ref, periodo)) receitas += getEntryReceivedAmount(item);
+        if (isPending(item)) {
+          const pendingRef = getEntryDateForPending(item);
+          if (pendingRef && getDateInPeriod(pendingRef, periodo)) {
+            const pendingValue = getEntryPendingAmount(item);
+            pendentes += pendingValue;
+            const due = getDueDate(item);
+            if (due && !Number.isNaN(due.getTime()) && due < inicioHoje) atraso += pendingValue;
+          }
+        }
         return;
       }
       const valor = Number(item?.valor) || 0;
       const refDespesa = getEntryDateForExpense(item);
       if (refDespesa && getDateInPeriod(refDespesa, periodo)) despesas += valor;
     });
-    return { receitas, despesas, saldo: receitas - despesas };
+    return { receitas, pendentes, atraso, despesas, saldo: receitas - despesas };
   };
 
   const parseAnyDate = (value) => {
@@ -393,7 +406,10 @@
     const mesNumero = Number(mes);
     const anoNumero = Number(ano);
     return lista.filter((l) => {
-      const data = parseLancamentoDate(l.data);
+      if (isCancelled(l)) return false;
+      const data = getNormalizedEntryType(l) === 'receita'
+        ? (isPending(l) ? getEntryDateForPending(l) : getEntryReferenceDate(l))
+        : getEntryDateForExpense(l);
       if (!data || Number.isNaN(data.getTime())) return false;
       return data.getFullYear() === anoNumero && data.getMonth() + 1 === mesNumero;
     });
@@ -402,12 +418,16 @@
   const calcularTotais = (lista) => {
     const entradas = lista.filter((l) => getNormalizedEntryType(l) === 'receita');
     const saidas = lista.filter((l) => getNormalizedEntryType(l) !== 'receita');
-    const totalEntradas = entradas.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+    const totalEntradas = entradas.reduce((acc, item) => acc + getEntryReceivedAmount(item), 0);
+    const totalPendentes = entradas
+      .filter((item) => isPending(item))
+      .reduce((acc, item) => acc + getEntryPendingAmount(item), 0);
     const totalSaidas = saidas.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
     const saldo = totalEntradas - totalSaidas;
     const totalMovimentado = totalEntradas + totalSaidas;
     return {
       entradas: totalEntradas,
+      pendentes: totalPendentes,
       saidas: totalSaidas,
       saldo,
       movimentado: totalMovimentado,
@@ -435,9 +455,11 @@
   const atualizarRelatorio = (lista) => {
     const totais = calcularTotais(lista);
     const totalEntradasEl = document.getElementById('relatorio-total-entradas');
+    const totalPendentesEl = document.getElementById('relatorio-total-pendentes');
     const totalSaidasEl = document.getElementById('relatorio-total-saidas');
     const totalSaldoEl = document.getElementById('relatorio-total-saldo');
     if (totalEntradasEl) totalEntradasEl.textContent = formatCurrency(totais.entradas);
+    if (totalPendentesEl) totalPendentesEl.textContent = formatCurrency(totais.pendentes);
     if (totalSaidasEl) totalSaidasEl.textContent = formatCurrency(totais.saidas);
     if (totalSaldoEl) totalSaldoEl.textContent = formatCurrency(totais.saldo);
     preencherTabelaRelatorio('#tabela-relatorio-entradas tbody', lista.filter((l) => getNormalizedEntryType(l) === 'receita'));
@@ -464,6 +486,30 @@
     if (entradasEl) entradasEl.textContent = formatCurrency(totaisMes.entradas);
     if (saidasEl) saidasEl.textContent = formatCurrency(totaisMes.saidas);
     if (saldoEl) saldoEl.textContent = formatCurrency(totaisMes.saldo);
+  };
+
+  const getPeriodoGerencialLabel = () => {
+    if (periodoAtual === 'dia') return 'Hoje';
+    if (periodoAtual === 'semana') return 'Semana atual';
+    return 'Mes atual';
+  };
+
+  const atualizarResumoGerencialPeriodo = (resumo = {}) => {
+    const labelEl = document.getElementById('gestao-resumo-periodo-label');
+    const recebidasEl = document.getElementById('gestao-resumo-recebidas');
+    const pendentesEl = document.getElementById('gestao-resumo-pendentes');
+    const despesasEl = document.getElementById('gestao-resumo-despesas');
+    const resultadoEl = document.getElementById('gestao-resumo-resultado');
+    if (labelEl) labelEl.textContent = getPeriodoGerencialLabel();
+    if (recebidasEl) recebidasEl.textContent = formatCurrency(Number(resumo.receitas) || 0);
+    if (pendentesEl) pendentesEl.textContent = formatCurrency(Number(resumo.pendentes) || 0);
+    if (despesasEl) despesasEl.textContent = formatCurrency(Number(resumo.despesas) || 0);
+    if (resultadoEl) {
+      const resultado = Number(resumo.saldo) || 0;
+      resultadoEl.textContent = formatCurrency(resultado);
+      resultadoEl.classList.toggle('negativo', resultado < 0);
+      resultadoEl.classList.toggle('positivo', resultado >= 0);
+    }
   };
 
   function configurarRelatorios() {
@@ -1194,6 +1240,11 @@
       const emAtrasoEl = document.getElementById('valor-em-atraso');
       if (aReceberEl) aReceberEl.textContent = formatCurrency(aReceber);
       if (emAtrasoEl) emAtrasoEl.textContent = formatCurrency(emAtraso);
+      atualizarResumoGerencialPeriodo({
+        ...bloco,
+        pendentes: aReceber,
+        atraso: emAtraso,
+      });
       try {
         console.info('[GESTAO] management_widget_loaded', JSON.stringify({
           widget: 'gestao-dashboard-cards',
