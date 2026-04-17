@@ -398,11 +398,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     suppressDrawerOpen = true;
     const map = buildOdontogramaSelections(services);
-    Object.keys(map).forEach((dente) => {
+    const selectedTeeth = Object.keys(map);
+    odontogramaFrame.contentWindow.postMessage({
+      type: 'odontograma:set-dentes',
+      dentes: selectedTeeth,
+      lastDente: selectedTeeth.length ? selectedTeeth[selectedTeeth.length - 1] : '',
+    }, '*');
+    selectedTeeth.forEach((dente) => {
+      const faces = Array.from(map[dente] || []);
+      if (!faces.length) return;
       odontogramaFrame.contentWindow.postMessage({
         type: 'odontograma:set-faces',
         dente,
-        faces: Array.from(map[dente]),
+        faces,
       }, '*');
     });
     setTimeout(() => { suppressDrawerOpen = false; }, 350);
