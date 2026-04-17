@@ -904,3 +904,70 @@ model LaboratoryOrderEvent {
 
   @@index([clinicId, orderId, createdAt])
 }
+
+enum PaymentSourceType {
+  APPOINTMENT
+  PLAN
+  MANUAL
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+}
+
+enum PaymentMethod {
+  PIX
+  CARD
+  LINK
+  MANUAL
+}
+
+enum PaymentGateway {
+  NONE
+  ASAAS
+  STRIPE
+  MANUAL
+}
+
+model Payment {
+  id              String               @id @default(uuid())
+  clinicId        String
+  clinic          Clinic               @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  patientId       String?
+  patient         Patient?             @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  sourceType      PaymentSourceType    @default(MANUAL)
+  sourceId        String?
+  amount          Decimal              @db.Decimal(12, 2)
+  status          PaymentStatus        @default(PENDING)
+  method          PaymentMethod        @default(PIX)
+  gateway         PaymentGateway       @default(NONE)
+  externalId      String?
+  description     String
+  dueDate         DateTime?
+  paidAt          DateTime?
+  paymentLink     String?
+  metadata        Json?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  transactions    PaymentTransaction[]
+
+  @@unique([clinicId, externalId])
+  @@index([clinicId, status, createdAt])
+  @@index([patientId])
+  @@index([sourceType, sourceId])
+}
+
+model PaymentTransaction {
+  id              String               @id @default(uuid())
+  paymentId       String
+  payment         Payment              @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  status          PaymentStatus        @default(PENDING)
+  gatewayResponse Json?
+  createdAt       DateTime             @default(now())
+
+  @@index([paymentId, createdAt])
+}
