@@ -104,6 +104,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let notifItems = [];
     let centralNotifItems = [];
     let notifTab = 'geral';
+    let notifViewed = false;
     let homeAutoRefreshTimer = null;
 
     if (cardGestao) {
@@ -149,6 +150,19 @@ document.addEventListener('DOMContentLoaded', () => {
         notifToggle?.setAttribute('aria-expanded', 'false');
     };
 
+    const setNotificationBadge = (count) => {
+        if (!notifCount) return;
+        const safeCount = Math.max(0, Number(count) || 0);
+        notifCount.textContent = String(safeCount);
+        notifCount.hidden = safeCount === 0;
+    };
+
+    const markNotificationsViewed = () => {
+        notifViewed = true;
+        setNotificationBadge(0);
+        if (notifSub) notifSub.textContent = 'Voce tem 0 notificacoes novas';
+    };
+
     const toggleNotif = (ev) => {
         ev?.stopPropagation();
         if (!notifPanel || !notifToggle) return;
@@ -156,6 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isHidden) {
             notifPanel.removeAttribute('hidden');
             notifToggle.setAttribute('aria-expanded', 'true');
+            markNotificationsViewed();
         } else {
             closeNotif();
         }
@@ -691,8 +706,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const agendaItems = buildAgendaNotifications(agendaCache);
         const financeItems = buildFinanceNotifications(financeRemindersCache);
         notifItems = [...centralNotifItems, ...agendaItems, ...financeItems];
-        if (notifCount) notifCount.textContent = String(notifItems.length);
-        if (notifSub) notifSub.textContent = `Voce tem ${notifItems.length} notificacoes novas`;
+        setNotificationBadge(notifViewed ? 0 : notifItems.length);
+        if (notifSub) {
+            const visibleCount = notifViewed ? 0 : notifItems.length;
+            notifSub.textContent = `Voce tem ${visibleCount} notificacoes novas`;
+        }
         renderNotifications();
     };
 

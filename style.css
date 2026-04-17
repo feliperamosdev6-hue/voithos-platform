@@ -1398,11 +1398,14 @@ main {
   right: 24px;
   top: 58px;
   width: 320px;
+  max-height: min(520px, calc(100vh - 120px));
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 16px;
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.16);
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .notif-panel[hidden] { display: none; }
@@ -1465,12 +1468,17 @@ main {
 
 .notif-body {
   min-height: 160px;
+  max-height: 360px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding-right: 4px;
 }
 
 .notif-empty {
+  margin: auto;
   text-align: center;
   color: #6b7280;
 }
@@ -1489,6 +1497,7 @@ main {
   .notif-panel {
     right: 16px;
     width: min(320px, 90vw);
+    max-height: calc(100vh - 150px);
   }
 }
 .notif-list {
