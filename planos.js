@@ -958,6 +958,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'toggle-parcels') { if (expanded.has(planId)) expanded.delete(planId); else expanded.add(planId); renderPlans(); return; }
     if (action === 'send-plan-message') {
       if (!plansApi.sendMessage) return alert('Mensageria de planos indisponivel.');
+      const parcel = (Array.isArray(plan?.payment?.schedule) ? plan.payment.schedule : [])
+        .find((p) => clean(p.parcelId) === clean(btn.dataset.parcelId));
+      const eventLabel = planMessageEventLabel(btn.dataset.eventType);
+      const ok = window.confirm([
+        `Enviar cobranca manual para ${plan.patientName || 'paciente'}?`,
+        `Plano: ${plan.title || '-'}`,
+        `Parcela: ${parcel?.number || '-'} | Valor: ${brMoney(parcel?.value || 0)} | Vencimento: ${brDate(parcel?.dueDate)}`,
+        `Tipo: ${eventLabel}`,
+      ].join('\n'));
+      if (!ok) return;
       try {
         const result = await plansApi.sendMessage({
           planId,
@@ -979,6 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (action === 'resend-plan-message') {
       if (!plansApi.resendMessage) return alert('Reenvio de mensageria de planos indisponivel.');
+      if (!window.confirm(`Reenviar a cobranca deste plano para ${plan.patientName || 'paciente'}?`)) return;
       try {
         await plansApi.resendMessage({
           planMessageId: clean(btn.dataset.planMessageId),

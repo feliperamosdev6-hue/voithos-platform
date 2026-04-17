@@ -1922,10 +1922,41 @@
       { auth: true }
     ),
     dashboard: async () => notImplemented('plans.dashboard'),
-    messageHistory: async () => notImplemented('plans.messageHistory'),
-    messageSuggestions: async () => notImplemented('plans.messageSuggestions'),
-    sendMessage: async () => notImplemented('plans.sendMessage'),
-    resendMessage: async () => notImplemented('plans.resendMessage'),
+    messageHistory: async ({ planId } = {}) => request(
+      'GET',
+      `/financial/plans/${encodeURIComponent(cleanText(planId))}/messages`,
+      null,
+      { auth: true }
+    ),
+    messageSuggestions: async ({ planId, dueSoonDays } = {}) => {
+      const params = new URLSearchParams();
+      if (dueSoonDays !== undefined && dueSoonDays !== null && dueSoonDays !== '') {
+        params.set('dueSoonDays', cleanText(dueSoonDays));
+      }
+      const query = params.toString();
+      return request(
+        'GET',
+        `/financial/plans/${encodeURIComponent(cleanText(planId))}/messages/suggestions${query ? `?${query}` : ''}`,
+        null,
+        { auth: true }
+      );
+    },
+    sendMessage: async ({ planId, installmentId, eventType, manualResend = false } = {}) => request(
+      'POST',
+      `/financial/plans/${encodeURIComponent(cleanText(planId))}/messages/send`,
+      {
+        installmentId: cleanText(installmentId),
+        eventType: cleanText(eventType),
+        manualResend: manualResend === true,
+      },
+      { auth: true }
+    ),
+    resendMessage: async ({ planMessageId, messageId } = {}) => request(
+      'POST',
+      `/financial/plan-messages/${encodeURIComponent(cleanText(planMessageId || messageId))}/resend`,
+      {},
+      { auth: true }
+    ),
   };
 
   const campanhas = {

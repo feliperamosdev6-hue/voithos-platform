@@ -16,6 +16,10 @@ const {
   getPlan,
   updatePlan,
   deletePlan,
+  listPlanMessageHistory,
+  listPlanMessageSuggestions,
+  sendPlanMessage,
+  resendPlanMessage,
 } = require('../controllers/financialController');
 
 const router = express.Router();
@@ -36,5 +40,9 @@ router.post('/plans', createPlan);
 router.get('/plans/:planId', getPlan);
 router.patch('/plans/:planId', updatePlan);
 router.delete('/plans/:planId', deletePlan);
+router.get('/plans/:planId/messages', listPlanMessageHistory);
+router.get('/plans/:planId/messages/suggestions', listPlanMessageSuggestions);
+router.post('/plans/:planId/messages/send', sendPlanMessage);
+router.post('/plan-messages/:messageId/resend', resendPlanMessage);
 
 module.exports = router;
