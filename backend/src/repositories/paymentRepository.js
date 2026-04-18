@@ -1,4 +1,4 @@
-const { prisma } = require('../config/database');
+const { prisma } = require('../db/prisma');
 
 const paymentRepository = {
   createPayment: async ({ clinicId, patientId, sourceType, sourceId, amount, method, description, dueDate, metadata }) => {
