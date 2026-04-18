@@ -193,6 +193,7 @@ model Clinic {
   financialAccounts FinancialAccount[]
   financialInstallments FinancialInstallment[]
   financialTransactions FinancialTransaction[]
+  payments          Payment[]          @relation("ClinicPayments")
   patientPlans      PatientPlan[]
   financialSnapshots FinancialSnapshot[]
   laboratoryOrders  LaboratoryOrder[]
@@ -261,6 +262,7 @@ model Patient {
   patientProcedures PatientProcedure[]
   patientDocumentMetadata PatientDocumentMetadata[]
   financialAccounts FinancialAccount[]
+  payments          Payment[]          @relation("PatientPayments")
   patientPlans      PatientPlan[]
   laboratoryOrders  LaboratoryOrder[]
 
@@ -936,9 +938,9 @@ enum PaymentGateway {
 model Payment {
   id              String               @id @default(uuid())
   clinicId        String
-  clinic          Clinic               @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  clinic          Clinic               @relation("ClinicPayments", fields: [clinicId], references: [id], onDelete: Restrict)
   patientId       String?
-  patient         Patient?             @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  patient         Patient?             @relation("PatientPayments", fields: [patientId], references: [id], onDelete: SetNull)
   sourceType      PaymentSourceType    @default(MANUAL)
   sourceId        String?
   amount          Decimal              @db.Decimal(12, 2)
