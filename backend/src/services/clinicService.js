@@ -70,6 +70,22 @@ const normalizeReceituario = (value = {}, clinicProfile = {}) => {
   };
 };
 
+const DEFAULT_PAYMENT_SETTINGS = {
+  enabledMethods: {
+    pix: true,
+    card: true,
+    link: true,
+    manual: true,
+  },
+  defaultMethod: 'PIX',
+  defaultGateway: 'NONE',
+  allowInstallments: true,
+  installmentsLimit: 12,
+  showPaymentLink: true,
+  requirePaymentNote: false,
+  updatedAt: '',
+};
+
 const getDefaultOperationalSettings = () => ({
   agendaSettings: {
     timezone: 'America/Sao_Paulo',
@@ -108,6 +124,7 @@ const getDefaultOperationalSettings = () => ({
     lastRunDate: '',
     updatedAt: '',
   },
+  paymentSettings: DEFAULT_PAYMENT_SETTINGS,
   clinicProfile: {
     whatsapp: '',
     cro: '',
@@ -343,6 +360,33 @@ const normalizeBirthdayMessaging = (value = {}) => {
   };
 };
 
+const normalizePaymentSettings = (value = {}) => {
+  const raw = isPlainObject(value) ? value : {};
+  const defaults = getDefaultOperationalSettings().paymentSettings;
+  const enabledMethods = isPlainObject(raw.enabledMethods) ? raw.enabledMethods : {};
+  const validMethods = ['PIX', 'CARD', 'LINK', 'MANUAL'];
+  const validGateways = ['NONE', 'ASAAS', 'STRIPE', 'MANUAL'];
+  const defaultMethod = String(raw.defaultMethod || defaults.defaultMethod).trim().toUpperCase();
+  const defaultGateway = String(raw.defaultGateway || defaults.defaultGateway).trim().toUpperCase();
+
+  return {
+    ...defaults,
+    enabledMethods: {
+      pix: Object.prototype.hasOwnProperty.call(enabledMethods, 'pix') ? !!enabledMethods.pix : defaults.enabledMethods.pix,
+      card: Object.prototype.hasOwnProperty.call(enabledMethods, 'card') ? !!enabledMethods.card : defaults.enabledMethods.card,
+      link: Object.prototype.hasOwnProperty.call(enabledMethods, 'link') ? !!enabledMethods.link : defaults.enabledMethods.link,
+      manual: Object.prototype.hasOwnProperty.call(enabledMethods, 'manual') ? !!enabledMethods.manual : defaults.enabledMethods.manual,
+    },
+    defaultMethod: validMethods.includes(defaultMethod) ? defaultMethod : defaults.defaultMethod,
+    defaultGateway: validGateways.includes(defaultGateway) ? defaultGateway : defaults.defaultGateway,
+    allowInstallments: Object.prototype.hasOwnProperty.call(raw, 'allowInstallments') ? raw.allowInstallments !== false : defaults.allowInstallments,
+    installmentsLimit: Math.max(1, Math.min(24, Number(raw.installmentsLimit) || defaults.installmentsLimit)),
+    showPaymentLink: Object.prototype.hasOwnProperty.call(raw, 'showPaymentLink') ? raw.showPaymentLink !== false : defaults.showPaymentLink,
+    requirePaymentNote: Object.prototype.hasOwnProperty.call(raw, 'requirePaymentNote') ? raw.requirePaymentNote === true : defaults.requirePaymentNote,
+    updatedAt: String(raw.updatedAt || '').trim(),
+  };
+};
+
 const normalizeOperationalSettings = (value = {}) => {
   const raw = isPlainObject(value) ? value : {};
   const clinicProfile = normalizeClinicProfileExtras(raw.clinicProfile);
@@ -353,6 +397,7 @@ const normalizeOperationalSettings = (value = {}) => {
       raw.notificationPreferences || raw.notifications
     ),
     birthdayMessaging: normalizeBirthdayMessaging(raw.birthdayMessaging),
+    paymentSettings: normalizePaymentSettings(raw.paymentSettings),
     clinicProfile,
     campaigns: normalizeClinicCampaigns(raw.campaigns),
     anamneseModels: Array.isArray(raw.anamneseModels) ? raw.anamneseModels : [],
@@ -398,6 +443,16 @@ const mergeOperationalSettings = (current = {}, patch = {}) => {
           ...(isPlainObject(safePatch.birthdayMessaging) ? safePatch.birthdayMessaging : {}),
         })
       : safeCurrent.birthdayMessaging,
+    paymentSettings: Object.prototype.hasOwnProperty.call(safePatch, 'paymentSettings')
+      ? normalizePaymentSettings({
+          ...safeCurrent.paymentSettings,
+          ...(isPlainObject(safePatch.paymentSettings) ? safePatch.paymentSettings : {}),
+          enabledMethods: {
+            ...safeCurrent.paymentSettings.enabledMethods,
+            ...(isPlainObject(safePatch.paymentSettings?.enabledMethods) ? safePatch.paymentSettings.enabledMethods : {}),
+          },
+        })
+      : safeCurrent.paymentSettings,
     clinicProfile: nextClinicProfile,
     campaigns: Object.prototype.hasOwnProperty.call(safePatch, 'campaigns')
       ? normalizeClinicCampaigns(safePatch.campaigns)

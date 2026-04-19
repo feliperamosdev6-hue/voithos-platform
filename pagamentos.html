@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -122,7 +122,8 @@
                         <span class="nav-caret" aria-hidden="true">▾</span>
                     </button>
                     <div class="nav-group-list">
-                        <a class="nav-item active" href="#">Pagamentos</a>
+                        <a class="nav-item active" href="#simulador-vendas">Simulador de vendas</a>
+                        <a class="nav-item" href="#meios-pagamento">Meios de pagamento</a>
                     </div>
                 </div>
                 <div class="nav-group">
@@ -146,9 +147,148 @@
                 <p>Central de pagamentos da clinica.</p>
             </div>
 
-            <section class="clinic-card coming-soon">
-                <div class="soon-title">Em breve</div>
-                <p>Estamos preparando o modulo de pagamentos. Em breve voce tera acesso a esta funcionalidade.</p>
+            <div class="payments-tabs" role="tablist" aria-label="Visões de pagamentos">
+                <button class="payments-tab active" type="button" data-payments-tab="simulador" role="tab" aria-selected="true">Simulador de vendas</button>
+                <button class="payments-tab" type="button" data-payments-tab="meios" role="tab" aria-selected="false">Meios de pagamento</button>
+            </div>
+
+            <section class="clinic-card payments-simulator payments-panel" id="simulador-vendas" data-payments-panel="simulador">
+                <div class="payments-simulator-head">
+                    <div>
+                        <h2>Simulador de vendas</h2>
+                        <p>Calcule rapidamente taxa, repasse e valor recebido com visual padronizado da Voithos.</p>
+                    </div>
+                </div>
+
+                <div class="payments-simulator-grid">
+                    <section class="simulator-card simulator-input-card" aria-label="Configuracao da venda">
+                        <div class="simulator-card-title">
+                            <h3>Forma de pagamento</h3>
+                        </div>
+
+                        <div class="simulator-segmented" role="tablist" aria-label="Forma de pagamento">
+                            <button class="simulator-segment active" type="button" data-method="debit" aria-pressed="true">Debito</button>
+                            <button class="simulator-segment" type="button" data-method="credit" aria-pressed="false">Credito</button>
+                            <button class="simulator-segment" type="button" data-method="pix" aria-pressed="false">Pix</button>
+                        </div>
+
+                        <label class="simulator-field">
+                            <span>Qual o valor da venda?</span>
+                            <div class="simulator-money-input">
+                                <span aria-hidden="true">R$</span>
+                                <input id="simulator-amount" type="number" min="0" max="500000" step="0.01" value="0" inputmode="decimal">
+                            </div>
+                            <small>Digite um valor entre R$ 0,00 e R$ 500.000,00.</small>
+                        </label>
+
+                        <label class="simulator-switch">
+                            <input id="simulator-pass-fee" type="checkbox">
+                            <span class="simulator-switch-track" aria-hidden="true"></span>
+                            <span class="simulator-switch-text">
+                                <strong>Repassar a taxa ao cliente</strong>
+                                <small>O valor recebido fica protegido e a taxa entra na cobranca.</small>
+                            </span>
+                        </label>
+
+                        <div class="simulator-divider" aria-hidden="true"></div>
+
+                        <label class="simulator-field" id="simulator-installments-field">
+                            <span>Em quantas parcelas?</span>
+                            <select id="simulator-installments">
+                                <option value="1">A vista</option>
+                                <option value="2">2 parcelas</option>
+                                <option value="3">3 parcelas</option>
+                                <option value="4">4 parcelas</option>
+                                <option value="5">5 parcelas</option>
+                                <option value="6">6 parcelas</option>
+                                <option value="7">7 parcelas</option>
+                                <option value="8">8 parcelas</option>
+                                <option value="9">9 parcelas</option>
+                                <option value="10">10 parcelas</option>
+                                <option value="11">11 parcelas</option>
+                                <option value="12">12 parcelas</option>
+                            </select>
+                            <small id="simulator-installments-hint">Credito habilita parcelamento.</small>
+                        </label>
+                    </section>
+
+                    <section class="simulator-card simulator-result-card" aria-label="Resultado da simulacao">
+                        <div class="simulator-card-title">
+                            <h3>Resultado da simulação</h3>
+                        </div>
+
+                        <div class="simulator-stats-grid">
+                            <article class="simulator-stat-card">
+                                <span>Taxa aplicada</span>
+                                <strong id="simulator-rate">0,80%</strong>
+                            </article>
+                            <article class="simulator-stat-card">
+                                <span>Valor da taxa</span>
+                                <strong id="simulator-fee">R$ 8,00</strong>
+                            </article>
+                            <article class="simulator-stat-card">
+                                <span>Cobrança ao cliente</span>
+                                <strong id="simulator-gross">R$ 1.000,00</strong>
+                            </article>
+                            <article class="simulator-stat-card">
+                                <span>Valor da parcela</span>
+                                <strong id="simulator-installment-value">A vista</strong>
+                            </article>
+                        </div>
+
+                        <div class="simulator-highlight">
+                            <span>Valor que você recebe</span>
+                            <strong id="simulator-net">R$ 992,00</strong>
+                            <small id="simulator-note">Você absorve a taxa nesta operação.</small>
+                        </div>
+
+                        <div class="simulator-breakdown">
+                            <div class="simulator-breakdown-row">
+                                <span>Metodo</span>
+                                <strong id="simulator-method-label">Debito</strong>
+                            </div>
+                            <div class="simulator-breakdown-row">
+                                <span>Parcelas</span>
+                                <strong id="simulator-installments-label">A vista</strong>
+                            </div>
+                            <div class="simulator-breakdown-row">
+                                <span>Valor liquido</span>
+                                <strong id="simulator-liquid">R$ 992,00</strong>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </section>
+
+            <section class="clinic-card payments-methods payments-panel" id="meios-pagamento" data-payments-panel="meios" hidden>
+                <div class="payments-method-grid">
+                    <article class="payments-method-card payments-method-card--primary">
+                        <div class="payments-method-top">
+                            <span class="payments-method-badge">LINK</span>
+                            <span class="payments-method-chip">PSP</span>
+                        </div>
+                        <h3>Link de pagamento</h3>
+                        <div class="payments-method-compact">
+                            <span>Débito</span>
+                            <span>Pix</span>
+                            <span>Parcelamento</span>
+                        </div>
+                    </article>
+
+                    <article class="payments-method-card">
+                        <div class="payments-method-top">
+                            <span class="payments-method-badge">VOITHOS</span>
+                            <span class="payments-method-chip">Maquininha</span>
+                        </div>
+                        <h3>Maquininha Voithos</h3>
+                        <p>Peça sua maquininha Voithos.</p>
+                        <div class="payments-method-compact">
+                            <span>Débito</span>
+                            <span>Pix</span>
+                            <span>Parcelamento</span>
+                        </div>
+                    </article>
+                </div>
             </section>
         </section>
     </main>
@@ -157,8 +297,7 @@
     <script src="shared/adapters/desktop-adapter.js"></script>
     <script src="shared/adapters/web-adapter.js"></script>
     <script src="shared/app-api.js"></script>
+    <script src="pagamentos.js"></script>
     <script src="header.js"></script>
 </body>
 </html>
-
-
