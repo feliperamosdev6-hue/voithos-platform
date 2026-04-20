@@ -48,3 +48,5 @@ whatsapp_engine_*.log
 *.vsix
 launch.json
 RENDER-SEGREDOS-LOCAL.md
+DIAGNOSTICO-FLUXO-FINANCEIRO-PAGAMENTO.md
+teste-importacao-clinica-10-pacientes.json
