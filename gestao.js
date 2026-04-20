@@ -1,5 +1,13 @@
 ﻿(function () {
   const ENABLE_GESTAO_HUB = true;
+  const canManageGestao = (user) => {
+    const profile = String(user?.tipo || user?.role || '').trim().toLowerCase();
+    return (
+      user?.isClinicAdmin === true
+      || user?.permissions?.admin === true
+      || ['admin', 'administrativo', 'super_admin', 'super-admin'].includes(profile)
+    );
+  };
 
   const formatCurrency = (value) => {
     const v = Number(value) || 0;
@@ -1113,12 +1121,11 @@
     try {
       usuarioLogado = await authApi.currentUser?.();
       const profile = String(usuarioLogado?.tipo || usuarioLogado?.role || '').trim().toLowerCase();
-      const canViewFinance = usuarioLogado?.permissions?.admin === true
-        || usuarioLogado?.permissions?.['finance.view'] === true
-        || ['admin', 'administrativo', 'dentista', 'super_admin'].includes(profile);
-      isFinanceAdmin = usuarioLogado?.permissions?.admin === true || ['admin', 'administrativo', 'super_admin'].includes(profile);
+      const canViewFinance = canManageGestao(usuarioLogado);
+      isFinanceAdmin = canManageGestao(usuarioLogado);
       if (!usuarioLogado || !canViewFinance) {
         console.warn('Acesso financeiro bloqueado para usuario sem permissao.');
+        window.location.href = 'index.html';
         return false;
       }
       return true;
@@ -2796,8 +2803,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
 
 
 

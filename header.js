@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const attnDropdown = document.getElementById('attn-dropdown');
   const gestaoToggle = document.getElementById('gestao-toggle');
   const gestaoDropdown = document.getElementById('gestao-dropdown');
+  let currentUser = null;
   const ensureAttnPaymentsItem = () => {
     if (!attnDropdown) return;
     const existing = attnDropdown.querySelector('a.attn-item[href="pagamentos.html"]');
@@ -104,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (gestaoToggle) {
     gestaoToggle.addEventListener('click', (ev) => {
       ev.stopPropagation();
+      if (!canManageClinic(currentUser)) return;
       toggleExclusive(gestaoDropdown, gestaoToggle);
     });
   }
@@ -164,6 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!authApi.currentUser) return;
     try {
       const user = await authApi.currentUser();
+      currentUser = user;
       const authContext = authApi.currentContext ? await authApi.currentContext().catch(() => null) : null;
       if (!user) {
         window.location.href = 'login.html';
@@ -213,6 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
           closeDropdowns();
           window.location.href = 'clinica.html';
         });
+      }
+
+      if (gestaoToggle) {
+        const allowed = canManageClinic(user);
+        gestaoToggle.disabled = !allowed;
+        gestaoToggle.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+        gestaoToggle.title = allowed ? '' : 'Acesso restrito';
       }
 
       if (changePassItem) {

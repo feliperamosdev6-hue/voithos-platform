@@ -109,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (cardGestao) {
         const openGestao = () => {
+            if (!canManageClinic(currentUser)) return;
             window.location.href = 'gestao.html';
         };
         cardGestao.addEventListener('click', openGestao);
@@ -1403,6 +1404,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
+            if (gestaoToggle) {
+                const allowed = canManageClinic(user);
+                gestaoToggle.disabled = !allowed;
+                gestaoToggle.setAttribute('aria-disabled', allowed ? 'false' : 'true');
+                gestaoToggle.title = allowed ? '' : 'Acesso restrito';
+            }
+
             if (changePassItem) {
                 changePassItem.remove();
             }
@@ -1435,6 +1443,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (gestaoToggle) {
         gestaoToggle.addEventListener('click', (ev) => {
             ev.stopPropagation();
+            if (!canManageClinic(user)) return;
             toggleExclusive(gestaoDropdown, gestaoToggle);
         });
     }
@@ -1536,7 +1545,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (homeAutoRefreshTimer) clearInterval(homeAutoRefreshTimer);
     });
 });
-
 
 
 
