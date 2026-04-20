@@ -12,6 +12,7 @@ body {
   color: #0f172a;
   min-height: 100vh;
   position: relative;
+  padding-top: 76px;
 }
 
 body::before {
@@ -35,9 +36,14 @@ body::before {
   color: rgb(255, 255, 255);
   display: flex;
   align-items: center;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
+  width: 100%;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 .header-container h1 {
@@ -638,9 +644,14 @@ body::before {
   align-items: center;
   gap: 32px;
   padding: 14px 16px 14px 40px;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 1000;
+  width: 100%;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(10px);
 }
 
 /* Logo */
@@ -1598,5 +1609,4 @@ main {
 .header-actions .user-menu-toggle {
   box-shadow: 0 6px 16px rgba(15, 118, 110, 0.18);
 }
-
 

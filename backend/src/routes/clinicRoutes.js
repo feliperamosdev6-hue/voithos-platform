@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const { authenticate } = require('../middlewares/authenticate');
 const { authenticateOptional } = require('../middlewares/authenticateOptional');
 const {
@@ -11,6 +12,16 @@ const {
   exportMyClinicData,
   previewMyClinicImport,
   applyMyClinicImport,
+  previewMyPatientImport,
+  applyMyPatientImport,
+  previewMyAppointmentImport,
+  applyMyAppointmentImport,
+  previewMyClinicalImport,
+  applyMyClinicalImport,
+  previewMyCashflowImport,
+  applyMyCashflowImport,
+  previewMyProceduresImport,
+  applyMyProceduresImport,
   getMyWhatsAppEngineHealth,
   getMyWhatsAppConnection,
   refreshMyWhatsAppConnection,
@@ -23,6 +34,12 @@ const {
 } = require('../controllers/clinicController');
 
 const router = express.Router();
+const importUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 30 * 1024 * 1024,
+  },
+});
 
 router.get('/', authenticateOptional, listClinics);
 router.use(authenticate);
@@ -34,6 +51,16 @@ router.patch('/me/profile', updateMyClinicProfile);
 router.get('/me/data-export', exportMyClinicData);
 router.post('/me/data-import/preview', previewMyClinicImport);
 router.post('/me/data-import/apply', applyMyClinicImport);
+router.post('/me/data-import/patients/preview', importUpload.single('file'), previewMyPatientImport);
+router.post('/me/data-import/patients/apply', importUpload.single('file'), applyMyPatientImport);
+router.post('/me/data-import/agenda/preview', importUpload.single('file'), previewMyAppointmentImport);
+router.post('/me/data-import/agenda/apply', importUpload.single('file'), applyMyAppointmentImport);
+router.post('/me/data-import/clinical/preview', importUpload.single('file'), previewMyClinicalImport);
+router.post('/me/data-import/clinical/apply', importUpload.single('file'), applyMyClinicalImport);
+router.post('/me/data-import/cashflow/preview', importUpload.single('file'), previewMyCashflowImport);
+router.post('/me/data-import/cashflow/apply', importUpload.single('file'), applyMyCashflowImport);
+router.post('/me/data-import/procedures/preview', importUpload.single('file'), previewMyProceduresImport);
+router.post('/me/data-import/procedures/apply', importUpload.single('file'), applyMyProceduresImport);
 router.get('/me/whatsapp/health', getMyWhatsAppEngineHealth);
 router.get('/me/whatsapp/connection', getMyWhatsAppConnection);
 router.post('/me/whatsapp/connection/refresh', refreshMyWhatsAppConnection);

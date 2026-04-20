@@ -12,6 +12,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const attnDropdown = document.getElementById('attn-dropdown');
   const gestaoToggle = document.getElementById('gestao-toggle');
   const gestaoDropdown = document.getElementById('gestao-dropdown');
+  const ensureAttnPaymentsItem = () => {
+    if (!attnDropdown) return;
+    const existing = attnDropdown.querySelector('a.attn-item[href="pagamentos.html"]');
+    if (existing) {
+      attnDropdown.appendChild(existing);
+      return;
+    }
+
+    const paymentsItem = document.createElement('a');
+    paymentsItem.className = 'attn-item';
+    paymentsItem.href = 'pagamentos.html';
+    paymentsItem.setAttribute('role', 'menuitem');
+    paymentsItem.innerHTML = '<span class="attn-icon" aria-hidden="true"></span> Pagamentos';
+    attnDropdown.appendChild(paymentsItem);
+  };
 
   const ensurePageBackButton = () => {
     const pageHeader = document.querySelector('.page-header');
@@ -34,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     pageHeader.appendChild(btn);
   };
   ensurePageBackButton();
+  ensureAttnPaymentsItem();
 
   const setDropdownState = (dropdown, toggle, isOpen) => {
     if (!dropdown) return;

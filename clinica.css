@@ -7,11 +7,12 @@
 
 .clinic-main {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   gap: 24px;
-  max-width: 1280px;
+  max-width: 1440px;
   margin: 24px auto 48px;
-  padding: 0 24px;
+  padding: 0 20px;
+  align-items: start;
 }
 
 .clinic-sidebar {
@@ -21,6 +22,12 @@
   padding: 18px;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
   height: fit-content;
+  position: sticky;
+  top: 92px;
+  max-height: calc(100vh - 108px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .sidebar-title {
@@ -619,11 +626,47 @@
 }
 
 .data-portability-card input[type="file"] {
+  display: none;
+}
+
+.file-dropzone {
+  display: grid;
+  place-items: center;
+  gap: 8px;
   width: 100%;
+  min-height: 162px;
   border: 1px dashed rgba(15, 118, 110, 0.35);
-  border-radius: 14px;
-  padding: 12px;
-  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbfa 100%);
+  text-align: center;
+  cursor: pointer;
+}
+
+.file-dropzone-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 118, 110, 0.08);
+  color: #0f766e;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.file-dropzone strong {
+  color: #0f172a;
+  font-size: 0.98rem;
+}
+
+.file-dropzone small {
+  color: #64748b;
+}
+
+.file-dropzone:focus-within {
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
 }
 
 .import-preview {
@@ -688,6 +731,12 @@
 }
 
 @media (max-width: 980px) {
+  .clinic-sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+
   .clinic-main {
     grid-template-columns: 1fr;
   }

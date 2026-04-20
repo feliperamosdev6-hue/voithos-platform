@@ -316,9 +316,14 @@
                         <button class="btn-secondary" type="button" id="clinic-export-data">Exportar dados</button>
                     </div>
                     <div>
-                        <h3>Importar configuracoes</h3>
-                        <p>Envie um arquivo JSON e revise o preview antes de aplicar na clinica atual.</p>
-                        <input type="file" id="clinic-import-file" accept="application/json,.json">
+                        <h3>Importar dados</h3>
+                        <p>Envie um arquivo exportado de outro sistema e revise o preview antes de aplicar na clinica atual.</p>
+                        <label class="file-dropzone" for="clinic-import-file">
+                            <input type="file" id="clinic-import-file" accept=".csv,.json,.xlsx,.xls,.zip,.rar">
+                            <span class="file-dropzone-icon" aria-hidden="true">⭱</span>
+                            <strong>Arraste ou escolha o arquivo para enviar</strong>
+                            <small>Formatos aceitos no seletor: csv, json, xlsx, xls, zip, rar. Leitura automática nesta versão: csv e json.</small>
+                        </label>
                         <div class="import-preview hidden" id="clinic-import-preview"></div>
                         <div class="import-actions">
                             <button class="btn-secondary" type="button" id="clinic-import-clear">Limpar</button>
@@ -343,5 +348,3 @@
     <script src="clinica.js"></script>
 </body>
 </html>
-
-

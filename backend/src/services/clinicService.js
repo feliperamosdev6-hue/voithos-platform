@@ -1,13 +1,22 @@
 const crypto = require('crypto');
 const { prisma } = require('../db/prisma');
 const { clinicRepository } = require('../repositories/clinicRepository');
+const { patientRepository } = require('../repositories/patientRepository');
+const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
 const { userRepository } = require('../repositories/userRepository');
+const { appointmentService } = require('./appointmentService');
+const { patientClinicalService } = require('./patientClinicalService');
+const { financialService } = require('./financialService');
 const { authService, SESSION_TTL_DAYS } = require('./authService');
 const { AppError } = require('../errors/AppError');
+const XLSX = require('xlsx');
+const JSZip = require('jszip');
+const { createExtractorFromData } = require('node-unrar-js');
 
 const isMissingTableError = (error) => error && error.code === 'P2021';
 const normalizeDocument = (value) => String(value || '').replace(/\D/g, '');
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const normalizeKey = (value) => normalizeImportKey(value);
 const isValidDocumentType = (value) => value === 'CPF' || value === 'CNPJ';
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
 const DEFAULT_BIRTHDAY_TEMPLATE = 'Ola, {nome}! A equipe da {clinicaNome} deseja um feliz aniversario! Conte com a gente para cuidar do seu sorriso.';
@@ -84,6 +93,49 @@ const DEFAULT_PAYMENT_SETTINGS = {
   showPaymentLink: true,
   requirePaymentNote: false,
   updatedAt: '',
+};
+
+const PATIENT_IMPORT_ALIASES = {
+  capim: {
+    name: ['nome', 'nomepaciente', 'paciente', 'patientname', 'fullname'],
+    document: ['cpf', 'documento', 'documentopaciente', 'cnpjcpf', 'cpfcnpj', 'rg'],
+    birthDate: ['nascimento', 'datanascimento', 'nasc', 'birthdate', 'datadenascimento'],
+    phone: ['telefone', 'celular', 'phone', 'fone', 'contato', 'whatsapp'],
+    email: ['email', 'e-mail', 'mail'],
+    address: ['endereco', 'endereço', 'logradouro'],
+  },
+  clinicorp: {
+    name: ['nome', 'paciente', 'nomecompleto', 'fullname'],
+    document: ['cpf', 'cpfcnpj', 'documento', 'documentoidentificacao', 'rg'],
+    birthDate: ['nascimento', 'datanascimento', 'data_nascimento', 'birthdate'],
+    phone: ['telefone', 'celular', 'fone', 'contato', 'whatsapp'],
+    email: ['email', 'e-mail', 'mail'],
+    address: ['endereco', 'endereço', 'logradouro'],
+  },
+  odontolis: {
+    name: ['nome', 'paciente', 'nomepaciente', 'nomedopaciente'],
+    document: ['cpf', 'documento', 'numero_documento', 'rg'],
+    birthDate: ['nascimento', 'datanascimento', 'data_nasc'],
+    phone: ['telefone', 'celular', 'fone'],
+    email: ['email', 'e-mail'],
+    address: ['endereco', 'endereço'],
+  },
+  dentaloffice: {
+    name: ['nome', 'patient', 'fullname', 'nomepaciente'],
+    document: ['cpf', 'document', 'id_document', 'rg'],
+    birthDate: ['birthdate', 'nascimento', 'dob'],
+    phone: ['phone', 'telefone', 'mobile', 'celular'],
+    email: ['email', 'e-mail'],
+    address: ['address', 'endereco', 'endereço'],
+  },
+  outro: {
+    name: ['nome', 'paciente', 'name', 'fullname'],
+    document: ['cpf', 'documento', 'document', 'id', 'rg'],
+    birthDate: ['nascimento', 'birthdate', 'data_nascimento', 'dob'],
+    phone: ['telefone', 'phone', 'celular', 'contato'],
+    email: ['email', 'mail'],
+    address: ['endereco', 'endereço', 'address'],
+  },
 };
 
 const getDefaultOperationalSettings = () => ({
@@ -458,13 +510,13 @@ const mergeOperationalSettings = (current = {}, patch = {}) => {
       ? normalizeClinicCampaigns(safePatch.campaigns)
       : normalizeClinicCampaigns(safeCurrent.campaigns),
     anamneseModels: Object.prototype.hasOwnProperty.call(safePatch, 'anamneseModels')
-      ? (Array.isArray(safePatch.anamneseModels) ? safePatch.anamneseModels : [])
+      ? (Array.isArray(safePatch.anamneseModels) ? safePatch.anamneseModels : safeCurrent.anamneseModels)
       : (Array.isArray(safeCurrent.anamneseModels) ? safeCurrent.anamneseModels : []),
     documentModels: Object.prototype.hasOwnProperty.call(safePatch, 'documentModels')
-      ? (Array.isArray(safePatch.documentModels) ? safePatch.documentModels : [])
+      ? (Array.isArray(safePatch.documentModels) ? safePatch.documentModels : safeCurrent.documentModels)
       : (Array.isArray(safeCurrent.documentModels) ? safeCurrent.documentModels : []),
     proceduresCatalog: Object.prototype.hasOwnProperty.call(safePatch, 'proceduresCatalog')
-      ? (Array.isArray(safePatch.proceduresCatalog) ? safePatch.proceduresCatalog : [])
+      ? (Array.isArray(safePatch.proceduresCatalog) ? safePatch.proceduresCatalog : safeCurrent.proceduresCatalog)
       : (Array.isArray(safeCurrent.proceduresCatalog) ? safeCurrent.proceduresCatalog : []),
     receituario: Object.prototype.hasOwnProperty.call(safePatch, 'receituario')
       ? normalizeReceituario({
@@ -576,6 +628,1330 @@ const buildClinicImportPreview = (payload = {}) => {
   };
 };
 
+const normalizeImportKey = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+const MAX_IMPORT_FILE_BYTES = 25 * 1024 * 1024;
+const SUPPORTED_IMPORT_FILE_EXTENSIONS = new Set(['csv', 'json', 'xlsx', 'xls', 'zip', 'rar', 'txt']);
+
+const getImportFileExtension = (fileName = '') => {
+  const parts = String(fileName || '').split('.');
+  return String(parts.length > 1 ? parts.pop() : '').trim().toLowerCase();
+};
+
+const normalizeImportFileBase64 = (value = '') => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const commaIndex = raw.indexOf(',');
+  return commaIndex >= 0 ? raw.slice(commaIndex + 1) : raw;
+};
+
+const bufferFromImportFileData = (value = '') => {
+  const base64 = normalizeImportFileBase64(value);
+  if (!base64) return Buffer.alloc(0);
+  return Buffer.from(base64, 'base64');
+};
+
+const detectImportSeparator = (text = '') => {
+  const sample = String(text || '');
+  const candidates = [';', '\t', ',', '|'];
+  let winner = ',';
+  let bestScore = -1;
+  candidates.forEach((candidate) => {
+    const score = (sample.match(new RegExp(`\\${candidate}`, 'g')) || []).length;
+    if (score > bestScore) {
+      bestScore = score;
+      winner = candidate;
+    }
+  });
+  return winner;
+};
+
+const splitImportCsvLine = (line, separator) => {
+  const out = [];
+  let current = '';
+  let quoted = false;
+  const raw = String(line || '');
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    const next = raw[index + 1];
+    if (char === '"' && quoted && next === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (char === separator && !quoted) {
+      out.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  out.push(current.trim());
+  return out;
+};
+
+const parseDelimitedImportText = (text = '') => {
+  const clean = String(text || '').replace(/^\uFEFF/, '').trim();
+  if (!clean) return { rows: [], headers: [] };
+  const separator = detectImportSeparator(clean);
+  const lines = clean.split(/\r?\n/).filter(Boolean);
+  const headers = splitImportCsvLine(lines.shift() || '', separator).map((value) => String(value || '').trim());
+  const rows = lines.map((line) => {
+    const cells = splitImportCsvLine(line, separator);
+    const record = {};
+    headers.forEach((header, index) => {
+      record[header || `col_${index}`] = cells[index] || '';
+    });
+    return record;
+  });
+  return { rows, headers };
+};
+
+const parseJsonImportText = (text = '') => {
+  const parsed = JSON.parse(String(text || ''));
+  if (Array.isArray(parsed)) {
+    return { rows: parsed, headers: parsed[0] ? Object.keys(parsed[0]) : [] };
+  }
+  if (parsed && typeof parsed === 'object') {
+    const source = parsed.rows || parsed.items || parsed.records || parsed.data || parsed.patients || parsed.appointments || parsed.clinicalRecords || parsed.procedures || parsed.cashflow || [];
+    if (Array.isArray(source)) {
+      return { rows: source, headers: source[0] ? Object.keys(source[0]) : [] };
+    }
+    return { rows: [parsed], headers: Object.keys(parsed) };
+  }
+  return { rows: [], headers: [] };
+};
+
+const parseWorkbookImportBuffer = (buffer) => {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const sheetName = workbook.SheetNames && workbook.SheetNames[0];
+  if (!sheetName) return { rows: [], headers: [] };
+  const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) return { rows: [], headers: [] };
+  const rows = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
+  return {
+    rows,
+    headers: rows[0] ? Object.keys(rows[0]) : [],
+  };
+};
+
+const parseImportFileBuffer = async (buffer, fileName = '') => {
+  const extension = getImportFileExtension(fileName);
+  if (!SUPPORTED_IMPORT_FILE_EXTENSIONS.has(extension)) {
+    return { rows: [], headers: [], fileType: extension };
+  }
+
+  if (buffer.byteLength > MAX_IMPORT_FILE_BYTES) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo excede o tamanho maximo permitido.');
+  }
+
+  if (extension === 'csv' || extension === 'txt') {
+    return {
+      ...parseDelimitedImportText(buffer.toString('utf8')),
+      fileType: extension,
+    };
+  }
+
+  if (extension === 'json') {
+    return {
+      ...parseJsonImportText(buffer.toString('utf8')),
+      fileType: extension,
+    };
+  }
+
+  if (extension === 'xlsx' || extension === 'xls') {
+    return {
+      ...parseWorkbookImportBuffer(buffer),
+      fileType: extension,
+    };
+  }
+
+  if (extension === 'zip') {
+    const archive = await JSZip.loadAsync(buffer);
+    const rows = [];
+    let headers = [];
+    const entries = [];
+    archive.forEach((relativePath, file) => {
+      if (!file || file.dir) return;
+      entries.push({ relativePath, file });
+    });
+
+    for (const entry of entries) {
+      const innerExt = getImportFileExtension(entry.relativePath);
+      if (!SUPPORTED_IMPORT_FILE_EXTENSIONS.has(innerExt) || innerExt === 'zip' || innerExt === 'rar') {
+        continue;
+      }
+      const innerBuffer = await entry.file.async('nodebuffer');
+      const parsed = await parseImportFileBuffer(innerBuffer, entry.relativePath);
+      if (Array.isArray(parsed.rows) && parsed.rows.length) rows.push(...parsed.rows);
+      if (!headers.length && Array.isArray(parsed.headers)) headers = parsed.headers;
+    }
+
+    return { rows, headers, fileType: extension };
+  }
+
+  if (extension === 'rar') {
+    const archive = await createExtractorFromData({
+      data: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+    });
+    const extracted = archive.extract({
+      files: (fileHeader) => !fileHeader?.flags?.directory,
+    });
+    const rows = [];
+    let headers = [];
+    for (const entry of extracted.files) {
+      if (!entry || !entry.fileHeader || entry.fileHeader.flags.directory || !entry.extraction) continue;
+      const innerExt = getImportFileExtension(entry.fileHeader.name);
+      if (!SUPPORTED_IMPORT_FILE_EXTENSIONS.has(innerExt) || innerExt === 'zip' || innerExt === 'rar') {
+        continue;
+      }
+      const innerBuffer = Buffer.from(entry.extraction);
+      const parsed = await parseImportFileBuffer(innerBuffer, entry.fileHeader.name);
+      if (Array.isArray(parsed.rows) && parsed.rows.length) rows.push(...parsed.rows);
+      if (!headers.length && Array.isArray(parsed.headers)) headers = parsed.headers;
+    }
+    return { rows, headers, fileType: extension };
+  }
+
+  return { rows: [], headers: [], fileType: extension };
+};
+
+const resolveUploadedImportRows = async (payload = {}) => {
+  const source = String(payload?.source || payload?.origem || 'outro').trim().toLowerCase();
+  const fileObject = isPlainObject(payload?.file) ? payload.file : null;
+  const fileData = String(payload?.fileData || payload?.fileContent || payload?.content || '').trim();
+  const fileName = String(payload?.fileName || payload?.name || fileObject?.originalname || '').trim();
+  if (!fileData && !(fileObject && fileObject.buffer) && !fileName) {
+    return { source, rows: [], headers: [], fileType: '' };
+  }
+  const buffer = fileObject && fileObject.buffer
+    ? Buffer.isBuffer(fileObject.buffer) ? fileObject.buffer : Buffer.from(fileObject.buffer)
+    : bufferFromImportFileData(fileData);
+  return {
+    source,
+    ...(await parseImportFileBuffer(buffer, fileName)),
+  };
+};
+
+const hasUploadedImportFile = (payload = {}) => {
+  const fileObject = isPlainObject(payload?.file) ? payload.file : null;
+  const fileData = String(payload?.fileData || payload?.fileContent || payload?.content || '').trim();
+  const fileName = String(payload?.fileName || payload?.name || fileObject?.originalname || '').trim();
+  return Boolean(fileObject?.buffer || fileData || fileName);
+};
+
+const resolvePatientImportAliases = (source) => PATIENT_IMPORT_ALIASES[source] || PATIENT_IMPORT_ALIASES.outro;
+
+const firstNonEmptyImportValue = (record, aliases) => {
+  if (!isPlainObject(record)) return '';
+  const target = new Set((Array.isArray(aliases) ? aliases : []).map(normalizeImportKey));
+  for (const [key, value] of Object.entries(record)) {
+    if (target.has(normalizeImportKey(key))) {
+      const normalized = String(value || '').trim();
+      if (normalized) return normalized;
+    }
+  }
+  return '';
+};
+
+const normalizePatientImportDate = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const dmyMatch = raw.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})$/);
+  if (dmyMatch) {
+    const day = Number(dmyMatch[1]);
+    const month = Number(dmyMatch[2]);
+    const year = Number(dmyMatch[3]);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizePatientImportRow = (row = {}, source = 'outro') => {
+  const aliases = resolvePatientImportAliases(source);
+  const nome = firstNonEmptyImportValue(row, aliases.name);
+  const cpf = normalizeDocument(firstNonEmptyImportValue(row, aliases.document));
+  const rg = firstNonEmptyImportValue(row, ['rg']);
+  const dataNascimento = normalizePatientImportDate(firstNonEmptyImportValue(row, aliases.birthDate));
+  const telefone = firstNonEmptyImportValue(row, aliases.phone);
+  const email = normalizeEmail(firstNonEmptyImportValue(row, aliases.email));
+  const endereco = firstNonEmptyImportValue(row, aliases.address);
+
+  return {
+    nome,
+    cpf,
+    rg,
+    dataNascimento,
+    telefone,
+    email,
+    endereco,
+  };
+};
+
+const extractPatientImportRows = async (payload = {}) => {
+  const source = String(payload?.source || payload?.origem || 'outro').trim().toLowerCase();
+  if (hasUploadedImportFile(payload)) {
+    const uploaded = await resolveUploadedImportRows(payload);
+    return {
+      source,
+      rows: Array.isArray(uploaded.rows) ? uploaded.rows.filter(isPlainObject) : [],
+      headers: Array.isArray(uploaded.headers) ? uploaded.headers : [],
+      fileType: uploaded.fileType || '',
+    };
+  }
+  const rawRows =
+    (Array.isArray(payload?.patients) && payload.patients) ||
+    (Array.isArray(payload?.rows) && payload.rows) ||
+    (Array.isArray(payload?.items) && payload.items) ||
+    (Array.isArray(payload?.data) && payload.data) ||
+    [];
+
+  return {
+    source,
+    rows: rawRows.filter(isPlainObject),
+  };
+};
+
+const buildPatientImportPreview = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+  if (!clinic) {
+    throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+  }
+
+  const { source, rows, headers = [] } = await extractPatientImportRows(payload);
+  if (!rows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem pacientes reconheciveis.');
+  }
+
+  const normalizedRows = rows.map((row) => normalizePatientImportRow(row, source)).filter((row) => row.nome || row.cpf || row.email);
+  if (!normalizedRows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem pacientes validos para importar.');
+  }
+
+  const existingPatients = await prisma.patient.findMany({
+    where: { clinicId: normalizedClinicId },
+    select: { cpf: true, email: true, nome: true, dataNascimento: true },
+  });
+  const existingCpf = new Set(existingPatients.map((patient) => normalizeDocument(patient.cpf)).filter(Boolean));
+  const existingEmail = new Set(existingPatients.map((patient) => normalizeEmail(patient.email)).filter(Boolean));
+
+  let duplicates = 0;
+  let valid = 0;
+  normalizedRows.forEach((row) => {
+    const hasCpfDuplicate = row.cpf && existingCpf.has(row.cpf);
+    const hasEmailDuplicate = row.email && existingEmail.has(row.email);
+    if (hasCpfDuplicate || hasEmailDuplicate) {
+      duplicates += 1;
+      return;
+    }
+    valid += 1;
+  });
+
+  return {
+    valid: true,
+    source,
+    totalRows: rows.length,
+    normalizedRows: normalizedRows.length,
+    headers,
+    validRows: valid,
+    duplicateRows: duplicates,
+    stage: 'patients',
+    summary: {
+      totalRows: rows.length,
+      normalizedRows: normalizedRows.length,
+      headers,
+      validRows: valid,
+      duplicateRows: duplicates,
+    },
+  };
+};
+
+const applyPatientImport = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const preview = await buildPatientImportPreview({ clinicId: normalizedClinicId, payload });
+  const { source, rows } = await extractPatientImportRows(payload);
+  const normalizedRows = rows.map((row) => normalizePatientImportRow(row, source)).filter((row) => row.nome || row.cpf || row.email);
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existingPatients = await tx.patient.findMany({
+        where: { clinicId: normalizedClinicId },
+        select: { id: true, cpf: true, email: true, nome: true, dataNascimento: true },
+      });
+
+      const existingCpf = new Map(
+        existingPatients
+          .filter((patient) => normalizeDocument(patient.cpf))
+          .map((patient) => [normalizeDocument(patient.cpf), patient])
+      );
+      const existingEmail = new Map(
+        existingPatients
+          .filter((patient) => normalizeEmail(patient.email))
+          .map((patient) => [normalizeEmail(patient.email), patient])
+      );
+
+      const created = [];
+      const skipped = [];
+
+      for (const row of normalizedRows) {
+        const cpfKey = row.cpf || '';
+        const emailKey = row.email || '';
+        const duplicate = (cpfKey && existingCpf.get(cpfKey)) || (emailKey && existingEmail.get(emailKey));
+        if (duplicate) {
+          skipped.push({
+            nome: row.nome,
+            cpf: row.cpf,
+            reason: 'duplicate',
+          });
+          continue;
+        }
+
+        const createdPatient = await tx.patient.create({
+          data: {
+            clinicId: normalizedClinicId,
+            nome: String(row.nome || '').trim().slice(0, 160),
+            cpf: row.cpf || null,
+            rg: row.rg || null,
+            dataNascimento: row.dataNascimento || null,
+            telefone: row.telefone || null,
+            email: row.email || null,
+            endereco: row.endereco || null,
+            allowsMessages: true,
+          },
+        });
+
+        if (createdPatient.cpf) {
+          existingCpf.set(createdPatient.cpf.replace(/\D/g, ''), createdPatient);
+        }
+        if (createdPatient.email) {
+          existingEmail.set(String(createdPatient.email).trim().toLowerCase(), createdPatient);
+        }
+        created.push(createdPatient);
+      }
+
+      return {
+        created: created.length,
+        skipped: skipped.length,
+        createdPatients: created.map((patient) => ({
+          id: patient.id,
+          nome: patient.nome,
+          cpf: patient.cpf,
+        })),
+        skippedPatients: skipped,
+      };
+    });
+
+    return {
+      ...preview,
+      imported: result.created,
+      skipped: result.skipped,
+      createdPatients: result.createdPatients,
+      skippedPatients: result.skippedPatients,
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+    }
+    throw error;
+  }
+};
+
+const CLINICAL_IMPORT_ALIASES = {
+  capim: {
+    patientName: ['paciente', 'nomepaciente', 'nome', 'patientname', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'documentopaciente', 'cnpjcpf', 'cpfcnpj', 'rg'],
+    procedureName: ['procedimento', 'nomeprocedimento', 'procedure', 'service', 'servico', 'tipo'],
+    procedureCode: ['codigo', 'code', 'código'],
+    status: ['status', 'situacao', 'estado'],
+    dentistName: ['dentista', 'profissional', 'dentistanome'],
+    tooth: ['dente', 'tooth'],
+    faces: ['faces', 'face'],
+    observations: ['observacoes', 'observação', 'observacao', 'obs'],
+    performedAt: ['datarealizacao', 'realizadoem', 'data', 'date', 'performedat'],
+    registeredAt: ['datacadastro', 'createdat', 'registradoem', 'registro', 'registeredat'],
+    amount: ['valor', 'price', 'preco', 'cobrado', 'amount'],
+  },
+  clinicorp: {
+    patientName: ['paciente', 'nome', 'nomecompleto'],
+    patientDocument: ['cpf', 'documento', 'cpfcnpj', 'rg'],
+    procedureName: ['procedimento', 'nome', 'servico', 'service'],
+    procedureCode: ['codigo', 'code'],
+    status: ['status', 'situacao'],
+    dentistName: ['dentista', 'profissional'],
+    tooth: ['dente', 'tooth'],
+    faces: ['faces'],
+    observations: ['observacoes', 'obs'],
+    performedAt: ['datarealizacao', 'data', 'performedat'],
+    registeredAt: ['datacadastro', 'registeredat'],
+    amount: ['valor', 'price', 'preco'],
+  },
+  odontolis: {
+    patientName: ['paciente', 'nome', 'nomepaciente'],
+    patientDocument: ['cpf', 'documento', 'rg'],
+    procedureName: ['procedimento', 'nomeprocedimento', 'procedure'],
+    procedureCode: ['codigo', 'code'],
+    status: ['status', 'situacao'],
+    dentistName: ['dentista', 'profissional'],
+    tooth: ['dente', 'tooth'],
+    faces: ['faces'],
+    observations: ['observacoes', 'obs'],
+    performedAt: ['data', 'realizadoem', 'performedat'],
+    registeredAt: ['registradoem', 'registeredat'],
+    amount: ['valor', 'amount'],
+  },
+  dentaloffice: {
+    patientName: ['patient', 'paciente', 'name', 'fullname'],
+    patientDocument: ['cpf', 'document', 'id_document'],
+    procedureName: ['procedure', 'service', 'procedimento'],
+    procedureCode: ['code', 'codigo'],
+    status: ['status'],
+    dentistName: ['dentist', 'doctor', 'professional'],
+    tooth: ['tooth', 'dente'],
+    faces: ['faces'],
+    observations: ['notes', 'observations', 'obs'],
+    performedAt: ['performedat', 'date', 'data'],
+    registeredAt: ['registeredat', 'createdat'],
+    amount: ['amount', 'price', 'valor'],
+  },
+  outro: {
+    patientName: ['paciente', 'nome', 'name', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'document', 'id', 'rg'],
+    procedureName: ['procedimento', 'procedure', 'service', 'nome'],
+    procedureCode: ['codigo', 'code'],
+    status: ['status', 'situacao', 'estado'],
+    dentistName: ['dentista', 'profissional', 'doctor'],
+    tooth: ['dente', 'tooth'],
+    faces: ['faces', 'face'],
+    observations: ['observacoes', 'notes', 'obs'],
+    performedAt: ['datarealizacao', 'date', 'performedat'],
+    registeredAt: ['registradoem', 'registeredat', 'createdat'],
+    amount: ['valor', 'amount', 'price'],
+  },
+};
+
+const resolveClinicalAliases = (source) => CLINICAL_IMPORT_ALIASES[source] || CLINICAL_IMPORT_ALIASES.outro;
+
+const normalizeClinicalImportDate = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (iso) {
+    const parsed = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), Number(iso[4] || 0), Number(iso[5] || 0), Number(iso[6] || 0)));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const dmy = raw.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (dmy) {
+    const parsed = new Date(Date.UTC(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]), Number(dmy[4] || 0), Number(dmy[5] || 0), Number(dmy[6] || 0)));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeFaces = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  return raw.split(/[,;|]/).map((item) => item.trim()).filter(Boolean);
+};
+
+const normalizeClinicalImportRow = (row = {}, source = 'outro') => {
+  const aliases = resolveClinicalAliases(source);
+  const patientName = firstNonEmptyImportValue(row, aliases.patientName);
+  const patientDocument = normalizeDocument(firstNonEmptyImportValue(row, aliases.patientDocument));
+  const procedureName = firstNonEmptyImportValue(row, aliases.procedureName);
+  const procedureCode = firstNonEmptyImportValue(row, aliases.procedureCode);
+  const status = String(firstNonEmptyImportValue(row, aliases.status) || 'a-realizar').trim();
+  const dentistName = firstNonEmptyImportValue(row, aliases.dentistName);
+  const tooth = firstNonEmptyImportValue(row, aliases.tooth);
+  const faces = normalizeFaces(firstNonEmptyImportValue(row, aliases.faces));
+  const observations = firstNonEmptyImportValue(row, aliases.observations);
+  const performedAt = normalizeClinicalImportDate(firstNonEmptyImportValue(row, aliases.performedAt));
+  const registeredAt = normalizeClinicalImportDate(firstNonEmptyImportValue(row, aliases.registeredAt));
+  const amount = Number(String(firstNonEmptyImportValue(row, aliases.amount) || '').replace(',', '.'));
+
+  return {
+    patientName,
+    patientDocument,
+    procedureName,
+    procedureCode,
+    status,
+    dentistName,
+    tooth,
+    faces,
+    observations,
+    performedAt,
+    registeredAt,
+    amount: Number.isFinite(amount) ? amount : 0,
+  };
+};
+
+const extractClinicalImportRows = async (payload = {}) => {
+  const source = String(payload?.source || payload?.origem || 'outro').trim().toLowerCase();
+  if (hasUploadedImportFile(payload)) {
+    const uploaded = await resolveUploadedImportRows(payload);
+    return {
+      source,
+      rows: Array.isArray(uploaded.rows) ? uploaded.rows.filter(isPlainObject) : [],
+      headers: Array.isArray(uploaded.headers) ? uploaded.headers : [],
+      fileType: uploaded.fileType || '',
+    };
+  }
+  const rawRows =
+    (Array.isArray(payload?.clinicalRecords) && payload.clinicalRecords) ||
+    (Array.isArray(payload?.procedures) && payload.procedures) ||
+    (Array.isArray(payload?.rows) && payload.rows) ||
+    (Array.isArray(payload?.items) && payload.items) ||
+    (Array.isArray(payload?.data) && payload.data) ||
+    [];
+
+  return {
+    source,
+    rows: rawRows.filter(isPlainObject),
+  };
+};
+
+const buildClinicalImportPreview = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+  const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+  if (!clinic) {
+    throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+  }
+
+  const { source, rows, headers = [] } = await extractClinicalImportRows(payload);
+  if (!rows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem fichas clinicas reconheciveis.');
+  }
+
+  const normalizedRows = rows.map((row) => normalizeClinicalImportRow(row, source)).filter((row) => row.patientName || row.patientDocument || row.procedureName);
+  if (!normalizedRows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem fichas clinicas validas.');
+  }
+
+  const patients = await prisma.patient.findMany({
+    where: { clinicId: normalizedClinicId },
+    select: { id: true, nome: true, cpf: true },
+  });
+  const patientsByCpf = new Map();
+  const patientsByName = new Map();
+  patients.forEach((patient) => {
+    const cpf = normalizeDocument(patient.cpf);
+    const name = normalizeKey(patient.nome);
+    if (cpf) patientsByCpf.set(cpf, patient);
+    if (name) patientsByName.set(name, patient);
+  });
+
+  let matchedRows = 0;
+  let missingPatients = 0;
+  let withoutProcedure = 0;
+  normalizedRows.forEach((row) => {
+    const matchedPatient = (row.patientDocument && patientsByCpf.get(row.patientDocument))
+      || (row.patientName && patientsByName.get(normalizeKey(row.patientName)));
+    if (matchedPatient) matchedRows += 1;
+    else missingPatients += 1;
+    if (!row.procedureName && !row.procedureCode) withoutProcedure += 1;
+  });
+
+  return {
+    valid: true,
+    source,
+    totalRows: rows.length,
+    normalizedRows: normalizedRows.length,
+    headers,
+    matchedRows,
+    missingPatients,
+    withoutProcedure,
+    stage: 'clinical',
+    summary: {
+      totalRows: rows.length,
+      normalizedRows: normalizedRows.length,
+      headers,
+      matchedRows,
+      missingPatients,
+      withoutProcedure,
+    },
+  };
+};
+
+const applyClinicalImport = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const preview = await buildClinicalImportPreview({ clinicId: normalizedClinicId, payload });
+  const { source, rows } = await extractClinicalImportRows(payload);
+  const normalizedRows = rows.map((row) => normalizeClinicalImportRow(row, source)).filter((row) => row.patientName || row.patientDocument || row.procedureName);
+
+  try {
+    const patients = await prisma.patient.findMany({
+      where: { clinicId: normalizedClinicId },
+      select: { id: true, nome: true, cpf: true },
+    });
+    const patientsByCpf = new Map();
+    const patientsByName = new Map();
+    patients.forEach((patient) => {
+      const cpf = normalizeDocument(patient.cpf);
+      const name = normalizeKey(patient.nome);
+      if (cpf) patientsByCpf.set(cpf, patient);
+      if (name) patientsByName.set(name, patient);
+    });
+
+    const created = [];
+    const skipped = [];
+
+    for (let index = 0; index < normalizedRows.length; index += 1) {
+      const row = normalizedRows[index];
+      const matchedPatient = (row.patientDocument && patientsByCpf.get(row.patientDocument))
+        || (row.patientName && patientsByName.get(normalizeKey(row.patientName)));
+      if (!matchedPatient || (!row.procedureName && !row.procedureCode)) {
+        skipped.push({
+          patientName: row.patientName,
+          reason: !matchedPatient ? 'patient_not_found' : 'missing_procedure',
+        });
+        continue;
+      }
+
+      const externalIdSource = [
+        matchedPatient.id,
+        row.procedureCode || row.procedureName || 'procedure',
+        row.performedAt ? row.performedAt.toISOString() : '',
+        index,
+      ].join('|');
+      const externalId = `import_${crypto.createHash('sha1').update(externalIdSource).digest('hex').slice(0, 16)}`;
+      const procedurePayload = {
+        id: externalId,
+        externalId,
+        nome: row.procedureName || row.procedureCode || 'Procedimento',
+        tipo: row.procedureName || row.procedureCode || 'Procedimento',
+        codigo: row.procedureCode || '',
+        status: row.status || 'a-realizar',
+        dentistaNome: row.dentistName || '',
+        dente: row.tooth || '',
+        dentes: row.tooth ? [row.tooth] : [],
+        faces: row.faces || [],
+        observacoes: row.observations || '',
+        dataRealizacao: row.performedAt || null,
+        registeredAt: row.registeredAt || row.performedAt || new Date(),
+        valor: row.amount || 0,
+        valorCobrado: row.amount || 0,
+        gerarFinanceiro: true,
+      };
+
+      const result = await patientClinicalService.upsertProcedure({
+        clinicId: normalizedClinicId,
+        patientId: matchedPatient.id,
+        procedure: procedurePayload,
+      });
+
+      created.push({
+        patientId: matchedPatient.id,
+        externalId,
+        procedureName: procedurePayload.nome,
+        financeWarning: result?.financeWarning || '',
+      });
+    }
+
+    return {
+      ...preview,
+      imported: created.length,
+      skipped: skipped.length,
+      createdProcedures: created,
+      skippedProcedures: skipped,
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+    }
+    throw error;
+  }
+};
+
+const CASHFLOW_ALIASES = {
+  capim: {
+    description: ['descricao', 'descrição', 'historico', 'historia', 'lancamento', 'lançamento', 'descricao_lancamento'],
+    patientName: ['paciente', 'nomepaciente', 'nome', 'patientname', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'documentopaciente', 'cnpjcpf', 'cpfcnpj', 'rg'],
+    amount: ['valor', 'amount', 'quantia', 'preco', 'price', 'total'],
+    type: ['tipo', 'category', 'categoria', 'natureza'],
+    paymentMethod: ['metodopagamento', 'paymentmethod', 'metodo', 'forma', 'forma_pagamento'],
+    dueDate: ['data', 'vencimento', 'duedate', 'date'],
+    status: ['status', 'situacao'],
+    category: ['categoria', 'category'],
+    source: ['origem', 'source'],
+  },
+  clinicorp: {
+    description: ['descricao', 'lancamento', 'historia'],
+    patientName: ['paciente', 'nome', 'nomecompleto'],
+    patientDocument: ['cpf', 'documento', 'cpfcnpj'],
+    amount: ['valor', 'amount', 'total'],
+    type: ['tipo', 'natureza', 'categoria'],
+    paymentMethod: ['metodo', 'forma', 'paymentmethod'],
+    dueDate: ['data', 'vencimento', 'duedate'],
+    status: ['status', 'situacao'],
+    category: ['categoria', 'category'],
+    source: ['origem', 'source'],
+  },
+  odontolis: {
+    description: ['descricao', 'lancamento', 'historico'],
+    patientName: ['paciente', 'nome', 'nomepaciente'],
+    patientDocument: ['cpf', 'documento', 'rg'],
+    amount: ['valor', 'amount', 'price'],
+    type: ['tipo', 'categoria'],
+    paymentMethod: ['metodo', 'forma'],
+    dueDate: ['data', 'vencimento'],
+    status: ['status', 'situacao'],
+    category: ['categoria', 'category'],
+    source: ['origem', 'source'],
+  },
+  dentaloffice: {
+    description: ['description', 'descricao', 'entry', 'lancamento'],
+    patientName: ['patient', 'paciente', 'name', 'fullname'],
+    patientDocument: ['cpf', 'document', 'id_document'],
+    amount: ['amount', 'valor', 'price'],
+    type: ['type', 'tipo', 'natureza'],
+    paymentMethod: ['paymentmethod', 'metodo', 'forma'],
+    dueDate: ['duedate', 'data', 'vencimento'],
+    status: ['status'],
+    category: ['category', 'categoria'],
+    source: ['source', 'origem'],
+  },
+  outro: {
+    description: ['descricao', 'description', 'lancamento', 'entry', 'movimentacao'],
+    patientName: ['paciente', 'nome', 'name', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'document', 'id', 'rg'],
+    amount: ['valor', 'amount', 'price', 'total'],
+    type: ['tipo', 'type', 'natureza'],
+    paymentMethod: ['metodo', 'method', 'forma', 'paymentmethod'],
+    dueDate: ['data', 'date', 'duedate', 'vencimento'],
+    status: ['status', 'situacao'],
+    category: ['categoria', 'category'],
+    source: ['origem', 'source'],
+  },
+};
+
+const resolveCashflowAliases = (source) => CASHFLOW_ALIASES[source] || CASHFLOW_ALIASES.outro;
+
+const normalizeCashflowAmount = (value) => {
+  const raw = String(value || '').trim().replace(/\s+/g, '').replace(',', '.');
+  const amount = Number(raw);
+  return Number.isFinite(amount) ? Math.abs(amount) : 0;
+};
+
+const normalizeCashflowType = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['despesa', 'expense', 'out', 'saida', 'saída', 'debito', 'débito'].includes(raw)) return 'despesa';
+  return 'receita';
+};
+
+const normalizeCashflowStatus = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PAGO' || raw === 'PAID') return 'PAID';
+  if (raw === 'CANCELADO' || raw === 'CANCELED' || raw === 'CANCELLED') return 'CANCELED';
+  return 'OPEN';
+};
+
+const normalizeCashflowPaymentMethod = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'DINHEIRO') return 'CASH';
+  if (raw === 'CARTAO' || raw === 'CREDIT' || raw === 'DEBIT' || raw === 'CARD' || raw === 'CARTAO_CREDITO' || raw === 'CARTAO_DEBITO') return 'CARD';
+  if (raw === 'TRANSFERENCIA' || raw === 'TRANSFER') return 'TRANSFER';
+  if (raw === 'BOLETO') return 'BOLETO';
+  if (raw === 'PIX') return 'PIX';
+  return raw || 'OTHER';
+};
+
+const normalizeCashflowImportRow = (row = {}, source = 'outro') => {
+  const aliases = resolveCashflowAliases(source);
+  return {
+    description: firstNonEmptyImportValue(row, aliases.description),
+    patientName: firstNonEmptyImportValue(row, aliases.patientName),
+    patientDocument: normalizeDocument(firstNonEmptyImportValue(row, aliases.patientDocument)),
+    amount: normalizeCashflowAmount(firstNonEmptyImportValue(row, aliases.amount)),
+    type: normalizeCashflowType(firstNonEmptyImportValue(row, aliases.type)),
+    paymentMethod: normalizeCashflowPaymentMethod(firstNonEmptyImportValue(row, aliases.paymentMethod)),
+    dueDate: normalizeClinicalImportDate(firstNonEmptyImportValue(row, aliases.dueDate)),
+    status: normalizeCashflowStatus(firstNonEmptyImportValue(row, aliases.status)),
+    category: firstNonEmptyImportValue(row, aliases.category),
+    source: firstNonEmptyImportValue(row, aliases.source),
+  };
+};
+
+const extractCashflowImportRows = async (payload = {}) => {
+  const source = String(payload?.source || payload?.origem || 'outro').trim().toLowerCase();
+  if (hasUploadedImportFile(payload)) {
+    const uploaded = await resolveUploadedImportRows(payload);
+    return {
+      source,
+      rows: Array.isArray(uploaded.rows) ? uploaded.rows.filter(isPlainObject) : [],
+      headers: Array.isArray(uploaded.headers) ? uploaded.headers : [],
+      fileType: uploaded.fileType || '',
+    };
+  }
+  const rawRows =
+    (Array.isArray(payload?.cashflow) && payload.cashflow) ||
+    (Array.isArray(payload?.entries) && payload.entries) ||
+    (Array.isArray(payload?.rows) && payload.rows) ||
+    (Array.isArray(payload?.items) && payload.items) ||
+    (Array.isArray(payload?.data) && payload.data) ||
+    [];
+
+  return {
+    source,
+    rows: rawRows.filter(isPlainObject),
+  };
+};
+
+const buildCashflowImportPreview = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+  const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+  if (!clinic) {
+    throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+  }
+
+  const { source, rows, headers = [] } = await extractCashflowImportRows(payload);
+  if (!rows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem lancamentos financeiros reconheciveis.');
+  }
+
+  const normalizedRows = rows.map((row) => normalizeCashflowImportRow(row, source)).filter((row) => row.description || row.amount > 0);
+  if (!normalizedRows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem lancamentos financeiros validos.');
+  }
+
+  let revenueRows = 0;
+  let expenseRows = 0;
+  let invalidRows = 0;
+  normalizedRows.forEach((row) => {
+    if (!row.description || row.amount <= 0) {
+      invalidRows += 1;
+      return;
+    }
+    if (row.type === 'despesa') expenseRows += 1;
+    else revenueRows += 1;
+  });
+
+  return {
+    valid: true,
+    source,
+    totalRows: rows.length,
+    normalizedRows: normalizedRows.length,
+    headers,
+    revenueRows,
+    expenseRows,
+    invalidRows,
+    stage: 'cashflow',
+    summary: {
+      totalRows: rows.length,
+      normalizedRows: normalizedRows.length,
+      headers,
+      revenueRows,
+      expenseRows,
+      invalidRows,
+    },
+  };
+};
+
+const applyCashflowImport = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const preview = await buildCashflowImportPreview({ clinicId: normalizedClinicId, payload });
+  const { source, rows } = await extractCashflowImportRows(payload);
+  const normalizedRows = rows.map((row) => normalizeCashflowImportRow(row, source)).filter((row) => row.description || row.amount > 0);
+
+  try {
+    const patients = await prisma.patient.findMany({
+      where: { clinicId: normalizedClinicId },
+      select: { id: true, nome: true, cpf: true },
+    });
+    const patientsByCpf = new Map();
+    const patientsByName = new Map();
+    patients.forEach((patient) => {
+      const cpf = normalizeDocument(patient.cpf);
+      const name = normalizeKey(patient.nome);
+      if (cpf) patientsByCpf.set(cpf, patient);
+      if (name) patientsByName.set(name, patient);
+    });
+
+    const created = [];
+    const skipped = [];
+
+    for (const row of normalizedRows) {
+      if (!row.description || row.amount <= 0) {
+        skipped.push({ description: row.description, reason: 'invalid_row' });
+        continue;
+      }
+
+      const matchedPatient = (row.patientDocument && patientsByCpf.get(row.patientDocument))
+        || (row.patientName && patientsByName.get(normalizeKey(row.patientName)));
+
+      const payloadForAccount = {
+        description: row.description,
+        totalAmount: row.amount,
+        source: row.source || source || 'importacao',
+        category: row.category || (row.type === 'despesa' ? 'despesas' : 'receitas'),
+        dueDate: row.dueDate || undefined,
+        paymentMethod: row.paymentMethod || undefined,
+        metadata: {
+          type: row.type,
+          patientName: row.patientName || '',
+          patientDocument: row.patientDocument || '',
+          importSource: source,
+          status: row.status,
+        },
+      };
+
+      if (matchedPatient) {
+        payloadForAccount.patientId = matchedPatient.id;
+        payloadForAccount.prontuario = matchedPatient.id;
+        payloadForAccount.metadata.patientName = matchedPatient.nome || payloadForAccount.metadata.patientName;
+      }
+
+      if (row.status === 'PAID') {
+        payloadForAccount.metadata.paymentStatus = 'PAID';
+      }
+
+      const account = await financialService.createFinancialAccount({
+        clinicId: normalizedClinicId,
+        payload: payloadForAccount,
+      });
+
+      created.push({
+        id: account.id,
+        description: account.descricao || account.description || payloadForAccount.description,
+        totalAmount: account.totalAmount ?? account.valor ?? row.amount,
+      });
+    }
+
+    return {
+      ...preview,
+      imported: created.length,
+      skipped: skipped.length,
+      createdAccounts: created,
+      skippedAccounts: skipped,
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+    }
+    throw error;
+  }
+};
+
+
+const PROCEDURE_CATALOG_ALIASES = {
+  capim: {
+    code: ['codigo', 'code', 'id', 'servicoid'],
+    name: ['nome', 'procedimento', 'procedure', 'service', 'descricao', 'tipo'],
+    price: ['preco', 'valor', 'price', 'amount', 'custo'],
+    active: ['ativo', 'status', 'situacao'],
+  },
+  clinicorp: {
+    code: ['codigo', 'code', 'id'],
+    name: ['nome', 'procedimento', 'service', 'descricao', 'tipo'],
+    price: ['preco', 'valor', 'price', 'amount'],
+    active: ['ativo', 'status', 'situacao'],
+  },
+  odontolis: {
+    code: ['codigo', 'code', 'id'],
+    name: ['nome', 'procedimento', 'service', 'descricao'],
+    price: ['preco', 'valor', 'price'],
+    active: ['ativo', 'status'],
+  },
+  dentaloffice: {
+    code: ['codigo', 'code', 'id'],
+    name: ['name', 'nome', 'procedure', 'procedimento', 'service', 'descricao'],
+    price: ['price', 'valor', 'amount'],
+    active: ['active', 'ativo', 'status'],
+  },
+  outro: {
+    code: ['codigo', 'code', 'id'],
+    name: ['nome', 'name', 'procedimento', 'procedure', 'service', 'descricao', 'tipo'],
+    price: ['preco', 'valor', 'price', 'amount'],
+    active: ['ativo', 'status', 'situacao'],
+  },
+};
+
+const resolveProcedureCatalogAliases = (source) => PROCEDURE_CATALOG_ALIASES[source] || PROCEDURE_CATALOG_ALIASES.outro;
+
+const normalizeProcedureCatalogPrice = (value) => {
+  const raw = String(value || '').trim().replace(/\s+/g, '').replace(',', '.');
+  const price = Number(raw);
+  return Number.isFinite(price) ? Math.max(0, price) : 0;
+};
+
+const normalizeProcedureCatalogActive = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return true;
+  return !['false', '0', 'nao', 'não', 'inativo', 'desativado', 'inactive', 'disabled'].includes(raw);
+};
+
+const normalizeProcedureCatalogImportRow = (row = {}, source = 'outro') => {
+  const aliases = resolveProcedureCatalogAliases(source);
+  const code = String(firstNonEmptyImportValue(row, aliases.code) || '').trim();
+  const name = String(firstNonEmptyImportValue(row, aliases.name) || '').trim();
+  const price = normalizeProcedureCatalogPrice(firstNonEmptyImportValue(row, aliases.price));
+  const active = normalizeProcedureCatalogActive(firstNonEmptyImportValue(row, aliases.active));
+  const normalizedCode = code || (name ? `IMP-${crypto.createHash('sha1').update(name.toLowerCase()).digest('hex').slice(0, 10).toUpperCase()}` : '');
+
+  return {
+    codigo: normalizedCode,
+    nome: name,
+    preco: price,
+    ativo: active,
+  };
+};
+
+const extractProcedureCatalogImportRows = async (payload = {}) => {
+  const source = String(payload?.source || payload?.origem || 'outro').trim().toLowerCase();
+  if (hasUploadedImportFile(payload)) {
+    const uploaded = await resolveUploadedImportRows(payload);
+    return {
+      source,
+      rows: Array.isArray(uploaded.rows) ? uploaded.rows.filter(isPlainObject) : [],
+      headers: Array.isArray(uploaded.headers) ? uploaded.headers : [],
+      fileType: uploaded.fileType || '',
+    };
+  }
+  const rawRows =
+    (Array.isArray(payload?.procedures) && payload.procedures) ||
+    (Array.isArray(payload?.proceduresCatalog) && payload.proceduresCatalog) ||
+    (Array.isArray(payload?.catalog) && payload.catalog) ||
+    (Array.isArray(payload?.items) && payload.items) ||
+    (Array.isArray(payload?.rows) && payload.rows) ||
+    (Array.isArray(payload?.data) && payload.data) ||
+    [];
+
+  return {
+    source,
+    rows: rawRows.filter(isPlainObject),
+  };
+};
+
+const buildProcedureCatalogKey = (item = {}) => {
+  const code = normalizeImportKey(item.codigo || item.code || '');
+  const name = normalizeImportKey(item.nome || item.name || '');
+  return code || name;
+};
+
+const buildProceduresImportPreview = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+  if (!clinic) {
+    throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+  }
+
+  const { source, rows, headers = [] } = await extractProcedureCatalogImportRows(payload);
+  if (!rows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem procedimentos reconheciveis.');
+  }
+
+  const normalizedRows = rows
+    .map((row) => normalizeProcedureCatalogImportRow(row, source))
+    .filter((row) => row.nome || row.codigo);
+  if (!normalizedRows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem procedimentos validos.');
+  }
+
+  const currentCatalog = Array.isArray(clinic?.operationalSettings?.proceduresCatalog)
+    ? clinic.operationalSettings.proceduresCatalog
+    : [];
+  const currentKeys = new Set();
+  currentCatalog.forEach((item) => {
+    const key = buildProcedureCatalogKey(item);
+    if (key) currentKeys.add(key);
+  });
+
+  const seenKeys = new Set();
+  let duplicatesInFile = 0;
+  let newItems = 0;
+  let updatedItems = 0;
+  let invalidRows = 0;
+
+  normalizedRows.forEach((row) => {
+    const key = buildProcedureCatalogKey(row);
+    if (!row.nome || !key) {
+      invalidRows += 1;
+      return;
+    }
+    if (seenKeys.has(key)) {
+      duplicatesInFile += 1;
+      return;
+    }
+    seenKeys.add(key);
+    if (currentKeys.has(key)) updatedItems += 1;
+    else newItems += 1;
+  });
+
+  return {
+    valid: true,
+    source,
+    totalRows: rows.length,
+    normalizedRows: normalizedRows.length,
+    headers,
+    currentItems: currentCatalog.length,
+    newItems,
+    updatedItems,
+    duplicatesInFile,
+    invalidRows,
+    stage: 'procedures',
+    summary: {
+      totalRows: rows.length,
+      normalizedRows: normalizedRows.length,
+      headers,
+      currentItems: currentCatalog.length,
+      newItems,
+      updatedItems,
+      duplicatesInFile,
+      invalidRows,
+    },
+  };
+};
+
+const applyProceduresImport = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const preview = await buildProceduresImportPreview({ clinicId: normalizedClinicId, payload });
+  const { source, rows } = await extractProcedureCatalogImportRows(payload);
+  const normalizedRows = rows
+    .map((row) => normalizeProcedureCatalogImportRow(row, source))
+    .filter((row) => row.nome || row.codigo);
+
+  try {
+    const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+    if (!clinic) {
+      throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+    }
+
+    const currentCatalog = Array.isArray(clinic?.operationalSettings?.proceduresCatalog)
+      ? clinic.operationalSettings.proceduresCatalog
+      : [];
+    const merged = new Map();
+
+    currentCatalog.forEach((item) => {
+      const safeItem = {
+        codigo: String(item?.codigo || item?.code || '').trim(),
+        nome: String(item?.nome || item?.name || '').trim(),
+        preco: normalizeProcedureCatalogPrice(item?.preco ?? item?.price ?? item?.valor ?? 0),
+        ativo: item?.ativo !== false,
+        updatedAt: String(item?.updatedAt || '').trim() || new Date().toISOString(),
+      };
+      const key = buildProcedureCatalogKey(safeItem);
+      if (key) merged.set(key, safeItem);
+    });
+
+    const created = [];
+    const updated = [];
+    const skipped = [];
+    const nowIso = new Date().toISOString();
+
+    normalizedRows.forEach((row) => {
+      const key = buildProcedureCatalogKey(row);
+      if (!row.nome || !key) {
+        skipped.push({
+          codigo: row.codigo,
+          nome: row.nome,
+          reason: 'invalid_row',
+        });
+        return;
+      }
+
+      const record = {
+        codigo: row.codigo,
+        nome: row.nome,
+        preco: row.preco,
+        ativo: row.ativo,
+        updatedAt: nowIso,
+      };
+
+      if (merged.has(key)) {
+        const previous = merged.get(key) || {};
+        merged.set(key, {
+          ...previous,
+          ...record,
+          codigo: previous.codigo || record.codigo,
+          nome: record.nome || previous.nome,
+          preco: record.preco,
+          ativo: record.ativo,
+          updatedAt: nowIso,
+        });
+        updated.push({
+          codigo: record.codigo,
+          nome: record.nome,
+        });
+        return;
+      }
+
+      merged.set(key, record);
+      created.push({
+        codigo: record.codigo,
+        nome: record.nome,
+      });
+    });
+
+    const mergedCatalog = Array.from(merged.values()).sort((a, b) => String(a.nome || '').localeCompare(String(b.nome || '')));
+    await clinicRepository.updateOperationalSettings(normalizedClinicId, {
+      ...normalizeOperationalSettings(clinic.operationalSettings || {}),
+      proceduresCatalog: mergedCatalog,
+    });
+
+    return {
+      ...preview,
+      imported: created.length + updated.length,
+      skipped: skipped.length,
+      createdProcedures: created,
+      updatedProcedures: updated,
+      skippedProcedures: skipped,
+      catalogSize: mergedCatalog.length,
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+    }
+    throw error;
+  }
+};
+
 const validateDocument = (documentType, documentNumber) => {
   const normalizedType = String(documentType || '').trim().toUpperCase();
   const normalizedNumber = normalizeDocument(documentNumber);
@@ -669,6 +2045,292 @@ const validateOptionalClinicDocument = (value) => {
     throw new AppError(400, 'INCOMPLETE_CLINIC_DOCUMENT', 'CNPJ incompleto. Confira os 14 digitos.');
   }
   throw new AppError(400, 'INVALID_CLINIC_DOCUMENT', 'CPF/CNPJ deve conter 11 ou 14 digitos.');
+};
+
+const APPOINTMENT_IMPORT_ALIASES = {
+  capim: {
+    patientName: ['paciente', 'nomepaciente', 'nome', 'patientname', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'documentopaciente', 'cnpjcpf', 'cpfcnpj'],
+    professionalName: ['profissional', 'dentista', 'profissionalnome', 'doctor', 'doctorname'],
+    startDateTime: ['datahora', 'inicio', 'inicioagendamento', 'data_agenda', 'datetime', 'start', 'scheduledat'],
+    endDateTime: ['horafim', 'fim', 'termino', 'end', 'endtime'],
+    status: ['status', 'situacao'],
+    type: ['tipo', 'categoria', 'atendimento'],
+    notes: ['observacoes', 'observação', 'observacao', 'obs', 'notes'],
+  },
+  clinicorp: {
+    patientName: ['paciente', 'nome', 'nomecompleto', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'cpfcnpj', 'rg'],
+    professionalName: ['profissional', 'responsavel', 'dentista'],
+    startDateTime: ['datahora', 'agendamento', 'data_agenda', 'inicio'],
+    endDateTime: ['horafim', 'fim', 'termino'],
+    status: ['status', 'situacao'],
+    type: ['tipo', 'categoria'],
+    notes: ['observacoes', 'obs', 'notes'],
+  },
+  odontolis: {
+    patientName: ['paciente', 'nome', 'nomepaciente'],
+    patientDocument: ['cpf', 'documento', 'rg'],
+    professionalName: ['profissional', 'dentista'],
+    startDateTime: ['datahora', 'agendamento', 'inicio'],
+    endDateTime: ['horafim', 'fim'],
+    status: ['status', 'situacao'],
+    type: ['tipo', 'categoria'],
+    notes: ['observacoes', 'obs'],
+  },
+  dentaloffice: {
+    patientName: ['patient', 'paciente', 'name', 'fullname'],
+    patientDocument: ['cpf', 'document', 'id_document'],
+    professionalName: ['professional', 'dentist', 'doctor'],
+    startDateTime: ['start', 'startdatetime', 'datahora', 'scheduledat'],
+    endDateTime: ['end', 'enddatetime', 'horafim'],
+    status: ['status', 'state'],
+    type: ['type', 'tipo'],
+    notes: ['notes', 'observations', 'observacoes'],
+  },
+  outro: {
+    patientName: ['paciente', 'nome', 'name', 'fullname'],
+    patientDocument: ['cpf', 'documento', 'document', 'id', 'rg'],
+    professionalName: ['profissional', 'dentista', 'doctor'],
+    startDateTime: ['datahora', 'inicio', 'start', 'scheduledat'],
+    endDateTime: ['horafim', 'end', 'termino'],
+    status: ['status', 'situacao'],
+    type: ['tipo', 'type'],
+    notes: ['observacoes', 'notes', 'obs'],
+  },
+};
+
+const resolveAppointmentAliases = (source) => APPOINTMENT_IMPORT_ALIASES[source] || APPOINTMENT_IMPORT_ALIASES.outro;
+
+const normalizeImportDateTime = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (iso) {
+    const parsed = new Date(
+      Date.UTC(
+        Number(iso[1]),
+        Number(iso[2]) - 1,
+        Number(iso[3]),
+        Number(iso[4] || 0),
+        Number(iso[5] || 0),
+        Number(iso[6] || 0),
+      )
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const dmy = raw.match(/^(\d{2})[\/.-](\d{2})[\/.-](\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (dmy) {
+    const parsed = new Date(
+      Date.UTC(
+        Number(dmy[3]),
+        Number(dmy[2]) - 1,
+        Number(dmy[1]),
+        Number(dmy[4] || 0),
+        Number(dmy[5] || 0),
+        Number(dmy[6] || 0),
+      )
+    );
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const normalizeAppointmentImportRow = (row = {}, source = 'outro') => {
+  const aliases = resolveAppointmentAliases(source);
+  return {
+    patientName: firstNonEmptyImportValue(row, aliases.patientName),
+    patientDocument: normalizeDocument(firstNonEmptyImportValue(row, aliases.patientDocument)),
+    professionalName: firstNonEmptyImportValue(row, aliases.professionalName),
+    startDateTime: normalizeImportDateTime(firstNonEmptyImportValue(row, aliases.startDateTime)),
+    endDateTime: normalizeImportDateTime(firstNonEmptyImportValue(row, aliases.endDateTime)),
+    status: String(firstNonEmptyImportValue(row, aliases.status) || 'AGENDADO').trim().toUpperCase(),
+    type: firstNonEmptyImportValue(row, aliases.type),
+    notes: firstNonEmptyImportValue(row, aliases.notes),
+  };
+};
+
+const extractAppointmentImportRows = async (payload = {}) => {
+  const source = String(payload?.source || payload?.origem || 'outro').trim().toLowerCase();
+  if (hasUploadedImportFile(payload)) {
+    const uploaded = await resolveUploadedImportRows(payload);
+    return {
+      source,
+      rows: Array.isArray(uploaded.rows) ? uploaded.rows.filter(isPlainObject) : [],
+      headers: Array.isArray(uploaded.headers) ? uploaded.headers : [],
+      fileType: uploaded.fileType || '',
+    };
+  }
+  const rawRows =
+    (Array.isArray(payload?.appointments) && payload.appointments) ||
+    (Array.isArray(payload?.rows) && payload.rows) ||
+    (Array.isArray(payload?.items) && payload.items) ||
+    (Array.isArray(payload?.data) && payload.data) ||
+    [];
+
+  return {
+    source,
+    rows: rawRows.filter(isPlainObject),
+  };
+};
+
+const buildAppointmentImportPreview = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const clinic = await clinicRepository.findProfileById(normalizedClinicId);
+  if (!clinic) {
+    throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+  }
+
+  const { source, rows, headers = [] } = await extractAppointmentImportRows(payload);
+  if (!rows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem agendamentos reconheciveis.');
+  }
+
+  const normalizedRows = rows
+    .map((row) => normalizeAppointmentImportRow(row, source))
+    .filter((row) => row.patientName || row.patientDocument || row.startDateTime);
+  if (!normalizedRows.length) {
+    throw new AppError(400, 'INVALID_IMPORT_FILE', 'Arquivo sem agenda valida para importar.');
+  }
+
+  const patients = await prisma.patient.findMany({
+    where: { clinicId: normalizedClinicId },
+    select: { id: true, nome: true, cpf: true },
+  });
+  const patientsByCpf = new Map();
+  const patientsByName = new Map();
+  patients.forEach((patient) => {
+    const cpf = normalizeDocument(patient.cpf);
+    const name = normalizeKey(patient.nome);
+    if (cpf) patientsByCpf.set(cpf, patient);
+    if (name) patientsByName.set(name, patient);
+  });
+
+  let matched = 0;
+  let missingPatients = 0;
+  let invalidDates = 0;
+  normalizedRows.forEach((row) => {
+    const matchedPatient = (row.patientDocument && patientsByCpf.get(row.patientDocument))
+      || (row.patientName && patientsByName.get(normalizeKey(row.patientName)));
+    if (!matchedPatient) {
+      missingPatients += 1;
+    } else {
+      matched += 1;
+    }
+    if (!row.startDateTime) {
+      invalidDates += 1;
+    }
+  });
+
+  return {
+    valid: true,
+    source,
+    totalRows: rows.length,
+    normalizedRows: normalizedRows.length,
+    headers,
+    matchedRows: matched,
+    missingPatients,
+    invalidDates,
+    stage: 'agenda',
+    summary: {
+      totalRows: rows.length,
+      normalizedRows: normalizedRows.length,
+      headers,
+      matchedRows: matched,
+      missingPatients,
+      invalidDates,
+    },
+  };
+};
+
+const applyAppointmentImport = async ({ clinicId, payload = {} } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const preview = await buildAppointmentImportPreview({ clinicId: normalizedClinicId, payload });
+  const { source, rows } = await extractAppointmentImportRows(payload);
+  const normalizedRows = rows
+    .map((row) => normalizeAppointmentImportRow(row, source))
+    .filter((row) => row.patientName || row.patientDocument || row.startDateTime);
+
+  try {
+    const patients = await prisma.patient.findMany({
+      where: { clinicId: normalizedClinicId },
+      select: { id: true, nome: true, cpf: true },
+    });
+    const patientsByCpf = new Map();
+    const patientsByName = new Map();
+    patients.forEach((patient) => {
+      const cpf = normalizeDocument(patient.cpf);
+      const name = normalizeKey(patient.nome);
+      if (cpf) patientsByCpf.set(cpf, patient);
+      if (name) patientsByName.set(name, patient);
+    });
+
+    const result = await prisma.$transaction(async (tx) => {
+      const created = [];
+      const skipped = [];
+
+      for (const row of normalizedRows) {
+        const matchedPatient = (row.patientDocument && patientsByCpf.get(row.patientDocument))
+          || (row.patientName && patientsByName.get(normalizeKey(row.patientName)));
+        if (!matchedPatient || !row.startDateTime) {
+          skipped.push({
+            patientName: row.patientName,
+            reason: !matchedPatient ? 'patient_not_found' : 'invalid_date',
+          });
+          continue;
+        }
+
+        const appointment = await tx.appointment.create({
+          data: {
+            clinicId: normalizedClinicId,
+            patientId: matchedPatient.id,
+            profissionalNome: row.professionalName || null,
+            dataHora: row.startDateTime,
+            horaFim: row.endDateTime || null,
+            status: 'AGENDADO',
+            confirmado: false,
+            tipo: row.type || null,
+            observacoes: row.notes || null,
+          },
+        });
+
+        created.push({
+          id: appointment.id,
+          patientId: appointment.patientId,
+          dataHora: appointment.dataHora,
+        });
+      }
+
+      return {
+        created: created.length,
+        skipped: skipped.length,
+        createdAppointments: created,
+        skippedAppointments: skipped,
+      };
+    });
+
+    return {
+      ...preview,
+      imported: result.created,
+      skipped: result.skipped,
+      createdAppointments: result.createdAppointments,
+      skippedAppointments: result.skippedAppointments,
+    };
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+    }
+    throw error;
+  }
 };
 
 const clinicService = {
@@ -868,27 +2530,96 @@ const clinicService = {
     const preview = buildClinicImportPreview(payload);
     const { profile, settings } = extractClinicImportPayload(payload);
     try {
-      let updatedProfile = await clinicService.getProfile({ clinicId: normalizedClinicId });
-      let updatedSettings = await clinicService.getOperationalSettings({ clinicId: normalizedClinicId });
+      const currentClinic = await clinicRepository.findProfileById(normalizedClinicId);
+      if (!currentClinic) {
+        throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+      }
 
-      if (Object.keys(profile).length) {
-        updatedProfile = await clinicService.updateProfile({
-          clinicId: normalizedClinicId,
-          patch: profile,
-        });
+      const hasProfilePatch = Object.keys(profile).length > 0;
+      const hasSettingsPatch = Object.keys(settings).length > 0;
+      const currentProfile = normalizeClinicProfile(currentClinic);
+      const currentOperationalSettings = normalizeOperationalSettings(currentClinic.operationalSettings || {});
+      const nextProfile = hasProfilePatch
+        ? {
+            ...currentProfile,
+            ...profile,
+            clinicId: normalizedClinicId,
+            endereco: {
+              ...currentProfile.endereco,
+              ...(isPlainObject(profile.endereco) ? profile.endereco : {}),
+            },
+          }
+        : currentProfile;
+
+      if (hasProfilePatch) {
+        const nomeFantasia = String(nextProfile.nomeFantasia || '').trim();
+        if (!nomeFantasia) {
+          throw new AppError(400, 'VALIDATION_ERROR', 'nomeFantasia is required.');
+        }
+        validateOptionalClinicDocument(
+          nextProfile.cnpjCpf || nextProfile.cnpj || nextProfile.cnpjOuCpf || ''
+        );
       }
-      if (Object.keys(settings).length) {
-        updatedSettings = await clinicService.updateOperationalSettings({
-          clinicId: normalizedClinicId,
-          patch: settings,
+
+      const mergedOperationalSettings = hasSettingsPatch || hasProfilePatch
+        ? mergeOperationalSettings(currentOperationalSettings, {
+            ...(hasSettingsPatch ? settings : {}),
+            clinicProfile: {
+              whatsapp: String(nextProfile.whatsapp || '').trim(),
+              cro: String(nextProfile.cro || '').trim(),
+              responsavelTecnico: String(nextProfile.responsavelTecnico || '').trim(),
+              logoDataUrlCache: String(nextProfile.logoDataUrlCache || '').trim(),
+              logoVersion: String(nextProfile.logoVersion || '').trim(),
+              endereco: {
+                ...(isPlainObject(nextProfile.endereco) ? {
+                  rua: String(nextProfile.endereco.rua || '').trim(),
+                  numero: String(nextProfile.endereco.numero || '').trim(),
+                  complemento: String(nextProfile.endereco.complemento || '').trim(),
+                  bairro: String(nextProfile.endereco.bairro || '').trim(),
+                  cidade: String(nextProfile.endereco.cidade || '').trim(),
+                  uf: String(nextProfile.endereco.uf || nextProfile.endereco.estado || '').trim(),
+                  cep: String(nextProfile.endereco.cep || '').trim(),
+                } : {}),
+              },
+            },
+          })
+        : currentOperationalSettings;
+
+      const updatedClinic = await prisma.$transaction(async (tx) => {
+        const updateData = {};
+        if (hasProfilePatch) {
+          updateData.nomeFantasia = String(nextProfile.nomeFantasia || '').trim();
+          updateData.razaoSocial = String(nextProfile.razaoSocial || '').trim() || String(nextProfile.nomeFantasia || '').trim();
+          updateData.cnpjCpf = validateOptionalClinicDocument(
+            nextProfile.cnpjCpf || nextProfile.cnpj || nextProfile.cnpjOuCpf || ''
+          );
+          updateData.email = String(nextProfile.email || '').trim();
+          updateData.telefoneComercial = String(nextProfile.telefone || '').trim();
+          updateData.endereco = buildClinicAddressLine(nextProfile.endereco);
+        }
+        updateData.operationalSettings = mergedOperationalSettings;
+
+        return tx.clinic.update({
+          where: { id: normalizedClinicId },
+          data: updateData,
+          select: {
+            id: true,
+            nomeFantasia: true,
+            razaoSocial: true,
+            cnpjCpf: true,
+            email: true,
+            telefoneComercial: true,
+            endereco: true,
+            operationalSettings: true,
+          },
         });
-      }
+      });
 
       return {
         applied: true,
         preview,
-        profile: updatedProfile,
-        operationalSettings: updatedSettings,
+        profile: normalizeClinicProfile(updatedClinic),
+        operationalSettings: normalizeOperationalSettings(updatedClinic.operationalSettings || {}),
       };
     } catch (error) {
       if (isMissingTableError(error)) {
@@ -1139,6 +2870,81 @@ const clinicService = {
       }
       throw error;
     }
+  },
+
+  previewPatientImportData: async ({ clinicId, payload = {} } = {}) => {
+    try {
+      return await buildPatientImportPreview({ clinicId, payload });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  applyPatientImportData: async ({ clinicId, payload = {} } = {}) => {
+    return applyPatientImport({ clinicId, payload });
+  },
+
+  previewAppointmentImportData: async ({ clinicId, payload = {} } = {}) => {
+    try {
+      return await buildAppointmentImportPreview({ clinicId, payload });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  applyAppointmentImportData: async ({ clinicId, payload = {} } = {}) => {
+    return applyAppointmentImport({ clinicId, payload });
+  },
+
+  previewClinicalImportData: async ({ clinicId, payload = {} } = {}) => {
+    try {
+      return await buildClinicalImportPreview({ clinicId, payload });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  applyClinicalImportData: async ({ clinicId, payload = {} } = {}) => {
+    return applyClinicalImport({ clinicId, payload });
+  },
+
+  previewCashflowImportData: async ({ clinicId, payload = {} } = {}) => {
+    try {
+      return await buildCashflowImportPreview({ clinicId, payload });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  applyCashflowImportData: async ({ clinicId, payload = {} } = {}) => {
+    return applyCashflowImport({ clinicId, payload });
+  },
+
+  previewProceduresImportData: async ({ clinicId, payload = {} } = {}) => {
+    try {
+      return await buildProceduresImportPreview({ clinicId, payload });
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  applyProceduresImportData: async ({ clinicId, payload = {} } = {}) => {
+    return applyProceduresImport({ clinicId, payload });
   },
 
   publicSignup: async (payload = {}) => {

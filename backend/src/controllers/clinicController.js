@@ -137,6 +137,156 @@ const applyMyClinicImport = async (req, res, next) => {
   }
 };
 
+const previewMyPatientImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.previewPatientImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const applyMyPatientImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.applyPatientImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const previewMyAppointmentImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.previewAppointmentImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const applyMyAppointmentImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.applyAppointmentImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const previewMyClinicalImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.previewClinicalImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const applyMyClinicalImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.applyClinicalImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const previewMyCashflowImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.previewCashflowImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const applyMyCashflowImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.applyCashflowImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const previewMyProceduresImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.previewProceduresImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const applyMyProceduresImport = async (req, res, next) => {
+  try {
+    const data = await clinicService.applyProceduresImportData({
+      clinicId: req?.auth?.clinicId,
+      payload: { ...(req?.body || {}), file: req?.file || null },
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getMyWhatsAppEngineHealth = async (_req, res, next) => {
   try {
     const data = await whatsappNgClient.getHealth();
@@ -252,6 +402,16 @@ module.exports = {
   exportMyClinicData,
   previewMyClinicImport,
   applyMyClinicImport,
+  previewMyPatientImport,
+  applyMyPatientImport,
+  previewMyAppointmentImport,
+  applyMyAppointmentImport,
+  previewMyClinicalImport,
+  applyMyClinicalImport,
+  previewMyCashflowImport,
+  applyMyCashflowImport,
+  previewMyProceduresImport,
+  applyMyProceduresImport,
   getMyWhatsAppEngineHealth,
   getMyWhatsAppConnection,
   refreshMyWhatsAppConnection,

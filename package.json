@@ -33,7 +33,11 @@
         "bcryptjs": "^3.0.3",
         "cors": "^2.8.5",
         "express": "^4.21.2",
-        "prisma": "^6.19.0"
+        "jszip": "^3.10.1",
+        "multer": "^2.1.1",
+        "node-unrar-js": "^2.0.2",
+        "prisma": "^6.19.0",
+        "xlsx": "^0.18.5"
     },
     "type": "commonjs",
     "build": {

@@ -87,6 +87,187 @@ document.addEventListener('DOMContentLoaded', () => {
     return formatCroValue(raw);
   };
 
+  const normalizeImportKey = (value) => String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+
+  const detectDelimitedSeparator = (line = '') => {
+    const commaCount = (line.match(/,/g) || []).length;
+    const semicolonCount = (line.match(/;/g) || []).length;
+    const tabCount = (line.match(/\t/g) || []).length;
+    if (tabCount > commaCount && tabCount > semicolonCount) return '\t';
+    if (semicolonCount > commaCount) return ';';
+    return ',';
+  };
+
+  const splitDelimitedLine = (line = '', separator = ',') => {
+    const result = [];
+    let current = '';
+    let quoted = false;
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (char === '"') {
+        if (quoted && line[index + 1] === '"') {
+          current += '"';
+          index += 1;
+        } else {
+          quoted = !quoted;
+        }
+        continue;
+      }
+      if (char === separator && !quoted) {
+        result.push(current.trim());
+        current = '';
+        continue;
+      }
+      current += char;
+    }
+    result.push(current.trim());
+    return result.map((value) => String(value || '').replace(/^"|"$/g, '').trim());
+  };
+
+  const parseDelimitedText = (text = '') => {
+    const raw = String(text || '')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
+    if (!raw) {
+      throw new Error('Arquivo vazio.');
+    }
+    const lines = raw.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (!lines.length) {
+      throw new Error('Arquivo vazio.');
+    }
+    const separator = detectDelimitedSeparator(lines[0]);
+    const headers = splitDelimitedLine(lines[0], separator);
+    const rows = lines.slice(1).map((line) => splitDelimitedLine(line, separator));
+    return { headers, rows };
+  };
+
+  const mapImportedRowToClinicPayload = (row = {}, headers = []) => {
+    const normalized = {};
+    headers.forEach((header, index) => {
+      const key = normalizeImportKey(header);
+      const value = String(row[index] || '').trim();
+      if (!value) return;
+      normalized[key] = value;
+    });
+
+    const pick = (...keys) => {
+      for (const key of keys) {
+        const found = normalized[normalizeImportKey(key)];
+        if (found) return found;
+      }
+      return '';
+    };
+
+    const clinic = {};
+    const endereco = {};
+
+    const nomeFantasia = pick('nomeFantasia', 'nome da clinica', 'nomeclinica', 'nome');
+    const razaoSocial = pick('razaoSocial', 'razao social', 'razaosocial', 'legalname');
+    const cnpjCpf = pick('cnpjCpf', 'cnpj/cpf', 'cnpj', 'cpf', 'cpfcnpj', 'documento');
+    const telefone = pick('telefone', 'telefonecomercial', 'phone', 'celular');
+    const email = pick('email', 'e-mail', 'emailclinica');
+    const cro = pick('cro');
+    const responsavelTecnico = pick('responsavelTecnico', 'responsavel tecnico', 'responsavel', 'responsaveltecnico');
+    const whatsapp = pick('whatsapp');
+    const logoVersion = pick('logoVersion', 'logo version');
+
+    if (nomeFantasia) clinic.nomeFantasia = nomeFantasia;
+    if (razaoSocial) clinic.razaoSocial = razaoSocial;
+    if (cnpjCpf) clinic.cnpjCpf = cnpjCpf;
+    if (telefone) clinic.telefone = telefone;
+    if (email) clinic.email = email;
+    if (cro) clinic.cro = cro;
+    if (responsavelTecnico) clinic.responsavelTecnico = responsavelTecnico;
+    if (whatsapp) clinic.whatsapp = whatsapp;
+    if (logoVersion) clinic.logoVersion = logoVersion;
+
+    const rua = pick('rua', 'logradouro', 'endereco');
+    const numero = pick('numero', 'num');
+    const complemento = pick('complemento', 'complement');
+    const bairro = pick('bairro');
+    const cidade = pick('cidade', 'municipio');
+    const uf = pick('uf', 'estado');
+    const cep = pick('cep', 'zipcode');
+
+    if (rua) endereco.rua = rua;
+    if (numero) endereco.numero = numero;
+    if (complemento) endereco.complemento = complemento;
+    if (bairro) endereco.bairro = bairro;
+    if (cidade) endereco.cidade = cidade;
+    if (uf) endereco.uf = uf;
+    if (cep) endereco.cep = cep;
+
+    if (Object.keys(endereco).length) {
+      clinic.endereco = endereco;
+    }
+
+    const operationalSettings = {};
+    const clinicProfile = {};
+    if (whatsapp) clinicProfile.whatsapp = whatsapp;
+    if (cro) clinicProfile.cro = cro;
+    if (responsavelTecnico) clinicProfile.responsavelTecnico = responsavelTecnico;
+    if (logoVersion) clinicProfile.logoVersion = logoVersion;
+    if (Object.keys(endereco).length) clinicProfile.endereco = endereco;
+    if (Object.keys(clinicProfile).length) operationalSettings.clinicProfile = clinicProfile;
+
+    const timezone = pick('timezone', 'fuso horario', 'fuso');
+    const reminderHours = pick('reminderhours', 'horaslembrete');
+    const summaryTime = pick('summarytime', 'horariosumario');
+    if (timezone) operationalSettings.agendaSettings = { timezone };
+    if (reminderHours || summaryTime) {
+      operationalSettings.notificationPreferences = {};
+      if (reminderHours) operationalSettings.notificationPreferences.reminderHours = Number(reminderHours) || 24;
+      if (summaryTime) operationalSettings.notificationPreferences.summaryTime = summaryTime;
+    }
+
+    const payload = { source: 'file-upload' };
+    if (Object.keys(clinic).length) payload.clinic = clinic;
+    if (Object.keys(operationalSettings).length) payload.operationalSettings = operationalSettings;
+    return payload;
+  };
+
+  const parseImportFile = async (file) => {
+    if (!file) {
+      throw new Error('Selecione um arquivo.');
+    }
+    const fileName = String(file.name || '').trim();
+    const extension = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+    if (['xlsx', 'xls', 'zip', 'rar'].includes(extension)) {
+      throw new Error('Este formato ainda nao e processado nesta etapa. Use CSV ou JSON para importar.');
+    }
+
+    const text = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Nao foi possivel ler o arquivo.'));
+      reader.readAsText(file, 'utf-8');
+    });
+
+    if (extension === 'csv') {
+      const { headers, rows } = parseDelimitedText(text);
+      if (!rows.length) {
+        throw new Error('CSV sem linhas de dados.');
+      }
+      return mapImportedRowToClinicPayload(rows[0], headers);
+    }
+
+    try {
+      const parsed = JSON.parse(text);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('JSON invalido.');
+      }
+      return parsed;
+    } catch (_error) {
+      throw new Error('Arquivo invalido. Use JSON ou CSV.');
+    }
+  };
+
   const setFieldError = (input, message) => {
     if (!input || !input.parentElement) return;
     const field = input.parentElement;
@@ -763,27 +944,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (importApplyButton) importApplyButton.disabled = true;
   };
 
-  const readJsonFile = (file) => new Promise((resolve, reject) => {
-    if (!file) {
-      reject(new Error('Selecione um arquivo JSON.'));
-      return;
-    }
-    if (file.size > 1024 * 1024) {
-      reject(new Error('Arquivo muito grande. Limite inicial: 1 MB.'));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        resolve(JSON.parse(String(reader.result || '{}')));
-      } catch (_error) {
-        reject(new Error('Arquivo JSON invalido.'));
-      }
-    };
-    reader.onerror = () => reject(new Error('Nao foi possivel ler o arquivo.'));
-    reader.readAsText(file, 'utf-8');
-  });
-
   const exportClinicData = async () => {
     if (!clinicApi.exportData) {
       setStatus('Exportacao ainda nao disponivel no backend web.', true);
@@ -819,7 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     try {
       setStatus('Validando arquivo de importacao...', true);
-      const payload = await readJsonFile(file);
+      const payload = await parseImportFile(file);
       const preview = await clinicApi.previewImport(payload);
       pendingImportPayload = payload;
       renderImportPreview(preview);
