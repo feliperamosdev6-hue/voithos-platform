@@ -1297,6 +1297,19 @@ main {
   font-weight: 600;
 }
 
+.gestao-toggle:disabled,
+.gestao-toggle[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(0.15);
+}
+
+.gestao-toggle:disabled:hover,
+.gestao-toggle[aria-disabled='true']:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
 .gestao-caret {
   font-size: 0.8rem;
   opacity: 0.85;
@@ -1609,4 +1622,3 @@ main {
 .header-actions .user-menu-toggle {
   box-shadow: 0 6px 16px rgba(15, 118, 110, 0.18);
 }
-
