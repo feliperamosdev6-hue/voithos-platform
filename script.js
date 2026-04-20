@@ -280,6 +280,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return role.charAt(0).toUpperCase() + role.slice(1);
     };
 
+    const canManageClinic = (user) => {
+        const perfil = String(user?.tipo || user?.perfil || user?.role || '').toLowerCase().trim();
+        return (
+            user?.isClinicAdmin === true
+            || user?.permissions?.admin === true
+            || perfil === 'admin'
+            || perfil === 'administrativo'
+            || perfil === 'super_admin'
+            || perfil === 'super-admin'
+        );
+    };
+
     const getDisplayName = (user = {}) => {
         const rawName = String(user?.nome || '').trim();
         if (rawName) {
@@ -1384,8 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (clinicItem) {
-                const canManageClinic = user?.isClinicAdmin === true || user?.tipo === 'super_admin';
-                clinicItem.style.display = canManageClinic ? 'block' : 'none';
+                clinicItem.style.display = canManageClinic(user) ? 'block' : 'none';
                 clinicItem.addEventListener('click', () => {
                     closeDropdown();
                     window.location.href = 'clinica.html';
@@ -1438,7 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (ev.key === 'Escape') closeDropdown();
             });
 
-            if (user.tipo === 'dentista') {
+            if (!canManageClinic(user) && user.tipo === 'dentista') {
                 ['#card-gestao-controle'].forEach((sel) => {
                     const el = document.querySelector(sel);
                     if (el) el.style.display = 'none';
@@ -1525,8 +1536,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (homeAutoRefreshTimer) clearInterval(homeAutoRefreshTimer);
     });
 });
-
-
 
 
 
