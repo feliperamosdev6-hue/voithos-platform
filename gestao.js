@@ -1135,6 +1135,11 @@
     }
   };
 
+  const ensureGestaoAccess = async () => {
+    if (isFinanceAdmin) return true;
+    return ensureAdmin();
+  };
+
   async function carregarDashboard() {
     try {
       const isAdmin = await ensureAdmin();
@@ -2648,6 +2653,11 @@
         }
         if (action === 'open-plan-page') {
           event.stopPropagation();
+          const isAdmin = await ensureGestaoAccess();
+          if (!isAdmin) {
+            alert('Acesso restrito a administradores.');
+            return;
+          }
           const planId = String(btn.dataset.planId || '');
           if (!planId) return;
           closeRowMenus();
@@ -2668,6 +2678,11 @@
         if (action === 'open-patient-finance') {
           closeRowMenus();
           try {
+            const isAdmin = await ensureGestaoAccess();
+            if (!isAdmin) {
+              alert('Acesso restrito a administradores.');
+              return;
+            }
             const patientStub = {
               prontuario: String(lancamento.prontuario || '').trim(),
               id: String(lancamento.patientId || '').trim(),
@@ -2698,12 +2713,22 @@
         }
 
         if (action === 'edit') {
+          const isAdmin = await ensureGestaoAccess();
+          if (!isAdmin) {
+            alert('Acesso restrito a administradores.');
+            return;
+          }
           closeRowMenus();
           openLancamentoDetailsModal(lancamento);
           return;
         }
 
         if (action === 'confirm') {
+          const isAdmin = await ensureGestaoAccess();
+          if (!isAdmin) {
+            alert('Acesso restrito a administradores.');
+            return;
+          }
           const originalLabel = btn.textContent;
           btn.disabled = true;
           btn.textContent = 'Confirmando...';
@@ -2803,7 +2828,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
 
 
 
