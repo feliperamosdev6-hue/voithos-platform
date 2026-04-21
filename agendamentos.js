@@ -31,6 +31,8 @@
   const birthdayStripSummary = document.getElementById('birthday-strip-summary');
   const birthdayStripList = document.getElementById('birthday-strip-list');
   const birthdayStripClose = document.getElementById('birthday-strip-close');
+  const marcadorPreview = document.getElementById('agendamento-marcador-preview-text');
+  const marcadorPreviewDot = document.getElementById('agendamento-marcador-preview-dot');
 console.log('[AGENDA] agendamentos.js carregado');
 const AGENDA_PREFILL_PATIENT_KEY = 'agendaPrefillPatient';
 const AGENDA_PREFILL_DRAFT_KEY = 'agendaPrefillDraft';
@@ -1905,6 +1907,19 @@ const renderMarcadoresSelect = (selectedId = '') => {
     }
     marcadorSelect.appendChild(opt);
   });
+  marcadorSelect.value = selectedId || '';
+  updateMarcadorPreview(marcadorSelect.value);
+};
+
+const updateMarcadorPreview = (selectedId = '') => {
+  const marker = agendaMarkersCache.find((item) => String(item.id) === String(selectedId));
+  if (marcadorPreview) {
+    marcadorPreview.textContent = marker?.nome || 'Nenhum marcador selecionado';
+  }
+  if (marcadorPreviewDot) {
+    marcadorPreviewDot.hidden = !marker;
+    marcadorPreviewDot.style.background = marker?.cor || '#94a3b8';
+  }
 };
 
 const clearModalFields = () => {
@@ -1919,6 +1934,7 @@ const clearModalFields = () => {
   if (tipo) tipo.value = '';
   if (status) status.value = 'em_aberto';
   if (marcadorSelect) marcadorSelect.value = '';
+  updateMarcadorPreview('');
 };
 
 const resetEditState = () => {
@@ -1972,6 +1988,7 @@ const abrirModalNovoAgendamento = async (agendamento, options = {}) => {
       }
     }
     if (marcadorSelect && marcadorId) marcadorSelect.value = marcadorId;
+    updateMarcadorPreview(marcadorSelect?.value || marcadorId || '');
     if (tituloModal) tituloModal.textContent = 'Editar agendamento';
   } else if (refs.tituloModal) {
     refs.tituloModal.textContent = 'Novo agendamento';
@@ -1989,6 +2006,7 @@ const abrirModalNovoAgendamento = async (agendamento, options = {}) => {
     if (options?.patientContext) {
       applyPatientPrefillToModal(options.patientContext, refs);
     }
+    updateMarcadorPreview('');
   }
   if (refs.modal) {
     refs.modal.classList.remove('hidden');
@@ -2050,6 +2068,9 @@ const wireModalNovoAgendamento = () => {
   btnCancelar?.addEventListener('click', (e) => {
     e.preventDefault();
     fecharModalNovoAgendamento();
+  });
+  marcadorSelect?.addEventListener('change', () => {
+    updateMarcadorPreview(marcadorSelect.value);
   });
     btnSalvar?.addEventListener('click', async (e) => {
     e.preventDefault();
