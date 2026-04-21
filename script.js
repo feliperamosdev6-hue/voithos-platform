@@ -106,6 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let notifTab = 'geral';
     let notifViewed = false;
     let homeAutoRefreshTimer = null;
+    const getFinanceSyncStorageKey = () => {
+        const clinicId = String(currentUser?.clinicId || '').trim();
+        return clinicId ? `voithos-finance-updated:${clinicId}` : 'voithos-finance-updated:global';
+    };
 
     if (cardGestao) {
         const openGestao = () => {
@@ -1530,7 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     window.addEventListener('finance-updated', scheduleHomeFinanceSync);
     window.addEventListener('storage', (event) => {
-        if (event.key !== 'voithos-finance-updated') return;
+        if (event.key !== getFinanceSyncStorageKey()) return;
         scheduleHomeFinanceSync();
     });
     window.addEventListener('campaigns-updated', () => {
@@ -1545,7 +1549,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (homeAutoRefreshTimer) clearInterval(homeAutoRefreshTimer);
     });
 });
-
 
 
 

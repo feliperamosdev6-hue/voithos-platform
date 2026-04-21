@@ -701,6 +701,10 @@
 
   let usuarioLogado = null;
   let financeRefreshInFlight = false;
+  const getFinanceSyncStorageKey = () => {
+    const clinicId = String(usuarioLogado?.clinicId || '').trim();
+    return clinicId ? `voithos-finance-updated:${clinicId}` : 'voithos-finance-updated:global';
+  };
   const TREND_SECTION_HTML = `
     <section class="bloco trend-bloco">
       <div class="bloco-header">
@@ -733,7 +737,7 @@
   const emitFinanceUpdated = (source) => {
     try {
       window.dispatchEvent(new CustomEvent('finance-updated', { detail: { source: source || 'gestao' } }));
-      localStorage.setItem('voithos-finance-updated', JSON.stringify({ at: Date.now(), source: source || 'gestao' }));
+      localStorage.setItem(getFinanceSyncStorageKey(), JSON.stringify({ at: Date.now(), source: source || 'gestao' }));
     } catch (_) {
     }
   };
@@ -2818,7 +2822,7 @@
       refreshFinanceViews().catch((err) => console.error('Falha ao sincronizar financeiro (evento).', err));
     });
     window.addEventListener('storage', (event) => {
-      if (event.key !== 'voithos-finance-updated') return;
+      if (event.key !== getFinanceSyncStorageKey()) return;
       refreshFinanceViews().catch((err) => console.error('Falha ao sincronizar financeiro (storage).', err));
     });
     try {
@@ -2834,8 +2838,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
 
 
 
