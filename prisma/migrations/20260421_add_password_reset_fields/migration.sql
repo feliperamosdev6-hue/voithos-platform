@@ -1,0 +1,3 @@
+ALTER TABLE "User"
+  ADD COLUMN IF NOT EXISTS "passwordResetCode" TEXT,
+  ADD COLUMN IF NOT EXISTS "passwordResetExpiresAt" TIMESTAMP(3);

@@ -219,6 +219,8 @@ model User {
   emailVerified Boolean  @default(false)
   emailVerificationCode String?
   emailVerificationExpiresAt DateTime?
+  passwordResetCode String?
+  passwordResetExpiresAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]

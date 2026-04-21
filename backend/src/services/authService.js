@@ -6,6 +6,7 @@ const { sessionRepository } = require('../repositories/sessionRepository');
 const { userRepository } = require('../repositories/userRepository');
 
 const SESSION_TTL_DAYS = 7;
+const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
 const SUPER_ADMIN_EMAIL = String(process.env.VOITHOS_SUPERADMIN_EMAIL || 'superadmin@voithos.local').trim().toLowerCase();
 const SUPER_ADMIN_PASSWORD = String(process.env.VOITHOS_SUPERADMIN_PASSWORD || 'voithos@2026').trim();
 const SUPER_ADMIN_CLINIC_EMAIL = String(process.env.VOITHOS_SUPERADMIN_CLINIC_EMAIL || 'superadmin-clinic@voithos.local').trim().toLowerCase();
@@ -17,6 +18,28 @@ const addDays = (date, days) => {
   const next = new Date(date);
   next.setDate(next.getDate() + Number(days || 0));
   return next;
+};
+
+const addMinutes = (date, minutes) => {
+  const next = new Date(date);
+  next.setMinutes(next.getMinutes() + Number(minutes || 0));
+  return next;
+};
+
+const generateSixDigitCode = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const normalizeCode = (value) => String(value || '').trim().replace(/\D/g, '').slice(0, 6);
+
+const maskEmail = (email) => {
+  const normalized = normalizeEmail(email);
+  const [localPart = '', domain = ''] = normalized.split('@');
+  if (!localPart || !domain) return 'seu e-mail';
+  const localMask = localPart.length <= 2
+    ? `${localPart[0] || '*'}*`
+    : `${localPart.slice(0, 2)}***`;
+  return `${localMask}@${domain}`;
 };
 
 const sanitizeUser = (user) => {
@@ -44,6 +67,113 @@ const verifyPassword = async (password, hash) => {
   const rawHash = String(hash || '');
   if (!rawPassword || !rawHash) return false;
   return bcrypt.compare(rawPassword, rawHash);
+};
+
+const requestPasswordReset = async ({ email }) => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
+  }
+
+  const resetCode = generateSixDigitCode();
+  const expiresAt = addMinutes(new Date(), PASSWORD_RESET_CODE_TTL_MINUTES);
+  const user = await userRepository.findByEmail(normalizedEmail);
+  const updateResult = user && user.ativo !== false
+    ? await userRepository.updateByEmail({
+      email: normalizedEmail,
+      data: {
+        passwordResetCode: resetCode,
+        passwordResetExpiresAt: expiresAt,
+      },
+    })
+    : { count: 0 };
+
+  if (updateResult?.count > 0) {
+    console.info('[auth] password reset code issued', {
+      email: maskEmail(normalizedEmail),
+      code: resetCode,
+      expiresAt: expiresAt.toISOString(),
+      testMode: true,
+    });
+  }
+
+  return {
+    requested: true,
+  };
+};
+
+const validatePasswordResetCode = async ({ email, code }) => {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCode = normalizeCode(code);
+
+  if (!normalizedEmail) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
+  }
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'reset code must contain 6 digits.');
+  }
+
+  const user = await userRepository.findByEmail(normalizedEmail);
+  const now = Date.now();
+  const expiresAt = user?.passwordResetExpiresAt ? new Date(user.passwordResetExpiresAt).getTime() : 0;
+
+  if (
+    !user
+    || user.ativo === false
+    || String(user.passwordResetCode || '') !== normalizedCode
+    || !expiresAt
+    || expiresAt <= now
+  ) {
+    throw new AppError(400, 'INVALID_RESET_CODE', 'Invalid or expired reset code.');
+  }
+
+  return {
+    valid: true,
+  };
+};
+
+const saveNewPassword = async ({
+  email,
+  code,
+  newPassword,
+  confirmPassword,
+}) => {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCode = normalizeCode(code);
+  const rawNewPassword = String(newPassword || '').trim();
+  const rawConfirmPassword = String(confirmPassword || '').trim();
+
+  if (!normalizedEmail) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
+  }
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'reset code must contain 6 digits.');
+  }
+
+  if (!rawNewPassword || !rawConfirmPassword) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'newPassword and confirmPassword are required.');
+  }
+
+  if (rawNewPassword !== rawConfirmPassword) {
+    throw new AppError(400, 'PASSWORD_CONFIRMATION_MISMATCH', 'Password confirmation does not match.');
+  }
+
+  const passwordHash = await hashPassword(rawNewPassword);
+  const updateResult = await userRepository.updatePasswordResetByEmailAndCode({
+    email: normalizedEmail,
+    code: normalizedCode,
+    passwordHash,
+  });
+
+  if (!updateResult || updateResult.count === 0) {
+    throw new AppError(400, 'INVALID_RESET_CODE', 'Invalid or expired reset code.');
+  }
+
+  return {
+    reset: true,
+  };
 };
 
 const ensureSuperAdminUser = async () => {
@@ -261,6 +391,9 @@ module.exports = {
     getCurrentUser,
     logout,
     changePassword,
+    requestPasswordReset,
+    validatePasswordResetCode,
+    saveNewPassword,
     impersonateClinicAdmin,
   },
 };

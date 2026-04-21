@@ -103,11 +103,63 @@ const impersonateClinicAdmin = async (req, res, next) => {
   }
 };
 
+const requestPasswordResetFlow = async (req, res, next) => {
+  try {
+    const data = await authService.requestPasswordReset({
+      email: req.body?.email || req.body?.login || req.body?.adminEmail || '',
+    });
+
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const validatePasswordResetFlow = async (req, res, next) => {
+  try {
+    const data = await authService.validatePasswordResetCode({
+      email: req.body?.email || req.body?.login || req.body?.adminEmail || '',
+      code: req.body?.code || req.body?.resetCode || req.body?.codigo || '',
+    });
+
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const confirmPasswordResetFlow = async (req, res, next) => {
+  try {
+    const data = await authService.saveNewPassword({
+      email: req.body?.email || req.body?.login || req.body?.adminEmail || '',
+      code: req.body?.code || req.body?.resetCode || req.body?.codigo || '',
+      newPassword: req.body?.newPassword || req.body?.senhaNova || req.body?.senha || '',
+      confirmPassword: req.body?.confirmPassword || req.body?.confirmarSenha || req.body?.passwordConfirmation || '',
+    });
+
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   login,
   signup,
   me,
   logout,
   changePassword,
+  requestPasswordResetFlow,
+  validatePasswordResetFlow,
+  confirmPasswordResetFlow,
   impersonateClinicAdmin,
 };

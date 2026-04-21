@@ -25,6 +25,34 @@ const userRepository = {
     },
   }),
 
+  updateByEmail: async ({ email, data }) => prisma.user.updateMany({
+    where: {
+      email: toRequiredString(email, 'email'),
+    },
+    data,
+  }),
+
+  updatePasswordResetByEmailAndCode: async ({
+    email,
+    code,
+    passwordHash,
+    now = new Date(),
+  }) => prisma.user.updateMany({
+    where: {
+      email: toRequiredString(email, 'email'),
+      passwordResetCode: toRequiredString(code, 'code'),
+      passwordResetExpiresAt: {
+        gt: now,
+      },
+      ativo: true,
+    },
+    data: {
+      passwordHash: toRequiredString(passwordHash, 'passwordHash'),
+      passwordResetCode: null,
+      passwordResetExpiresAt: null,
+    },
+  }),
+
   listByClinic: async (clinicId) => prisma.user.findMany({
     where: {
       clinicId: toRequiredString(clinicId, 'clinicId'),
