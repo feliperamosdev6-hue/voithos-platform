@@ -135,7 +135,7 @@
       <button class="tab" data-tab="orcamentos">Orcamentos</button>
       <button class="tab" data-tab="financeiro">Financeiro</button>
       <button class="tab" data-tab="documentos">Documentos</button>
-      <button class="tab" data-tab="arquivos">Arquivos</button>
+      <button class="tab" data-tab="arquivos">Documentos</button>
       <button class="tab" data-tab="consultas">Consultas</button>
     </nav>
 
@@ -327,17 +327,17 @@
     <section class="tab-panel" id="tab-arquivos">
       <div class="docs-header">
         <div>
-          <h3>Arquivos do paciente</h3>
-          <p>Anexe documentos pessoais, exames, imagens e outros arquivos vinculados a este paciente.</p>
+          <h3>Documentos do paciente</h3>
+          <p>Anexe documentos pessoais, exames, imagens e outros documentos vinculados a este paciente.</p>
         </div>
-        <button class="btn primary" type="button" data-action="open-upload-drawer">Adicionar arquivos</button>
+        <button class="btn primary" type="button" data-action="open-upload-drawer">Adicionar documento</button>
       </div>
       <p class="files-helper">Os anexos ficam vinculados somente a esta clinica e a este paciente, com recuperacao central quando o cache local nao existir.</p>
       <div id="arquivos-list" class="docs-list"></div>
       <div id="arquivos-empty" class="docs-empty">
-        <h4>Voce ainda nao adicionou nenhum arquivo</h4>
+        <h4>Voce ainda nao adicionou nenhum documento</h4>
         <div class="docs-empty-actions">
-          <button class="btn primary" type="button" data-action="open-upload-drawer">Adicionar arquivos</button>
+          <button class="btn primary" type="button" data-action="open-upload-drawer">Adicionar documento</button>
         </div>
       </div>
     </section>
@@ -845,19 +845,19 @@
     <div class="upload-drawer-backdrop" data-action="close-upload-drawer"></div>
     <aside class="upload-drawer-panel" role="dialog" aria-modal="true" aria-labelledby="upload-drawer-title">
       <div class="upload-drawer-header">
-        <h3 id="upload-drawer-title">Adicionar arquivo do paciente</h3>
+        <h3 id="upload-drawer-title">Adicionar documento do paciente</h3>
         <button class="icon-btn" type="button" data-action="close-upload-drawer" aria-label="Fechar">&times;</button>
       </div>
       <form id="upload-drawer-form" class="upload-drawer-form">
         <div class="field">
-          <span>Arquivo</span>
+          <span>Documento</span>
           <div class="upload-actions">
-            <button class="btn outline" type="button" data-action="select-upload-file">Selecionar arquivos</button>
+            <button class="btn outline" type="button" data-action="select-upload-file">Selecionar documento</button>
             <button class="btn ghost" type="button" data-action="capture-upload-file">Tirar foto</button>
           </div>
           <input type="file" id="upload-file-input" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.heic,.doc,.docx,.txt,.rtf,.xls,.xlsx,.csv,.ppt,.pptx,.stl,.dcm">
           <input type="file" id="upload-photo-input" hidden accept="image/*" capture="environment">
-          <p id="upload-file-name" class="upload-file-name">Nenhum arquivo selecionado.</p>
+          <p id="upload-file-name" class="upload-file-name">Nenhum documento selecionado.</p>
         </div>
 
         <label class="field">
@@ -872,7 +872,7 @@
 
         <label class="field">
           <span>Titulo (opcional)</span>
-          <input type="text" id="upload-title" placeholder="Titulo do arquivo">
+          <input type="text" id="upload-title" placeholder="Titulo do documento">
         </label>
 
         <p class="files-helper">Aceita PDF, imagens, exames e documentos de escritorio de ate 25MB.</p>

@@ -2361,7 +2361,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     arquivosEmpty.classList.remove('show');
     list.forEach((doc) => {
-      arquivosList.appendChild(buildDocumentCard(doc, 'open-file', 'delete-file', 'Arquivo', 'Arquivo do paciente'));
+      arquivosList.appendChild(buildDocumentCard(doc, 'open-file', 'delete-file', 'Documento', 'Documento do paciente'));
     });
   };
 
@@ -2450,7 +2450,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const setUploadFile = (file) => {
     selectedUploadFile = file || null;
     if (uploadFileName) {
-      uploadFileName.textContent = file?.name ? `${file.name} (${Math.ceil((file.size || 0) / 1024)} KB)` : 'Nenhum arquivo selecionado.';
+      uploadFileName.textContent = file?.name ? `${file.name} (${Math.ceil((file.size || 0) / 1024)} KB)` : 'Nenhum documento selecionado.';
     }
   };
 

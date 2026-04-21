@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Arquivos de Pacientes</title>
+  <title>Documentos de Pacientes</title>
   <link rel="stylesheet" href="arquivos.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="header.css">
@@ -97,7 +97,8 @@
         </button>
     </header>
 
-<main class="container">\r\n    <section class="intro">
+<main class="container">
+    <section class="intro">
       <p>Gerencie anexos, exames, imagens e arquivos pessoais dos pacientes sem misturar com documentos clinicos gerados pelo prontuario.</p>
       <div class="search-box">
         <input type="text" id="fileSearchInput" placeholder="Buscar paciente, CPF ou prontuario">
@@ -115,7 +116,7 @@
             <th>CPF</th>
             <th>Prontuário</th>
             <th>Telefone</th>
-            <th>Arquivos</th>
+            <th>Documentos</th>
             <th>Ações</th>
           </tr>
         </thead>
@@ -130,7 +131,7 @@
     <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="documents-list-title">
       <header class="modal-header">
         <div>
-          <h2 id="documents-list-title">Arquivos do paciente</h2>
+          <h2 id="documents-list-title">Documentos do paciente</h2>
           <p id="documents-list-subtitle"></p>
         </div>
         <button class="icon-button" id="documents-list-close" type="button" aria-label="Fechar">x</button>
@@ -138,7 +139,7 @@
       <section class="modal-body">
         <div class="documents-toolbar">
           <select id="documents-category-filter" aria-label="Filtrar categoria"></select>
-          <input type="text" id="documents-search" placeholder="Buscar arquivos">
+          <input type="text" id="documents-search" placeholder="Buscar documentos">
           <label class="checkbox">
             <input type="checkbox" id="documents-archived-toggle">
             Mostrar arquivados
@@ -146,7 +147,7 @@
           <button class="btn secondary" id="documents-refresh" type="button">Atualizar</button>
         </div>
         <div id="documents-list" class="documents-list"></div>
-        <div id="documents-empty" class="documents-empty">Nenhum arquivo encontrado.</div>
+        <div id="documents-empty" class="documents-empty">Nenhum documento encontrado.</div>
       </section>
     </div>
   </div>
@@ -155,7 +156,7 @@
     <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="documents-add-title">
       <header class="modal-header">
         <div>
-          <h2 id="documents-add-title">Adicionar arquivo</h2>
+          <h2 id="documents-add-title">Adicionar documento</h2>
           <p id="documents-add-subtitle"></p>
         </div>
         <button class="icon-button" id="documents-add-close" type="button" aria-label="Fechar">x</button>
@@ -172,11 +173,11 @@
               <select id="doc-type" required></select>
             </label>
             <label>
-              Titulo do arquivo (opcional)
+              Titulo do documento (opcional)
               <input type="text" id="doc-title" placeholder="Ex: RG frente">
             </label>
             <label>
-              Data do arquivo
+              Data do documento
               <input type="date" id="doc-date">
             </label>
             <label>
@@ -192,12 +193,12 @@
               <textarea id="doc-notes" rows="3" placeholder="Detalhes do anexo, imagem ou documento pessoal"></textarea>
             </label>
             <label class="full">
-              Arquivo
+              Documento
               <input type="file" id="doc-file" required>
             </label>
           </div>
           <div class="form-actions">
-            <button class="btn" type="submit">Enviar arquivo</button>
+            <button class="btn" type="submit">Enviar documento</button>
           </div>
         </form>
       </section>
