@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const emitFinanceUpdated = () => {
     try {
       window.dispatchEvent(new CustomEvent('finance-updated', { detail: { source: 'prontuario' } }));
-      localStorage.setItem('voithos-finance-updated', JSON.stringify({
+      localStorage.setItem(getClinicStorageKey('voithos-finance-updated'), JSON.stringify({
         at: Date.now(),
         source: 'prontuario',
         prontuario: currentPatient?.prontuario || '',
@@ -3019,7 +3019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (action === 'abrir-agenda') {
       if (currentPatient) {
         try {
-          sessionStorage.setItem(AGENDA_PREFILL_PATIENT_KEY, JSON.stringify(currentPatient));
+          sessionStorage.setItem(getClinicStorageKey(AGENDA_PREFILL_PATIENT_KEY), JSON.stringify(currentPatient));
         } catch (_) {}
       }
       window.location.href = 'agendamentos.html';

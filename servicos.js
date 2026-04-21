@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
           patientId: currentPatient?.id || currentPatient?.prontuario || '',
         },
       }));
-      localStorage.setItem('voithos-finance-updated', JSON.stringify({ at: Date.now(), source }));
+      localStorage.setItem(getClinicStorageKey('voithos-finance-updated'), JSON.stringify({ at: Date.now(), source }));
     } catch (_) {}
   };
 

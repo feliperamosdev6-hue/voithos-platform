@@ -34,6 +34,11 @@ const AGENDA_PREFILL_PATIENT_KEY = 'agendaPrefillPatient';
 const AGENDA_PREFILL_DRAFT_KEY = 'agendaPrefillDraft';
 const AGENDA_AUTO_REFRESH_MS = 30000;
 
+const getClinicStorageKey = (baseKey) => {
+  const clinicId = String(currentUser?.clinicId || '').trim();
+  return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+};
+
 function normalizeDateLocal(value) {
   if (!value) return '';
   const format = (d) => {
@@ -397,7 +402,7 @@ const openPatientProntuario = async (agendamento) => {
     return;
   }
 
-  localStorage.setItem('prontuarioPatient', JSON.stringify(patient));
+  localStorage.setItem(getClinicStorageKey('prontuarioPatient'), JSON.stringify(patient));
   window.location.href = 'prontuario.html';
 };
 
@@ -556,8 +561,10 @@ document.body.addEventListener('click', async (event) => {
 
 const consumeAgendaPatientContext = () => {
   try {
-    const raw = sessionStorage.getItem(AGENDA_PREFILL_PATIENT_KEY);
+    const raw = sessionStorage.getItem(getClinicStorageKey(AGENDA_PREFILL_PATIENT_KEY))
+      || sessionStorage.getItem(AGENDA_PREFILL_PATIENT_KEY);
     if (!raw) return null;
+    sessionStorage.removeItem(getClinicStorageKey(AGENDA_PREFILL_PATIENT_KEY));
     sessionStorage.removeItem(AGENDA_PREFILL_PATIENT_KEY);
     const patient = JSON.parse(raw);
     const activeClinicId = String(currentUser?.clinicId || '').trim();
@@ -572,6 +579,7 @@ const consumeAgendaPatientContext = () => {
     }
     return patient;
   } catch (err) {
+    sessionStorage.removeItem(getClinicStorageKey(AGENDA_PREFILL_PATIENT_KEY));
     sessionStorage.removeItem(AGENDA_PREFILL_PATIENT_KEY);
     console.warn('[AGENDA] invalid_agenda_prefill_context', err?.message || err);
     return null;
@@ -600,8 +608,10 @@ const resolveAgendaContextPatient = () => {
 
 const consumeAgendaDraftContext = () => {
   try {
-    const raw = sessionStorage.getItem(AGENDA_PREFILL_DRAFT_KEY);
+    const raw = sessionStorage.getItem(getClinicStorageKey(AGENDA_PREFILL_DRAFT_KEY))
+      || sessionStorage.getItem(AGENDA_PREFILL_DRAFT_KEY);
     if (!raw) return null;
+    sessionStorage.removeItem(getClinicStorageKey(AGENDA_PREFILL_DRAFT_KEY));
     sessionStorage.removeItem(AGENDA_PREFILL_DRAFT_KEY);
     const draft = JSON.parse(raw);
     const activeClinicId = String(currentUser?.clinicId || '').trim();
@@ -616,6 +626,7 @@ const consumeAgendaDraftContext = () => {
     }
     return draft;
   } catch (err) {
+    sessionStorage.removeItem(getClinicStorageKey(AGENDA_PREFILL_DRAFT_KEY));
     sessionStorage.removeItem(AGENDA_PREFILL_DRAFT_KEY);
     console.warn('[AGENDA] invalid_agenda_draft_context', err?.message || err);
     return null;
