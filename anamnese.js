@@ -16,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let activeModel = null;
 
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
   const api = {
     readPatient: (prontuario) => patientsApi.read?.(prontuario),
     searchPatients: (query) => patientsApi.search?.(query),
@@ -251,8 +256,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadPatientFromStorage = async () => {
-    const raw = localStorage.getItem('anamnesePatient');
+    const raw = localStorage.getItem(getClinicStorageKey('anamnesePatient')) || localStorage.getItem('anamnesePatient');
     if (!raw) return;
+    localStorage.removeItem(getClinicStorageKey('anamnesePatient'));
     localStorage.removeItem('anamnesePatient');
     try {
       const patient = JSON.parse(raw);

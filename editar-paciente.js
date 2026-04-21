@@ -33,6 +33,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   let procedures = [];
   let selectedSelfieFile = null;
 
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
   const acceptedSelfieTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'application/pdf'];
   const acceptedSelfieExt = ['.png', '.jpg', '.jpeg', '.svg', '.pdf'];
 
@@ -442,11 +447,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     let prontuario = prontuarioParam;
 
     if (!prontuario) {
-      const stored = localStorage.getItem('editingPatient');
+      const stored = localStorage.getItem(getClinicStorageKey('editingPatient')) || localStorage.getItem('editingPatient');
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
           prontuario = parsed?.prontuario || null;
+          localStorage.removeItem(getClinicStorageKey('editingPatient'));
+          localStorage.removeItem('editingPatient');
         } catch (e) {
           prontuario = null;
         }

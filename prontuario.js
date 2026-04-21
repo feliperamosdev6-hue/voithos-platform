@@ -724,6 +724,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const AGENDA_PREFILL_PATIENT_KEY = 'agendaPrefillPatient';
   const LEGACY_PRONTUARIO_STORAGE_KEYS = ['prontuarioPatient', 'editingPatient', 'servicePatient', 'documentsPatient'];
 
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
+  const getClinicStorageCandidates = (baseKey) => {
+    const clinicKey = getClinicStorageKey(baseKey);
+    return clinicKey === baseKey ? [baseKey] : [clinicKey, baseKey];
+  };
+
   const readStoredPatientCandidate = (key, source) => {
     const storage = source === 'session' ? sessionStorage : localStorage;
     const raw = storage.getItem(key);
@@ -769,16 +779,18 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const resolvePatientFromStorage = () => {
-    for (const key of LEGACY_PRONTUARIO_STORAGE_KEYS) {
-      const patient = readStoredPatientCandidate(key, 'local');
-      if (!patient) continue;
-      localStorage.removeItem(key);
-      console.info('[PRONTUARIO] prontuario_storage_key_cleared', {
-        key,
-        clinicId: String(currentUser?.clinicId || patient?.clinicId || patient?.clinicaId || '').trim(),
-      });
-      persistActiveProntuarioContext(patient, 'storage');
-      return { patient, key, source: 'storage' };
+    for (const baseKey of LEGACY_PRONTUARIO_STORAGE_KEYS) {
+      for (const key of getClinicStorageCandidates(baseKey)) {
+        const patient = readStoredPatientCandidate(key, 'local');
+        if (!patient) continue;
+        localStorage.removeItem(key);
+        console.info('[PRONTUARIO] prontuario_storage_key_cleared', {
+          key,
+          clinicId: String(currentUser?.clinicId || patient?.clinicId || patient?.clinicaId || '').trim(),
+        });
+        persistActiveProntuarioContext(patient, 'storage');
+        return { patient, key, source: 'storage' };
+      }
     }
 
     const activeSessionPatient = readStoredPatientCandidate(ACTIVE_PRONTUARIO_CONTEXT_KEY, 'session');
@@ -2852,8 +2864,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyProntuarioEntryNavigation = () => {
     let targetTab = '';
     try {
-      targetTab = String(localStorage.getItem('prontuario-open-tab') || '').trim().toLowerCase();
-      if (targetTab) localStorage.removeItem('prontuario-open-tab');
+      const navKey = getClinicStorageKey('prontuario-open-tab');
+      targetTab = String(localStorage.getItem(navKey) || localStorage.getItem('prontuario-open-tab') || '').trim().toLowerCase();
+      if (targetTab) {
+        localStorage.removeItem(navKey);
+        localStorage.removeItem('prontuario-open-tab');
+      }
     } catch (_) {
       targetTab = '';
     }
@@ -2893,31 +2909,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const openServicePage = () => {
     if (!currentPatient) return;
-    localStorage.setItem('servicePatient', JSON.stringify(currentPatient));
+    localStorage.setItem(getClinicStorageKey('servicePatient'), JSON.stringify(currentPatient));
     window.location.href = 'servicos.html';
   };
 
   const openAnamnesePage = () => {
     if (!currentPatient) return;
-    localStorage.setItem('anamnesePatient', JSON.stringify(currentPatient));
+    localStorage.setItem(getClinicStorageKey('anamnesePatient'), JSON.stringify(currentPatient));
     window.location.href = 'anamnese.html';
   };
 
   const openReceitaPage = () => {
     if (!currentPatient) return;
-    localStorage.setItem('receitaPatient', JSON.stringify(currentPatient));
+    localStorage.setItem(getClinicStorageKey('receitaPatient'), JSON.stringify(currentPatient));
     window.location.href = 'receita.html';
   };
 
   const openAtestadoPage = () => {
     if (!currentPatient) return;
-    localStorage.setItem('atestadoPatient', JSON.stringify(currentPatient));
+    localStorage.setItem(getClinicStorageKey('atestadoPatient'), JSON.stringify(currentPatient));
     window.location.href = 'atestado.html';
   };
 
   const openEditProfile = () => {
     if (!currentPatient) return;
-    localStorage.setItem('editingPatient', JSON.stringify(currentPatient));
+    localStorage.setItem(getClinicStorageKey('editingPatient'), JSON.stringify(currentPatient));
     window.location.href = 'editar-paciente.html';
   };
 
@@ -2979,7 +2995,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (action === 'abrir-documentos') {
       if (currentPatient) {
-        localStorage.setItem('documentsPatient', JSON.stringify(currentPatient));
+        localStorage.setItem(getClinicStorageKey('documentsPatient'), JSON.stringify(currentPatient));
       }
       window.location.href = 'arquivos.html';
       return;

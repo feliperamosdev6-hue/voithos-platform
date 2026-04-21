@@ -24,6 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const submitBtn = document.getElementById('atest-submit');
   const hint = document.getElementById('atest-hint');
 
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(state.currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
   const cidList = [
     { codigo: 'K00.0', descricao: 'Anodontia' },
     { codigo: 'K00.1', descricao: 'Dentes supranumerarios' },
@@ -315,8 +320,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadPatientFromStorage = () => {
-    const raw = localStorage.getItem('atestadoPatient');
+    const raw = localStorage.getItem(getClinicStorageKey('atestadoPatient')) || localStorage.getItem('atestadoPatient');
     if (!raw) return;
+    localStorage.removeItem(getClinicStorageKey('atestadoPatient'));
     localStorage.removeItem('atestadoPatient');
     try {
       const patient = JSON.parse(raw);

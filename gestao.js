@@ -1150,6 +1150,11 @@
     return ensureAdmin();
   };
 
+  const getProntuarioNavKey = (baseKey) => {
+    const clinicId = String(usuarioLogado?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
   async function carregarDashboard() {
     try {
       const isAdmin = await ensureAdmin();
@@ -2328,9 +2333,9 @@
           alert('Este lancamento nao possui prontuario vinculado.');
           return;
         }
-        localStorage.setItem('prontuarioPatient', JSON.stringify(patientStub));
-        localStorage.setItem('prontuario-open-tab', 'financeiro');
-        localStorage.setItem('prontuario-focus-finance-entry', String(lancamento.id || ''));
+        localStorage.setItem(getProntuarioNavKey('prontuarioPatient'), JSON.stringify(patientStub));
+        localStorage.setItem(getProntuarioNavKey('prontuario-open-tab'), 'financeiro');
+        localStorage.setItem(getProntuarioNavKey('prontuario-focus-finance-entry'), String(lancamento.id || ''));
         window.location.href = 'prontuario.html';
       } catch (err) {
         console.error('Erro ao abrir prontuario a partir do detalhe financeiro:', err);
@@ -2705,9 +2710,9 @@
               return;
             }
 
-            localStorage.setItem('prontuarioPatient', JSON.stringify(patientStub));
-            localStorage.setItem('prontuario-open-tab', 'financeiro');
-            localStorage.setItem('prontuario-focus-finance-entry', String(lancamento.id || ''));
+            localStorage.setItem(getProntuarioNavKey('prontuarioPatient'), JSON.stringify(patientStub));
+            localStorage.setItem(getProntuarioNavKey('prontuario-open-tab'), 'financeiro');
+            localStorage.setItem(getProntuarioNavKey('prontuario-focus-finance-entry'), String(lancamento.id || ''));
             window.location.href = 'prontuario.html';
           } catch (err) {
             console.error('Erro ao abrir prontuario no financeiro:', err);
@@ -2838,7 +2843,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
 
 
 

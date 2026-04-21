@@ -52,6 +52,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let allProcedures = [];
   let selectedServices = [];
   let currentUser = null;
+
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
   let currentPatient = null;
   let dentistasCache = [];
   let currentPatientNome = '';
@@ -505,8 +510,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadPatientFromStorage = () => {
-    const raw = localStorage.getItem('servicePatient');
+    const raw = localStorage.getItem(getClinicStorageKey('servicePatient')) || localStorage.getItem('servicePatient');
     if (!raw) return;
+    localStorage.removeItem(getClinicStorageKey('servicePatient'));
     localStorage.removeItem('servicePatient');
     try {
       const patient = JSON.parse(raw);

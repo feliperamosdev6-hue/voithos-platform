@@ -28,6 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
     clinicReceita: null,
   };
 
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(state.currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
   const setHint = (text) => {
     if (hint) hint.textContent = text || '';
   };
@@ -189,8 +194,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadPatientFromStorage = () => {
-    const raw = localStorage.getItem('receitaPatient');
+    const raw = localStorage.getItem(getClinicStorageKey('receitaPatient')) || localStorage.getItem('receitaPatient');
     if (!raw) return;
+    localStorage.removeItem(getClinicStorageKey('receitaPatient'));
     localStorage.removeItem('receitaPatient');
     try {
       const patient = JSON.parse(raw);

@@ -12,6 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchButton = document.getElementById('fileSearchButton');
   let currentUser = null;
 
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
   const api = {
     readPatients: async () => {
       const centralList = await patientsApi.list?.();
@@ -331,8 +336,9 @@ const showToast = (msg, type = 'info') => {
 
 
   const openDocumentsFromStorage = async () => {
-    const raw = localStorage.getItem('documentsPatient');
+    const raw = localStorage.getItem(getClinicStorageKey('documentsPatient')) || localStorage.getItem('documentsPatient');
     if (!raw) return;
+    localStorage.removeItem(getClinicStorageKey('documentsPatient'));
     localStorage.removeItem('documentsPatient');
     try {
       const patientRaw = JSON.parse(raw);
@@ -526,7 +532,7 @@ const showToast = (msg, type = 'info') => {
 
   const openProntuario = (patient) => {
     if (!patient) return;
-    localStorage.setItem('prontuarioPatient', JSON.stringify(patient));
+    localStorage.setItem(getClinicStorageKey('prontuarioPatient'), JSON.stringify(patient));
     window.location.href = 'prontuario.html';
   };
 
@@ -534,7 +540,7 @@ const showToast = (msg, type = 'info') => {
     try {
       const patient = await api.readPatient(prontuario);
       if (patient) {
-        localStorage.setItem('editingPatient', JSON.stringify(patient));
+        localStorage.setItem(getClinicStorageKey('editingPatient'), JSON.stringify(patient));
       }
       window.location.href = 'editar-paciente.html';
     } catch (err) {
