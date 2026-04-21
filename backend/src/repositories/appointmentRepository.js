@@ -83,6 +83,9 @@ const appointmentRepository = {
       attendanceStatus: toNullableString(input?.attendanceStatus),
       tipo: toNullableString(input?.tipo),
       observacoes: toNullableString(input?.observacoes),
+      marcadorId: toNullableString(input?.marcadorId),
+      marcadorNome: toNullableString(input?.marcadorNome),
+      marcadorCor: toNullableString(input?.marcadorCor),
     },
   }),
 
@@ -101,6 +104,9 @@ const appointmentRepository = {
       status: toRequiredString(data?.status, 'status'),
       confirmado: data?.confirmado === true,
       attendanceStatus: toNullableString(data?.attendanceStatus),
+      marcadorId: toNullableString(data?.marcadorId),
+      marcadorNome: toNullableString(data?.marcadorNome),
+      marcadorCor: toNullableString(data?.marcadorCor),
     },
   }),
 

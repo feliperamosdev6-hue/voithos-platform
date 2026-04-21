@@ -135,19 +135,22 @@ const appointmentService = {
 
     try {
       await ensurePatientBelongsToClinic(normalizedClinicId, patientId);
-      return await appointmentRepository.create({
-        clinicId: normalizedClinicId,
-        patientId,
-        profissionalId: sanitizedInput?.profissionalId,
-        profissionalNome: sanitizedInput?.profissionalNome,
+        return await appointmentRepository.create({
+          clinicId: normalizedClinicId,
+          patientId,
+          profissionalId: sanitizedInput?.profissionalId,
+          profissionalNome: sanitizedInput?.profissionalNome,
         dataHora,
         horaFim: sanitizedInput?.horaFim,
         status: 'AGENDADO',
         confirmado: false,
-        attendanceStatus: normalizeAttendanceStatus(sanitizedInput?.attendanceStatus),
-        tipo: sanitizedInput?.tipo,
-        observacoes: sanitizedInput?.observacoes,
-      });
+          attendanceStatus: normalizeAttendanceStatus(sanitizedInput?.attendanceStatus),
+          tipo: sanitizedInput?.tipo,
+          observacoes: sanitizedInput?.observacoes,
+          marcadorId: sanitizedInput?.marcadorId,
+          marcadorNome: sanitizedInput?.marcadorNome,
+          marcadorCor: sanitizedInput?.marcadorCor,
+        });
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -269,6 +272,9 @@ const appointmentService = {
           horaFim: sanitizedInput?.horaFim,
           tipo: sanitizedInput?.tipo,
           observacoes: sanitizedInput?.observacoes,
+          marcadorId: sanitizedInput?.marcadorId,
+          marcadorNome: sanitizedInput?.marcadorNome,
+          marcadorCor: sanitizedInput?.marcadorCor,
           status: normalizedStatus,
           confirmado: normalizedStatus === 'CONFIRMADO',
           attendanceStatus: normalizedAttendanceStatus,

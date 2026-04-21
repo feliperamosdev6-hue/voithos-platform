@@ -148,6 +148,9 @@
       status: legacyStatus,
       attendanceStatus: derivedAttendanceStatus,
       observacoes: appointment.observacoes || '',
+      marcadorId: appointment.marcadorId || '',
+      marcadorNome: appointment.marcadorNome || '',
+      marcadorCor: appointment.marcadorCor || '',
       confirmado: appointment.confirmado === true,
       confirmationPending: appointment.confirmationPending === true,
       lastConfirmationSentAt: appointment.lastConfirmationSentAt || '',
@@ -2181,6 +2184,9 @@
         horaFim: combineDateTime(payload?.data, payload?.horaFim),
         tipo: payload?.tipo || '',
         observacoes: payload?.observacoes || '',
+        marcadorId: payload?.marcadorId || '',
+        marcadorNome: payload?.marcadorNome || '',
+        marcadorCor: payload?.marcadorCor || '',
         attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[cleanText(payload?.attendanceStatus).toLowerCase()] || null,
       };
       const [appointment, patient] = await Promise.all([
@@ -2222,6 +2228,9 @@
         horaFim: combineDateTime(payload?.data, payload?.horaFim),
         tipo: payload?.tipo || '',
         observacoes: payload?.observacoes || '',
+        marcadorId: payload?.marcadorId || '',
+        marcadorNome: payload?.marcadorNome || '',
+        marcadorCor: payload?.marcadorCor || '',
         status: LEGACY_TO_CENTRAL_STATUS[cleanText(payload?.status || 'em_aberto').toLowerCase()] || 'AGENDADO',
         attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[cleanText(payload?.attendanceStatus).toLowerCase()] || null,
       }, { auth: true });

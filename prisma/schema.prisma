@@ -289,6 +289,9 @@ model Appointment {
   attendanceStatus String?
   tipo             String?
   observacoes      String?
+  marcadorId       String?
+  marcadorNome     String?
+  marcadorCor      String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   outboundMessages OutboundMessage[]

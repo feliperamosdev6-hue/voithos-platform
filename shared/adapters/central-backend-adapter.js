@@ -730,6 +730,9 @@ const createCentralBackendAdapter = (options = {}) => {
       status: legacyStatus,
       attendanceStatus: derivedAttendanceStatus,
       observacoes: appointment.observacoes || '',
+      marcadorId: appointment.marcadorId || '',
+      marcadorNome: appointment.marcadorNome || '',
+      marcadorCor: appointment.marcadorCor || '',
       confirmado: appointment.confirmado === true,
       confirmationPending: appointment.confirmationPending === true,
       lastConfirmationSentAt: appointment.lastConfirmationSentAt || '',
@@ -898,6 +901,9 @@ const createCentralBackendAdapter = (options = {}) => {
       horaFim: combineDateTime(appointmentData.data, appointmentData.horaFim),
       tipo: appointmentData.tipo || '',
       observacoes: appointmentData.observacoes || '',
+      marcadorId: appointmentData.marcadorId || '',
+      marcadorNome: appointmentData.marcadorNome || '',
+      marcadorCor: appointmentData.marcadorCor || '',
       attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[String(appointmentData.attendanceStatus || '').trim().toLowerCase()] || null,
     };
 
@@ -1181,6 +1187,9 @@ const createCentralBackendAdapter = (options = {}) => {
       horaFim: combineDateTime(appointmentData.data, appointmentData.horaFim),
       tipo: appointmentData.tipo || '',
       observacoes: appointmentData.observacoes || '',
+      marcadorId: appointmentData.marcadorId || '',
+      marcadorNome: appointmentData.marcadorNome || '',
+      marcadorCor: appointmentData.marcadorCor || '',
       status: LEGACY_TO_CENTRAL_STATUS[legacyStatus] || 'AGENDADO',
       attendanceStatus: LEGACY_TO_CENTRAL_ATTENDANCE[String(appointmentData.attendanceStatus || '').trim().toLowerCase()] || null,
     };
