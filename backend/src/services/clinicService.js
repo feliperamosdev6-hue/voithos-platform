@@ -8,6 +8,7 @@ const { appointmentService } = require('./appointmentService');
 const { patientClinicalService } = require('./patientClinicalService');
 const { financialService } = require('./financialService');
 const { authService, SESSION_TTL_DAYS } = require('./authService');
+const { emailService } = require('./emailService');
 const { AppError } = require('../errors/AppError');
 const XLSX = require('xlsx');
 const JSZip = require('jszip');
@@ -39,6 +40,14 @@ const normalizeColor = (value) => {
   const raw = String(value || '').trim();
   const match = raw.match(/^#([0-9a-fA-F]{6})$/);
   return match ? `#${match[1].toUpperCase()}` : '';
+};
+
+const generateEmailVerificationCode = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0');
+
+const getEmailVerificationExpiresAt = () => {
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+  return expiresAt;
 };
 const sanitizeMarker = (value = {}) => {
   if (!isPlainObject(value)) return null;
@@ -2970,6 +2979,9 @@ const clinicService = {
     }
 
     try {
+      const emailVerificationCode = generateEmailVerificationCode();
+      const emailVerificationExpiresAt = getEmailVerificationExpiresAt();
+
       const result = await prisma.$transaction(async (tx) => {
         const duplicatedClinic = await tx.clinic.findFirst({
           where: { cnpjCpf: document.documentNumber },
@@ -3006,6 +3018,9 @@ const clinicService = {
             role: 'ADMIN',
             isClinicAdmin: true,
             ativo: true,
+            emailVerified: false,
+            emailVerificationCode,
+            emailVerificationExpiresAt,
           },
         });
 
@@ -3037,6 +3052,15 @@ const clinicService = {
           },
         };
       });
+
+      try {
+        await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
+      } catch (emailError) {
+        console.error('[email] Failed to send signup verification email', {
+          email: adminEmail,
+          error: emailError?.message || emailError,
+        });
+      }
 
       return result;
     } catch (error) {
