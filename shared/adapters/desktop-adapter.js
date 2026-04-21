@@ -32,6 +32,21 @@
       if (!window.auth?.changePassword) return unavailable('auth.changePassword');
       return window.auth.changePassword(payload);
     },
+    requestPasswordReset: async (payload) => {
+      if (window.auth?.requestPasswordReset) return window.auth.requestPasswordReset(payload);
+      if (window.__webAdapter?.auth?.requestPasswordReset) return window.__webAdapter.auth.requestPasswordReset(payload);
+      return unavailable('auth.requestPasswordReset');
+    },
+    validatePasswordResetCode: async (payload) => {
+      if (window.auth?.validatePasswordResetCode) return window.auth.validatePasswordResetCode(payload);
+      if (window.__webAdapter?.auth?.validatePasswordResetCode) return window.__webAdapter.auth.validatePasswordResetCode(payload);
+      return unavailable('auth.validatePasswordResetCode');
+    },
+    saveNewPassword: async (payload) => {
+      if (window.auth?.saveNewPassword) return window.auth.saveNewPassword(payload);
+      if (window.__webAdapter?.auth?.saveNewPassword) return window.__webAdapter.auth.saveNewPassword(payload);
+      return unavailable('auth.saveNewPassword');
+    },
     impersonateClinic: async (clinicId) => {
       if (!window.auth?.impersonateClinic) return unavailable('auth.impersonateClinic');
       return window.auth.impersonateClinic(clinicId);

@@ -1295,6 +1295,28 @@
       persistWebSession({ token: result?.token || '', user: mappedUser, clinic });
       return { success: true, user: mappedUser, clinic, token: result?.token || '' };
     },
+    requestPasswordReset: async ({ email }) => {
+      const result = await request('POST', '/auth/password-reset/request', {
+        email: cleanText(email).toLowerCase(),
+      }, { auth: false });
+      return { success: result?.requested === true || result?.ok === true };
+    },
+    validatePasswordResetCode: async ({ email, code }) => {
+      const result = await request('POST', '/auth/password-reset/validate', {
+        email: cleanText(email).toLowerCase(),
+        code: cleanText(code),
+      }, { auth: false });
+      return { success: result?.valid === true || result?.ok === true };
+    },
+    saveNewPassword: async ({ email, code, newPassword, confirmPassword }) => {
+      const result = await request('POST', '/auth/password-reset/confirm', {
+        email: cleanText(email).toLowerCase(),
+        code: cleanText(code),
+        newPassword: cleanText(newPassword),
+        confirmPassword: cleanText(confirmPassword),
+      }, { auth: false });
+      return { success: result?.reset === true || result?.ok === true };
+    },
     logout: async () => {
       try {
         if (getStoredToken()) {

@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetFlowState = {
     email: '',
     maskedEmail: '',
-    code: '284619',
+    code: '',
   };
 
   const setError = (message) => {
@@ -74,12 +74,27 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${localMask}@${domain}`;
   };
 
-  const syncRecoveryMock = (email) => {
+  const setRecoveryTarget = (email) => {
     resetFlowState.email = email;
     resetFlowState.maskedEmail = maskEmail(email);
     if (maskedEmailBadge) {
       maskedEmailBadge.textContent = `Código enviado para ${resetFlowState.maskedEmail}`;
     }
+  };
+
+  const setFlowMessage = (element, message) => {
+    if (element) element.textContent = message || '';
+  };
+
+  const getFriendlyResetError = (error) => {
+    const raw = String(error?.message || error || '').toLowerCase();
+    if (raw.includes('invalid') || raw.includes('expir') || raw.includes('codigo') || raw.includes('código')) {
+      return 'Código inválido ou expirado.';
+    }
+    if (raw.includes('match') || raw.includes('confirma')) {
+      return 'A confirmação de senha não confere.';
+    }
+    return 'Não foi possível concluir a operação. Tente novamente.';
   };
 
   const goToLogin = () => {
@@ -100,7 +115,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showScreen('code');
     updateSubtitle('Validação do código');
     if (verificationCodeInput) {
-      verificationCodeInput.value = '';
       verificationCodeInput.focus();
     }
   };
@@ -135,9 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const user = await authApi.currentUser();
       if (user) {
-        if (user.tipo === 'super_admin') {
-          return;
-        }
+        if (user.tipo === 'super_admin') return;
         redirectAfterLogin(user);
       }
     } catch (err) {
@@ -172,53 +184,94 @@ document.addEventListener('DOMContentLoaded', () => {
   backToLoginFromSuccess?.addEventListener('click', goToLogin);
 
   resendCodePlaceholder?.addEventListener('click', () => {
-    window.alert('Reenvio visual apenas nesta etapa.');
+    window.alert('Reenvio ainda indisponível nesta etapa.');
   });
 
-  sendCodeButton?.addEventListener('click', () => {
+  sendCodeButton?.addEventListener('click', async () => {
     const email = String(recoveryEmailInput?.value || '').trim().toLowerCase();
     if (!email) {
-      if (recoveryMessage) recoveryMessage.textContent = 'Informe o e-mail para continuar.';
+      setFlowMessage(recoveryMessage, 'Informe o e-mail para continuar.');
       return;
     }
-    syncRecoveryMock(email);
-    if (recoveryMessage) {
-      recoveryMessage.textContent = `Código enviado para ${resetFlowState.maskedEmail}.`;
+    if (!authApi?.requestPasswordReset) {
+      setFlowMessage(recoveryMessage, 'Recuperação de senha indisponível neste ambiente.');
+      return;
     }
-    goToCode();
+
+    try {
+      const result = await authApi.requestPasswordReset({ email });
+      if (!result?.success) {
+        throw new Error('request_failed');
+      }
+      setRecoveryTarget(email);
+      setFlowMessage(recoveryMessage, `Enviamos um código para ${resetFlowState.maskedEmail}.`);
+      goToCode();
+    } catch (error) {
+      console.error('Erro ao solicitar redefinição de senha', error);
+      setFlowMessage(recoveryMessage, 'Não foi possível enviar o código agora.');
+    }
   });
 
   verificationCodeInput?.addEventListener('input', () => {
     verificationCodeInput.value = normalizeDigits(verificationCodeInput.value, 6);
   });
 
-  validateCodeButton?.addEventListener('click', () => {
+  validateCodeButton?.addEventListener('click', async () => {
     const code = normalizeDigits(verificationCodeInput?.value || '', 6);
     if (code.length !== 6) {
-      if (codeMessage) codeMessage.textContent = 'Digite o código de 6 dígitos.';
+      setFlowMessage(codeMessage, 'Digite o código de 6 dígitos.');
       return;
     }
-    if (code !== resetFlowState.code) {
-      if (codeMessage) codeMessage.textContent = 'Código inválido na visualização.';
+    if (!authApi?.validatePasswordResetCode) {
+      setFlowMessage(codeMessage, 'Validação de código indisponível neste ambiente.');
       return;
     }
-    if (codeMessage) codeMessage.textContent = 'Código validado com sucesso.';
-    goToPassword();
+
+    try {
+      const result = await authApi.validatePasswordResetCode({
+        email: resetFlowState.email || String(recoveryEmailInput?.value || '').trim().toLowerCase(),
+        code,
+      });
+      if (!result?.success) {
+        throw new Error('invalid_code');
+      }
+      resetFlowState.code = code;
+      setFlowMessage(codeMessage, 'Código validado com sucesso.');
+      goToPassword();
+    } catch (error) {
+      console.error('Erro ao validar código', error);
+      setFlowMessage(codeMessage, 'Código inválido ou expirado.');
+    }
   });
 
-  savePasswordButton?.addEventListener('click', () => {
+  savePasswordButton?.addEventListener('click', async () => {
     const newPassword = String(newPasswordInput?.value || '').trim();
     const confirmPassword = String(confirmNewPasswordInput?.value || '').trim();
     if (!newPassword || !confirmPassword) {
-      if (passwordMessage) passwordMessage.textContent = 'Preencha a nova senha e a confirmação.';
+      setFlowMessage(passwordMessage, 'Preencha a nova senha e a confirmação.');
       return;
     }
-    if (newPassword !== confirmPassword) {
-      if (passwordMessage) passwordMessage.textContent = 'A confirmação não confere.';
+    if (!authApi?.saveNewPassword) {
+      setFlowMessage(passwordMessage, 'Salvamento de nova senha indisponível neste ambiente.');
       return;
     }
-    if (passwordMessage) passwordMessage.textContent = 'Senha alterada na visualização.';
-    goToSuccess();
+
+    try {
+      const result = await authApi.saveNewPassword({
+        email: resetFlowState.email || String(recoveryEmailInput?.value || '').trim().toLowerCase(),
+        code: resetFlowState.code || normalizeDigits(verificationCodeInput?.value || '', 6),
+        newPassword,
+        confirmPassword,
+      });
+      if (!result?.success) {
+        throw new Error('reset_failed');
+      }
+      setFlowMessage(passwordMessage, '');
+      goToSuccess();
+    } catch (error) {
+      console.error('Erro ao salvar nova senha', error);
+      setFlowMessage(passwordMessage, getFriendlyResetError(error));
+    }
   });
 
   loginForm?.addEventListener('submit', async (event) => {
