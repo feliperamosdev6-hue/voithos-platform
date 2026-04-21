@@ -373,3 +373,33 @@
   line-height: 1;
   font-weight: 700;
 }
+
+/* ===== Shared header polish ===== */
+.main-nav a:focus-visible,
+.user-menu-toggle:focus-visible,
+.attn-toggle:focus-visible,
+.gestao-toggle:focus-visible,
+.user-menu-item:focus-visible,
+.attn-item:focus-visible,
+.gestao-item:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 3px;
+}
+
+.user-menu-toggle,
+.attn-toggle,
+.gestao-toggle {
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.user-menu-toggle:hover,
+.attn-toggle:hover,
+.gestao-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.user-menu-item:focus-visible,
+.attn-item:focus-visible,
+.gestao-item:focus-visible {
+  background: #f0fdf9;
+}
