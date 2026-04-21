@@ -1908,16 +1908,25 @@ const renderMarcadoresSelect = (selectedId = '') => {
     marcadorSelect.appendChild(opt);
   });
   marcadorSelect.value = selectedId || '';
-  updateMarcadorPreview(marcadorSelect.value);
+  updateMarcadorPreview(marcadorSelect);
 };
 
-const updateMarcadorPreview = (selectedId = '') => {
-  const marker = agendaMarkersCache.find((item) => String(item.id) === String(selectedId));
+const updateMarcadorPreview = (selectOrValue = '') => {
+  const selectedValue = typeof selectOrValue === 'string'
+    ? selectOrValue
+    : String(selectOrValue?.value || '');
+  const selectedText = typeof selectOrValue === 'string'
+    ? ''
+    : String(selectOrValue?.selectedOptions?.[0]?.textContent || '').trim();
+  const marker = agendaMarkersCache.find((item) => String(item.id) === String(selectedValue));
+  const previewText = selectedValue
+    ? (selectedText || marker?.nome || 'Marcador selecionado')
+    : 'Nenhum marcador selecionado';
   if (marcadorPreview) {
-    marcadorPreview.textContent = marker?.nome || 'Nenhum marcador selecionado';
+    marcadorPreview.textContent = previewText;
   }
   if (marcadorPreviewDot) {
-    marcadorPreviewDot.hidden = !marker;
+    marcadorPreviewDot.hidden = !selectedValue;
     marcadorPreviewDot.style.background = marker?.cor || '#94a3b8';
   }
 };
@@ -1988,7 +1997,7 @@ const abrirModalNovoAgendamento = async (agendamento, options = {}) => {
       }
     }
     if (marcadorSelect && marcadorId) marcadorSelect.value = marcadorId;
-    updateMarcadorPreview(marcadorSelect?.value || marcadorId || '');
+    updateMarcadorPreview(marcadorSelect);
     if (tituloModal) tituloModal.textContent = 'Editar agendamento';
   } else if (refs.tituloModal) {
     refs.tituloModal.textContent = 'Novo agendamento';
@@ -2070,7 +2079,7 @@ const wireModalNovoAgendamento = () => {
     fecharModalNovoAgendamento();
   });
   marcadorSelect?.addEventListener('change', () => {
-    updateMarcadorPreview(marcadorSelect.value);
+    updateMarcadorPreview(marcadorSelect);
   });
     btnSalvar?.addEventListener('click', async (e) => {
     e.preventDefault();
