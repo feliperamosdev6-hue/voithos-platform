@@ -694,7 +694,10 @@
   let estoqueBusca = '';
   let estoqueEditId = null;
   let activeRowMenu = null;
-  const ESTOQUE_STORAGE_KEY = 'voithos_estoque_produtos_v1';
+  const getEstoqueStorageKey = () => {
+    const clinicId = String(usuarioLogado?.clinicId || '').trim();
+    return clinicId ? `voithos_estoque_produtos_v1:${clinicId}` : 'voithos_estoque_produtos_v1:global';
+  };
 
   let usuarioLogado = null;
   let financeRefreshInFlight = false;
@@ -787,7 +790,7 @@
 
   const readEstoqueStorage = () => {
     try {
-      const raw = window.localStorage.getItem(ESTOQUE_STORAGE_KEY);
+      const raw = window.localStorage.getItem(getEstoqueStorageKey());
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed : [];
@@ -799,10 +802,15 @@
 
   const writeEstoqueStorage = (list) => {
     try {
-      window.localStorage.setItem(ESTOQUE_STORAGE_KEY, JSON.stringify(list || []));
+      window.localStorage.setItem(getEstoqueStorageKey(), JSON.stringify(list || []));
     } catch (err) {
       console.warn('Falha ao salvar estoque no localStorage.', err);
     }
+  };
+
+  const loadEstoqueForCurrentClinic = () => {
+    estoqueProdutos = readEstoqueStorage();
+    renderEstoque();
   };
 
   const normalizeStockNumber = (value) => {
@@ -961,9 +969,6 @@
   };
 
   const configureEstoqueModule = () => {
-    estoqueProdutos = readEstoqueStorage();
-    renderEstoque();
-
     const busca = document.getElementById('estoque-busca');
     const btnCadastro = document.getElementById('btn-estoque-cadastrar');
     const btnCadastroEmpty = document.getElementById('btn-estoque-cadastrar-empty');
@@ -1128,6 +1133,7 @@
         window.location.href = 'index.html';
         return false;
       }
+      loadEstoqueForCurrentClinic();
       return true;
     } catch (err) {
       console.warn('Falha ao obter usuario atual.', err);
@@ -2828,9 +2834,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
-
 
 
 
