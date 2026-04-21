@@ -7,7 +7,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const signupForm = document.getElementById('signup-form');
   const showSignupLink = document.getElementById('show-signup-link');
   const hideSignupLink = document.getElementById('hide-signup-link');
+  const screenSubtitle = document.getElementById('screen-subtitle');
+  const screens = {
+    login: document.getElementById('screen-login'),
+    recovery: document.getElementById('screen-recovery'),
+    code: document.getElementById('screen-code'),
+    password: document.getElementById('screen-password'),
+    success: document.getElementById('screen-success'),
+  };
+  const recoveryEmailInput = document.getElementById('recovery-email');
+  const sendCodeButton = document.getElementById('send-code-button');
+  const backToLoginFromRecovery = document.getElementById('back-to-login-from-recovery');
+  const maskedEmailBadge = document.getElementById('masked-email-badge');
+  const verificationCodeInput = document.getElementById('verification-code');
+  const validateCodeButton = document.getElementById('validate-code-button');
+  const resendCodePlaceholder = document.getElementById('resend-code-placeholder');
+  const backToLoginFromCode = document.getElementById('back-to-login-from-code');
+  const newPasswordInput = document.getElementById('new-password');
+  const confirmNewPasswordInput = document.getElementById('confirm-new-password');
+  const savePasswordButton = document.getElementById('save-password-button');
+  const backToLoginFromPassword = document.getElementById('back-to-login-from-password');
+  const backToLoginFromSuccess = document.getElementById('back-to-login-from-success');
+  const recoveryMessage = document.getElementById('recovery-message');
+  const codeMessage = document.getElementById('code-message');
+  const passwordMessage = document.getElementById('password-message');
   const authApi = window.appApi?.auth || window.auth;
+  const resetFlowState = {
+    email: '',
+    maskedEmail: '',
+    code: '284619',
+  };
 
   const setError = (message) => {
     if (errorMessage) errorMessage.textContent = message || '';
@@ -21,6 +50,73 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!signupForm) return;
     signupForm.classList.toggle('hidden', !visible);
   };
+
+  const updateSubtitle = (message) => {
+    if (screenSubtitle) screenSubtitle.textContent = message;
+  };
+
+  const showScreen = (name) => {
+    Object.entries(screens).forEach(([key, element]) => {
+      if (!element) return;
+      element.classList.toggle('hidden', key !== name);
+    });
+    toggleSignupForm(false);
+    setError('');
+    setSignupMessage('');
+  };
+
+  const maskEmail = (email) => {
+    const [localPart = '', domain = ''] = String(email || '').split('@');
+    if (!localPart || !domain) return 'seu e-mail';
+    const localMask = localPart.length <= 2
+      ? `${localPart[0] || '*'}*`
+      : `${localPart.slice(0, 2)}***`;
+    return `${localMask}@${domain}`;
+  };
+
+  const syncRecoveryMock = (email) => {
+    resetFlowState.email = email;
+    resetFlowState.maskedEmail = maskEmail(email);
+    if (maskedEmailBadge) {
+      maskedEmailBadge.textContent = `Código enviado para ${resetFlowState.maskedEmail}`;
+    }
+  };
+
+  const goToLogin = () => {
+    showScreen('login');
+    updateSubtitle('Acesse sua conta para continuar');
+  };
+
+  const goToRecovery = () => {
+    showScreen('recovery');
+    updateSubtitle('Recuperação de senha');
+    if (recoveryEmailInput) {
+      recoveryEmailInput.value = String(emailInput?.value || '');
+      recoveryEmailInput.focus();
+    }
+  };
+
+  const goToCode = () => {
+    showScreen('code');
+    updateSubtitle('Validação do código');
+    if (verificationCodeInput) {
+      verificationCodeInput.value = '';
+      verificationCodeInput.focus();
+    }
+  };
+
+  const goToPassword = () => {
+    showScreen('password');
+    updateSubtitle('Nova senha');
+    if (newPasswordInput) newPasswordInput.focus();
+  };
+
+  const goToSuccess = () => {
+    showScreen('success');
+    updateSubtitle('Senha redefinida');
+  };
+
+  const normalizeDigits = (value, maxLength) => String(value || '').replace(/\D/g, '').slice(0, maxLength);
 
   const redirectAfterLogin = (user) => {
     if (user?.tipo === 'super_admin') {
@@ -40,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const user = await authApi.currentUser();
       if (user) {
         if (user.tipo === 'super_admin') {
-          // Evita prender o usuario na area de super admin por sessao antiga.
           return;
         }
         redirectAfterLogin(user);
@@ -52,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   forgotPasswordLink?.addEventListener('click', (event) => {
     event.preventDefault();
-    window.alert('Fluxo de recuperacao de senha em desenvolvimento. Contate o administrador da clinica.');
+    goToRecovery();
   });
 
   showSignupLink?.addEventListener('click', (event) => {
@@ -60,12 +155,70 @@ document.addEventListener('DOMContentLoaded', () => {
     setError('');
     setSignupMessage('');
     toggleSignupForm(true);
+    updateSubtitle('Criar conta');
+    Object.values(screens).forEach((screen) => screen?.classList.add('hidden'));
   });
 
   hideSignupLink?.addEventListener('click', (event) => {
     event.preventDefault();
     setSignupMessage('');
     toggleSignupForm(false);
+    goToLogin();
+  });
+
+  backToLoginFromRecovery?.addEventListener('click', goToLogin);
+  backToLoginFromCode?.addEventListener('click', goToLogin);
+  backToLoginFromPassword?.addEventListener('click', goToLogin);
+  backToLoginFromSuccess?.addEventListener('click', goToLogin);
+
+  resendCodePlaceholder?.addEventListener('click', () => {
+    window.alert('Reenvio visual apenas nesta etapa.');
+  });
+
+  sendCodeButton?.addEventListener('click', () => {
+    const email = String(recoveryEmailInput?.value || '').trim().toLowerCase();
+    if (!email) {
+      if (recoveryMessage) recoveryMessage.textContent = 'Informe o e-mail para continuar.';
+      return;
+    }
+    syncRecoveryMock(email);
+    if (recoveryMessage) {
+      recoveryMessage.textContent = `Código enviado para ${resetFlowState.maskedEmail}.`;
+    }
+    goToCode();
+  });
+
+  verificationCodeInput?.addEventListener('input', () => {
+    verificationCodeInput.value = normalizeDigits(verificationCodeInput.value, 6);
+  });
+
+  validateCodeButton?.addEventListener('click', () => {
+    const code = normalizeDigits(verificationCodeInput?.value || '', 6);
+    if (code.length !== 6) {
+      if (codeMessage) codeMessage.textContent = 'Digite o código de 6 dígitos.';
+      return;
+    }
+    if (code !== resetFlowState.code) {
+      if (codeMessage) codeMessage.textContent = 'Código inválido na visualização.';
+      return;
+    }
+    if (codeMessage) codeMessage.textContent = 'Código validado com sucesso.';
+    goToPassword();
+  });
+
+  savePasswordButton?.addEventListener('click', () => {
+    const newPassword = String(newPasswordInput?.value || '').trim();
+    const confirmPassword = String(confirmNewPasswordInput?.value || '').trim();
+    if (!newPassword || !confirmPassword) {
+      if (passwordMessage) passwordMessage.textContent = 'Preencha a nova senha e a confirmação.';
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      if (passwordMessage) passwordMessage.textContent = 'A confirmação não confere.';
+      return;
+    }
+    if (passwordMessage) passwordMessage.textContent = 'Senha alterada na visualização.';
+    goToSuccess();
   });
 
   loginForm?.addEventListener('submit', async (event) => {
@@ -153,5 +306,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  showScreen('login');
   checkActiveSession();
 });

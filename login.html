@@ -9,22 +9,97 @@
 <body>
     <div class="login-container">
         <div class="login-box">
-            <h1 class="title"><img src="assets/logo-voithos.svg" alt="Voithos" class="title-logo"></h1>
-            <p class="subtitle">Acesse sua conta para continuar</p>
-            <form id="login-form">
-                <div class="input-group">
-                    <label for="login-email">E-mail</label>
-                    <input type="email" id="login-email" name="email" autocomplete="email" required>
+            <div class="auth-brand">
+                <h1 class="title"><img src="assets/logo-voithos.svg" alt="Voithos" class="title-logo"></h1>
+                <p class="subtitle" id="screen-subtitle">Acesse sua conta para continuar</p>
+            </div>
+
+            <section id="screen-login" class="auth-screen">
+                <form id="login-form">
+                    <div class="input-group">
+                        <label for="login-email">E-mail</label>
+                        <input type="email" id="login-email" name="email" autocomplete="email" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="senha">Senha</label>
+                        <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+                    </div>
+                    <button type="submit" class="btn-login">Entrar</button>
+                    <p class="login-help"><a href="#" id="forgot-password-link">Esqueci minha senha</a></p>
+                    <p class="login-help"><a href="#" id="show-signup-link">Criar conta</a></p>
+                    <p id="error-message" class="error-message"></p>
+                </form>
+            </section>
+
+            <section id="screen-recovery" class="auth-screen hidden">
+                <div class="flow-header">
+                    <p class="flow-kicker">Recuperação de acesso</p>
+                    <h2 class="flow-title">Redefinir senha</h2>
+                    <p class="flow-copy">Informe o e-mail da sua conta para receber um código de verificação.</p>
                 </div>
-                <div class="input-group">
-                    <label for="senha">Senha</label>
-                    <input type="password" id="senha" name="senha" autocomplete="current-password" required>
+
+                <div class="flow-card">
+                    <div class="input-group">
+                        <label for="recovery-email">E-mail</label>
+                        <input type="email" id="recovery-email" autocomplete="email" placeholder="voce@clinica.com.br">
+                    </div>
+                    <button type="button" class="btn-login" id="send-code-button">Enviar código</button>
+                    <button type="button" class="btn-secondary" id="back-to-login-from-recovery">Voltar ao login</button>
+                    <p class="flow-message" id="recovery-message"></p>
                 </div>
-                <button type="submit" class="btn-login">Entrar</button>
-                <p class="login-help"><a href="#" id="forgot-password-link">Esqueci minha senha</a></p>
-                <p class="login-help"><a href="#" id="show-signup-link">Criar conta</a></p>
-                <p id="error-message" class="error-message"></p>
-            </form>
+            </section>
+
+            <section id="screen-code" class="auth-screen hidden">
+                <div class="flow-header">
+                    <p class="flow-kicker">Validação</p>
+                    <h2 class="flow-title">Digite o código enviado</h2>
+                    <p class="flow-copy">Digite o código de 6 dígitos para continuar com a redefinição.</p>
+                </div>
+
+                <div class="flow-card">
+                    <div class="mask-badge" id="masked-email-badge">Código enviado para seu e-mail</div>
+                    <div class="input-group">
+                        <label for="verification-code">Código de verificação</label>
+                        <input type="text" id="verification-code" inputmode="numeric" maxlength="6" placeholder="000000">
+                    </div>
+                    <button type="button" class="btn-login" id="validate-code-button">Validar código</button>
+                    <button type="button" class="btn-link" id="resend-code-placeholder" disabled>Reenviar código em 30s</button>
+                    <button type="button" class="btn-secondary" id="back-to-login-from-code">Voltar ao login</button>
+                    <p class="flow-message" id="code-message"></p>
+                </div>
+            </section>
+
+            <section id="screen-password" class="auth-screen hidden">
+                <div class="flow-header">
+                    <p class="flow-kicker">Nova senha</p>
+                    <h2 class="flow-title">Crie uma nova senha</h2>
+                    <p class="flow-copy">Defina a nova senha para acessar novamente sua conta Voithos.</p>
+                </div>
+
+                <div class="flow-card">
+                    <div class="input-group">
+                        <label for="new-password">Nova senha</label>
+                        <input type="password" id="new-password" autocomplete="new-password" placeholder="Digite a nova senha">
+                    </div>
+                    <div class="input-group">
+                        <label for="confirm-new-password">Confirmar senha</label>
+                        <input type="password" id="confirm-new-password" autocomplete="new-password" placeholder="Repita a nova senha">
+                    </div>
+                    <button type="button" class="btn-login" id="save-password-button">Salvar nova senha</button>
+                    <button type="button" class="btn-secondary" id="back-to-login-from-password">Voltar ao login</button>
+                    <p class="flow-message" id="password-message"></p>
+                </div>
+            </section>
+
+            <section id="screen-success" class="auth-screen hidden">
+                <div class="success-panel">
+                    <div class="success-icon">✓</div>
+                    <h2 class="flow-title">Senha redefinida</h2>
+                    <p class="flow-copy">Sua senha foi atualizada com sucesso. Você já pode entrar novamente no sistema.</p>
+                    <button type="button" class="btn-login" id="back-to-login-from-success">Voltar ao login</button>
+                </div>
+            </section>
+
             <form id="signup-form" class="signup-form hidden">
                 <div class="form-divider"><span>Nova conta</span></div>
                 <div class="signup-grid">
@@ -83,6 +158,3 @@
     <script src="login.js"></script>
 </body>
 </html>
-
-
-

@@ -1,7 +1,10 @@
 body {
     margin: 0;
     font-family: "Segoe UI", Arial, sans-serif;
-    background: #f7f9fb;
+    background:
+        radial-gradient(circle at top left, rgba(31, 168, 122, 0.16), transparent 30%),
+        radial-gradient(circle at bottom right, rgba(31, 122, 168, 0.12), transparent 26%),
+        linear-gradient(180deg, #f7f9fb 0%, #eef3f6 100%);
     color: #1f2d3d;
     display: flex;
     justify-content: center;
@@ -17,13 +20,15 @@ body {
 }
 
 .login-box {
-    background: #fff;
-    padding: 40px 30px;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(10px);
+    padding: 40px 30px 28px;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
     width: 100%;
-    max-width: 420px;
+    max-width: 460px;
     text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
 .title {
@@ -45,7 +50,7 @@ body {
 
 .subtitle {
     color: #4b5563;
-    margin-bottom: 30px;
+    margin: 0 0 28px;
 }
 
 .input-group {
@@ -62,10 +67,11 @@ body {
 
 .input-group input {
     width: 100%;
-    padding: 10px;
-    border: 1px solid #e1e7ef;
-    border-radius: 8px;
+    padding: 12px 14px;
+    border: 1px solid #d9e1ea;
+    border-radius: 10px;
     box-sizing: border-box;
+    background: #fff;
 }
 
 .input-group select {
@@ -90,7 +96,7 @@ body {
     width: 100%;
     padding: 12px;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     background: linear-gradient(135deg, #2a9d8f, #1fa87a);
     color: #fff;
     font-size: 1rem;
@@ -165,3 +171,109 @@ body {
     gap: 0;
 }
 
+.auth-brand {
+    margin-bottom: 6px;
+}
+
+.auth-screen {
+    text-align: left;
+}
+
+.flow-header {
+    margin-bottom: 18px;
+}
+
+.flow-kicker {
+    margin: 0 0 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #1fa87a;
+}
+
+.flow-title {
+    margin: 0;
+    font-size: 1.55rem;
+    line-height: 1.2;
+    color: #102131;
+}
+
+.flow-copy {
+    margin: 8px 0 0;
+    color: #516071;
+    line-height: 1.45;
+}
+
+.flow-card {
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbfc 100%);
+    border: 1px solid #e5ebf1;
+    border-radius: 16px;
+    padding: 18px;
+}
+
+.btn-secondary,
+.btn-link {
+    width: 100%;
+    margin-top: 10px;
+    border: 1px solid #d6dee6;
+    border-radius: 10px;
+    padding: 11px 12px;
+    background: #fff;
+    color: #274255;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.btn-link {
+    background: transparent;
+    border-color: transparent;
+    color: #1fa87a;
+    padding: 8px 12px;
+}
+
+.btn-link:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+.flow-message {
+    min-height: 20px;
+    margin: 12px 0 0;
+    color: #1f7a5a;
+    font-weight: 600;
+}
+
+.mask-badge {
+    display: inline-flex;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(31, 168, 122, 0.12);
+    color: #156a4d;
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.success-panel {
+    text-align: center;
+    padding: 8px 6px 2px;
+}
+
+.success-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #2a9d8f, #1fa87a);
+    color: #fff;
+    font-size: 1.65rem;
+    font-weight: 800;
+}
+
+.success-panel .flow-copy {
+    max-width: 320px;
+    margin: 8px auto 20px;
+}
