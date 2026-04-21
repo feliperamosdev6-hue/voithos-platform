@@ -5,6 +5,8 @@
   const drawerType = document.getElementById('drawer-type');
   const drawerPaciente = document.getElementById('drawer-paciente');
   const drawerDentista = document.getElementById('drawer-dentista');
+  const drawerMarcadorText = document.getElementById('drawer-marcador-text');
+  const drawerMarcadorDot = document.getElementById('drawer-marcador-dot');
   const drawerHorario = document.getElementById('drawer-horario');
   const drawerTelefone = document.getElementById('drawer-telefone');
   const drawerFalarPaciente = document.getElementById('drawer-falar-paciente');
@@ -849,6 +851,8 @@ const openAgendaDrawer = (appt) => {
   currentDrawerAppt = appt;
   const statusKey = getAgendaStatusKey(appt);
   const attendanceKey = getAttendanceStatusKey(appt);
+  const markerName = getMarkerName(appt);
+  const markerColor = getMarkerColor(appt);
   const nome = appt.pacienteNome || appt.paciente || 'Paciente';
   const dentista = appt.dentistaNome || 'Dentista';
   const horario = `${appt.horaInicio || '--:--'}${appt.horaFim ? ' - ' + appt.horaFim : ''}`;
@@ -860,6 +864,11 @@ const openAgendaDrawer = (appt) => {
   if (drawerType) drawerType.textContent = tipo;
   if (drawerPaciente) drawerPaciente.textContent = nome;
   if (drawerDentista) drawerDentista.textContent = dentista;
+  if (drawerMarcadorText) drawerMarcadorText.textContent = markerName || 'Sem marcador';
+  if (drawerMarcadorDot) {
+    drawerMarcadorDot.hidden = !markerName;
+    drawerMarcadorDot.style.background = markerColor || '#94a3b8';
+  }
   if (drawerHorario) drawerHorario.textContent = horario;
   if (drawerTelefone) drawerTelefone.textContent = phone || '-';
   if (drawerStatus) drawerStatus.value = statusKey;

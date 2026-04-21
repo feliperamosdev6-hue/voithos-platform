@@ -963,6 +963,21 @@ body {
   color: #6b7280;
 }
 
+.drawer-marker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.drawer-marker-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #94a3b8;
+  flex: 0 0 10px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+}
+
 .drawer-label {
   font-size: 0.85rem;
   color: #374151;
