@@ -32,10 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const codeMessage = document.getElementById('code-message');
   const passwordMessage = document.getElementById('password-message');
   const authApi = window.appApi?.auth || window.auth;
+  const RESEND_WAIT_SECONDS = 5 * 60;
   const resetFlowState = {
     email: '',
     maskedEmail: '',
     code: '',
+    resendTimerId: null,
   };
 
   const setError = (message) => {
@@ -86,6 +88,45 @@ document.addEventListener('DOMContentLoaded', () => {
     if (element) element.textContent = message || '';
   };
 
+  const formatResendWait = (seconds) => {
+    const safeSeconds = Math.max(0, Number(seconds) || 0);
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = String(safeSeconds % 60).padStart(2, '0');
+    return `${minutes}:${remainingSeconds}`;
+  };
+
+  const stopResendTimer = () => {
+    if (resetFlowState.resendTimerId) {
+      window.clearInterval(resetFlowState.resendTimerId);
+      resetFlowState.resendTimerId = null;
+    }
+  };
+
+  const startResendTimer = () => {
+    stopResendTimer();
+    let remainingSeconds = RESEND_WAIT_SECONDS;
+
+    const updateLabel = () => {
+      if (!resendCodePlaceholder) return;
+      resendCodePlaceholder.disabled = true;
+      resendCodePlaceholder.textContent = `Reenviar código em ${formatResendWait(remainingSeconds)}`;
+    };
+
+    updateLabel();
+    resetFlowState.resendTimerId = window.setInterval(() => {
+      remainingSeconds -= 1;
+      if (remainingSeconds <= 0) {
+        stopResendTimer();
+        if (resendCodePlaceholder) {
+          resendCodePlaceholder.disabled = true;
+          resendCodePlaceholder.textContent = 'Reenvio disponível em breve';
+        }
+        return;
+      }
+      updateLabel();
+    }, 1000);
+  };
+
   const getFriendlyResetError = (error) => {
     const raw = String(error?.message || error || '').toLowerCase();
     if (raw.includes('invalid') || raw.includes('expir') || raw.includes('codigo') || raw.includes('código')) {
@@ -98,11 +139,13 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const goToLogin = () => {
+    stopResendTimer();
     showScreen('login');
     updateSubtitle('Acesse sua conta para continuar');
   };
 
   const goToRecovery = () => {
+    stopResendTimer();
     showScreen('recovery');
     updateSubtitle('Recuperação de senha');
     if (recoveryEmailInput) {
@@ -114,18 +157,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const goToCode = () => {
     showScreen('code');
     updateSubtitle('Validação do código');
+    startResendTimer();
     if (verificationCodeInput) {
       verificationCodeInput.focus();
     }
   };
 
   const goToPassword = () => {
+    stopResendTimer();
     showScreen('password');
     updateSubtitle('Nova senha');
     if (newPasswordInput) newPasswordInput.focus();
   };
 
   const goToSuccess = () => {
+    stopResendTimer();
     showScreen('success');
     updateSubtitle('Senha redefinida');
   };

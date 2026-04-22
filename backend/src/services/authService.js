@@ -92,11 +92,16 @@ const requestPasswordReset = async ({ email }) => {
 
   if (updateResult?.count > 0) {
     try {
-      await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
+      const emailResult = await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
+      console.info('[email] Password reset email accepted', {
+        email: maskEmail(normalizedEmail),
+        resendEmailId: emailResult?.data?.id || '',
+      });
     } catch (emailError) {
       console.error('[email] Failed to send password reset email', {
         email: maskEmail(normalizedEmail),
         error: emailError?.message || emailError,
+        resendError: emailError?.resendError || null,
       });
     }
   }

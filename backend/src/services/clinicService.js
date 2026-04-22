@@ -3054,11 +3054,16 @@ const clinicService = {
       });
 
       try {
-        await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
+        const emailResult = await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
+        console.info('[email] Signup verification email accepted', {
+          email: adminEmail,
+          resendEmailId: emailResult?.data?.id || '',
+        });
       } catch (emailError) {
         console.error('[email] Failed to send signup verification email', {
           email: adminEmail,
           error: emailError?.message || emailError,
+          resendError: emailError?.resendError || null,
         });
       }
 

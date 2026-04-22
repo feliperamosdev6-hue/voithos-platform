@@ -15,7 +15,11 @@ const getEmailFrom = () => {
     throw new Error('EMAIL_FROM is not configured.');
   }
 
-  return from;
+  if (from.includes('<') && from.includes('>')) {
+    return from;
+  }
+
+  return `Voithos <${from}>`;
 };
 
 const sendWithResend = async (payload) => {
@@ -48,6 +52,7 @@ const sendVerificationEmail = async (email, code) => {
     from: getEmailFrom(),
     to,
     subject: 'Confirme seu e-mail - Voithos',
+    idempotencyKey: `signup-verification/${to}/${verificationCode}`,
     text: [
       'Confirme seu e-mail na Voithos.',
       '',
@@ -81,6 +86,7 @@ const sendPasswordResetEmail = async (email, code) => {
     from: getEmailFrom(),
     to,
     subject: 'Redefina sua senha - Voithos',
+    idempotencyKey: `password-reset/${to}/${resetCode}`,
     text: [
       'Redefina sua senha na Voithos.',
       '',
