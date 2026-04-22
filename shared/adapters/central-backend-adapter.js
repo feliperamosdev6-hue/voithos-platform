@@ -36,6 +36,28 @@ const normalizeDigits = (value) => String(value || '').replace(/\D/g, '');
 const cleanText = (value) => String(value || '').trim();
 const createLocalId = (prefix = 'id') => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+const maskEmail = (email) => {
+  const [localPart = '', domain = ''] = String(email || '').trim().toLowerCase().split('@');
+  if (!localPart || !domain) return '';
+  const localMask = localPart.length <= 2
+    ? `${localPart[0] || '*'}*`
+    : `${localPart.slice(0, 2)}***`;
+  return `${localMask}@${domain}`;
+};
+
+const logPasswordReset = (stage, payload = {}, extra = {}) => {
+  console.info('[password-reset][central-adapter]', JSON.stringify({
+    stage,
+    endpoint: extra.endpoint || '',
+    baseUrl: extra.baseUrl || '',
+    email: maskEmail(payload?.email || payload?.login || payload?.adminEmail || ''),
+    status: extra.status || '',
+    httpStatus: extra.httpStatus || '',
+    fallback: extra.fallback === true,
+    error: extra.error || '',
+  }));
+};
+
 const normalizeDateOnly = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -313,6 +335,12 @@ const createCentralBackendAdapter = (options = {}) => {
   };
 
   const authRequestPasswordReset = async ({ email, login, adminEmail } = {}) => {
+    const payloadInput = { email, login, adminEmail };
+    logPasswordReset('request_call', payloadInput, {
+      endpoint: '/auth/password-reset/request',
+      baseUrl: config.baseUrl,
+      status: 'started',
+    });
     const response = await withTimeout(`${config.baseUrl}/auth/password-reset/request`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -320,13 +348,30 @@ const createCentralBackendAdapter = (options = {}) => {
         email: email || login || adminEmail || '',
       }),
     });
+    logPasswordReset('request_response', payloadInput, {
+      endpoint: '/auth/password-reset/request',
+      baseUrl: config.baseUrl,
+      httpStatus: response.status,
+      status: response.ok ? 'http_ok' : 'http_error',
+    });
     await ensureOk(response);
     const payload = await response.json();
     const data = payload?.data || {};
+    logPasswordReset('request_completed', payloadInput, {
+      endpoint: '/auth/password-reset/request',
+      baseUrl: config.baseUrl,
+      status: data?.requested === true || payload?.ok === true ? 'success' : 'failed',
+    });
     return { success: data?.requested === true || payload?.ok === true };
   };
 
   const authValidatePasswordResetCode = async ({ email, login, adminEmail, code, resetCode, codigo } = {}) => {
+    const payloadInput = { email, login, adminEmail };
+    logPasswordReset('validate_call', payloadInput, {
+      endpoint: '/auth/password-reset/validate',
+      baseUrl: config.baseUrl,
+      status: 'started',
+    });
     const response = await withTimeout(`${config.baseUrl}/auth/password-reset/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -335,9 +380,20 @@ const createCentralBackendAdapter = (options = {}) => {
         code: code || resetCode || codigo || '',
       }),
     });
+    logPasswordReset('validate_response', payloadInput, {
+      endpoint: '/auth/password-reset/validate',
+      baseUrl: config.baseUrl,
+      httpStatus: response.status,
+      status: response.ok ? 'http_ok' : 'http_error',
+    });
     await ensureOk(response);
     const payload = await response.json();
     const data = payload?.data || {};
+    logPasswordReset('validate_completed', payloadInput, {
+      endpoint: '/auth/password-reset/validate',
+      baseUrl: config.baseUrl,
+      status: data?.valid === true || payload?.ok === true ? 'success' : 'failed',
+    });
     return { success: data?.valid === true || payload?.ok === true };
   };
 
@@ -355,6 +411,12 @@ const createCentralBackendAdapter = (options = {}) => {
     confirmarSenha,
     passwordConfirmation,
   } = {}) => {
+    const payloadInput = { email, login, adminEmail };
+    logPasswordReset('confirm_call', payloadInput, {
+      endpoint: '/auth/password-reset/confirm',
+      baseUrl: config.baseUrl,
+      status: 'started',
+    });
     const response = await withTimeout(`${config.baseUrl}/auth/password-reset/confirm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -365,9 +427,20 @@ const createCentralBackendAdapter = (options = {}) => {
         confirmPassword: confirmPassword || confirmarSenha || passwordConfirmation || '',
       }),
     });
+    logPasswordReset('confirm_response', payloadInput, {
+      endpoint: '/auth/password-reset/confirm',
+      baseUrl: config.baseUrl,
+      httpStatus: response.status,
+      status: response.ok ? 'http_ok' : 'http_error',
+    });
     await ensureOk(response);
     const payload = await response.json();
     const data = payload?.data || {};
+    logPasswordReset('confirm_completed', payloadInput, {
+      endpoint: '/auth/password-reset/confirm',
+      baseUrl: config.baseUrl,
+      status: data?.reset === true || payload?.ok === true ? 'success' : 'failed',
+    });
     return { success: data?.reset === true || payload?.ok === true };
   };
 

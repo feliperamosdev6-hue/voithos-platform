@@ -76,6 +76,17 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${localMask}@${domain}`;
   };
 
+  const logPasswordResetDiagnostic = (stage, details = {}) => {
+    console.info('[password-reset][ui]', {
+      stage,
+      endpoint: details.endpoint || '',
+      email: details.email ? maskEmail(details.email) : '',
+      status: details.status || '',
+      fallback: details.fallback === true,
+      error: details.error || '',
+    });
+  };
+
   const setRecoveryTarget = (email) => {
     resetFlowState.email = email;
     resetFlowState.maskedEmail = maskEmail(email);
@@ -235,17 +246,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   sendCodeButton?.addEventListener('click', async () => {
     const email = String(recoveryEmailInput?.value || '').trim().toLowerCase();
+    logPasswordResetDiagnostic('request_click', {
+      endpoint: '/auth/password-reset/request',
+      email,
+      status: 'started',
+    });
     if (!email) {
+      logPasswordResetDiagnostic('request_validation_failed', {
+        endpoint: '/auth/password-reset/request',
+        status: 'missing_email',
+      });
       setFlowMessage(recoveryMessage, 'Informe o e-mail para continuar.');
       return;
     }
     if (!authApi?.requestPasswordReset) {
+      logPasswordResetDiagnostic('request_unavailable', {
+        endpoint: '/auth/password-reset/request',
+        email,
+        status: 'auth_api_missing',
+      });
       setFlowMessage(recoveryMessage, 'Recuperação de senha indisponível neste ambiente.');
       return;
     }
 
     try {
       const result = await authApi.requestPasswordReset({ email });
+      logPasswordResetDiagnostic('request_result', {
+        endpoint: '/auth/password-reset/request',
+        email,
+        status: result?.success ? 'success' : 'failed',
+      });
       if (!result?.success) {
         throw new Error('request_failed');
       }
@@ -254,6 +284,12 @@ document.addEventListener('DOMContentLoaded', () => {
       goToCode();
     } catch (error) {
       console.error('Erro ao solicitar redefinição de senha', error);
+      logPasswordResetDiagnostic('request_error', {
+        endpoint: '/auth/password-reset/request',
+        email,
+        status: 'error',
+        error: error?.message || String(error || ''),
+      });
       setFlowMessage(recoveryMessage, 'Não foi possível enviar o código agora.');
     }
   });

@@ -22,15 +22,62 @@ const getEmailFrom = () => {
   return `Voithos <${from}>`;
 };
 
+const maskEmail = (email) => {
+  const [localPart = '', domain = ''] = String(email || '').trim().toLowerCase().split('@');
+  if (!localPart || !domain) return '';
+  const localMask = localPart.length <= 2
+    ? `${localPart[0] || '*'}*`
+    : `${localPart.slice(0, 2)}***`;
+  return `${localMask}@${domain}`;
+};
+
+const logEmailDiagnostic = (stage, payload = {}, extra = {}) => {
+  console.info('[password-reset][email-service]', {
+    stage,
+    endpoint: extra.endpoint || '',
+    email: maskEmail(Array.isArray(payload.to) ? payload.to[0] : payload.to || ''),
+    from: payload.from || '',
+    subject: payload.subject || '',
+    status: extra.status || '',
+    resendEmailId: extra.resendEmailId || '',
+    fallback: false,
+    error: extra.error || '',
+    resendError: extra.resendError || null,
+  });
+};
+
 const sendWithResend = async (payload) => {
   const resend = getResendClient();
+  const isPasswordReset = String(payload?.idempotencyKey || '').startsWith('password-reset/');
+  if (isPasswordReset) {
+    logEmailDiagnostic('resend_call_started', payload, {
+      endpoint: '/auth/password-reset/request',
+      status: 'started',
+    });
+  }
   const { data, error } = await resend.emails.send(payload);
 
   if (error) {
+    if (isPasswordReset) {
+      logEmailDiagnostic('resend_call_failed', payload, {
+        endpoint: '/auth/password-reset/request',
+        status: 'failed',
+        error: error?.message || error?.name || 'Unknown Resend error',
+        resendError: error,
+      });
+    }
     const message = error?.message || error?.name || 'Unknown Resend error';
     const resendError = new Error(message);
     resendError.resendError = error;
     throw resendError;
+  }
+
+  if (isPasswordReset) {
+    logEmailDiagnostic('resend_call_completed', payload, {
+      endpoint: '/auth/password-reset/request',
+      status: 'accepted',
+      resendEmailId: data?.id || '',
+    });
   }
 
   return { data, error: null };

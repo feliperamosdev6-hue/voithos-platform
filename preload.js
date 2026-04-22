@@ -1,6 +1,50 @@
 ﻿// preload.js
 const { contextBridge, ipcRenderer } = require('electron');
 
+const maskEmail = (email) => {
+  const [localPart = '', domain = ''] = String(email || '').trim().toLowerCase().split('@');
+  if (!localPart || !domain) return '';
+  const localMask = localPart.length <= 2
+    ? `${localPart[0] || '*'}*`
+    : `${localPart.slice(0, 2)}***`;
+  return `${localMask}@${domain}`;
+};
+
+const invokePasswordReset = (channel, payload = {}, endpoint = '') => {
+  console.info('[password-reset][preload]', {
+    stage: 'invoke',
+    channel,
+    endpoint,
+    email: maskEmail(payload?.email || payload?.login || payload?.adminEmail || ''),
+    status: 'started',
+    fallback: false,
+  });
+  return ipcRenderer.invoke(channel, payload)
+    .then((result) => {
+      console.info('[password-reset][preload]', {
+        stage: 'invoke_completed',
+        channel,
+        endpoint,
+        email: maskEmail(payload?.email || payload?.login || payload?.adminEmail || ''),
+        status: result?.success ? 'success' : 'completed',
+        fallback: false,
+      });
+      return result;
+    })
+    .catch((error) => {
+      console.error('[password-reset][preload]', {
+        stage: 'invoke_error',
+        channel,
+        endpoint,
+        email: maskEmail(payload?.email || payload?.login || payload?.adminEmail || ''),
+        status: 'error',
+        fallback: false,
+        error: error?.message || String(error || ''),
+      });
+      throw error;
+    });
+};
+
 contextBridge.exposeInMainWorld('auth', {
   login: (credentials) => ipcRenderer.invoke('auth-login', credentials),
   signup: (payload) => ipcRenderer.invoke('auth-signup', payload),
@@ -9,9 +53,9 @@ contextBridge.exposeInMainWorld('auth', {
   currentContext: () => ipcRenderer.invoke('auth-current-context'),
   listUsers: () => ipcRenderer.invoke('auth-list-users-public'),
   changePassword: (payload) => ipcRenderer.invoke('auth-change-password', payload),
-  requestPasswordReset: (payload) => ipcRenderer.invoke('auth-password-reset-request', payload),
-  validatePasswordResetCode: (payload) => ipcRenderer.invoke('auth-password-reset-validate', payload),
-  saveNewPassword: (payload) => ipcRenderer.invoke('auth-password-reset-confirm', payload),
+  requestPasswordReset: (payload) => invokePasswordReset('auth-password-reset-request', payload, '/auth/password-reset/request'),
+  validatePasswordResetCode: (payload) => invokePasswordReset('auth-password-reset-validate', payload, '/auth/password-reset/validate'),
+  saveNewPassword: (payload) => invokePasswordReset('auth-password-reset-confirm', payload, '/auth/password-reset/confirm'),
   listClinics: () => ipcRenderer.invoke('super-admin-clinics-list'),
   createClinic: (payload) => ipcRenderer.invoke('super-admin-clinics-create', payload),
   impersonateClinic: (clinicId) => ipcRenderer.invoke('super-admin-impersonate-clinic', clinicId),

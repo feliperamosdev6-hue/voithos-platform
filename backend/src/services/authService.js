@@ -43,6 +43,22 @@ const maskEmail = (email) => {
   return `${localMask}@${domain}`;
 };
 
+const logPasswordReset = (stage, details = {}) => {
+  console.info('[password-reset][auth-service]', {
+    stage,
+    endpoint: details.endpoint || '',
+    email: details.email ? maskEmail(details.email) : '',
+    status: details.status || '',
+    userFound: details.userFound,
+    active: details.active,
+    updateCount: details.updateCount,
+    resendEmailId: details.resendEmailId || '',
+    fallback: false,
+    error: details.error || '',
+    resendError: details.resendError || null,
+  });
+};
+
 const sanitizeUser = (user) => {
   if (!user) return null;
   return {
@@ -73,13 +89,40 @@ const verifyPassword = async (password, hash) => {
 
 const requestPasswordReset = async ({ email }) => {
   const normalizedEmail = normalizeEmail(email);
+  logPasswordReset('request_started', {
+    endpoint: '/auth/password-reset/request',
+    email: normalizedEmail,
+    status: 'started',
+  });
   if (!normalizedEmail) {
+    logPasswordReset('request_validation_failed', {
+      endpoint: '/auth/password-reset/request',
+      status: 'missing_email',
+    });
     throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
   }
 
   const resetCode = generateSixDigitCode();
   const expiresAt = addMinutes(new Date(), PASSWORD_RESET_CODE_TTL_MINUTES);
+  logPasswordReset('code_generated', {
+    endpoint: '/auth/password-reset/request',
+    email: normalizedEmail,
+    status: 'generated',
+  });
+
+  logPasswordReset('user_lookup_started', {
+    endpoint: '/auth/password-reset/request',
+    email: normalizedEmail,
+    status: 'started',
+  });
   const user = await userRepository.findByEmail(normalizedEmail);
+  logPasswordReset('user_lookup_completed', {
+    endpoint: '/auth/password-reset/request',
+    email: normalizedEmail,
+    status: user ? 'found' : 'not_found',
+    userFound: Boolean(user),
+    active: user?.ativo !== false,
+  });
   const updateResult = user && user.ativo !== false
     ? await userRepository.updateByEmail({
       email: normalizedEmail,
@@ -91,28 +134,52 @@ const requestPasswordReset = async ({ email }) => {
     : { count: 0 };
 
   if (!user || user.ativo === false) {
-    console.info('[auth] password reset requested for non-active account', {
-      email: maskEmail(normalizedEmail),
-      accountFound: Boolean(user),
+    logPasswordReset('non_active_account', {
+      endpoint: '/auth/password-reset/request',
+      email: normalizedEmail,
+      status: user ? 'inactive' : 'not_found',
+      userFound: Boolean(user),
       active: user?.ativo !== false,
     });
   }
 
   if (updateResult?.count > 0) {
+    logPasswordReset('code_persisted', {
+      endpoint: '/auth/password-reset/request',
+      email: normalizedEmail,
+      status: 'persisted',
+      updateCount: updateResult.count,
+    });
     try {
+      logPasswordReset('email_send_started', {
+        endpoint: '/auth/password-reset/request',
+        email: normalizedEmail,
+        status: 'started',
+      });
       const emailResult = await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
-      console.info('[email] Password reset email accepted', {
-        email: maskEmail(normalizedEmail),
+      logPasswordReset('email_send_accepted', {
+        endpoint: '/auth/password-reset/request',
+        email: normalizedEmail,
+        status: 'accepted',
         resendEmailId: emailResult?.data?.id || '',
       });
     } catch (emailError) {
-      console.error('[email] Failed to send password reset email', {
-        email: maskEmail(normalizedEmail),
+      logPasswordReset('email_send_failed', {
+        endpoint: '/auth/password-reset/request',
+        email: normalizedEmail,
+        status: 'failed',
         error: emailError?.message || emailError,
         resendError: emailError?.resendError || null,
       });
     }
   }
+
+  logPasswordReset('request_completed', {
+    endpoint: '/auth/password-reset/request',
+    email: normalizedEmail,
+    status: 'completed',
+    updateCount: updateResult?.count || 0,
+  });
 
   return {
     requested: true,

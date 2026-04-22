@@ -109,6 +109,27 @@ const registerAuthHandlers = ({
     }));
   };
 
+  const maskEmail = (email) => {
+    const [localPart = '', domain = ''] = String(email || '').trim().toLowerCase().split('@');
+    if (!localPart || !domain) return '';
+    const localMask = localPart.length <= 2
+      ? `${localPart[0] || '*'}*`
+      : `${localPart.slice(0, 2)}***`;
+    return `${localMask}@${domain}`;
+  };
+
+  const logPasswordReset = (stage, payload = {}, extra = {}) => {
+    console.info('[password-reset][ipc]', JSON.stringify({
+      stage,
+      endpoint: extra.endpoint || '',
+      email: maskEmail(payload?.email || payload?.login || payload?.adminEmail || ''),
+      status: extra.status || '',
+      fallback: extra.fallback === true,
+      centralEnabled: isCentralEnabled(),
+      error: extra.error || '',
+    }));
+  };
+
   const getCurrentClinicContext = () => {
     const user = currentUserRef?.() || null;
     const context = typeof buildAccessContext === 'function' ? buildAccessContext(user) : null;
@@ -304,27 +325,54 @@ const registerAuthHandlers = ({
   });
 
   ipcMain.handle('auth-password-reset-request', async (_event, payload = {}) => {
+    logPasswordReset('request_received', payload, { endpoint: '/auth/password-reset/request', status: 'received' });
     if (!isCentralEnabled()) {
+      logPasswordReset('request_blocked', payload, { endpoint: '/auth/password-reset/request', status: 'central_disabled' });
       throw new Error('Redefinicao de senha indisponivel sem backend central.');
     }
 
-    return centralBackendAdapter.authRequestPasswordReset(payload || {});
+    try {
+      const result = await centralBackendAdapter.authRequestPasswordReset(payload || {});
+      logPasswordReset('request_completed', payload, { endpoint: '/auth/password-reset/request', status: result?.success ? 'success' : 'failed' });
+      return result;
+    } catch (error) {
+      logPasswordReset('request_error', payload, { endpoint: '/auth/password-reset/request', status: 'error', error: error?.message || String(error || '') });
+      throw error;
+    }
   });
 
   ipcMain.handle('auth-password-reset-validate', async (_event, payload = {}) => {
+    logPasswordReset('validate_received', payload, { endpoint: '/auth/password-reset/validate', status: 'received' });
     if (!isCentralEnabled()) {
+      logPasswordReset('validate_blocked', payload, { endpoint: '/auth/password-reset/validate', status: 'central_disabled' });
       throw new Error('Validacao de codigo indisponivel sem backend central.');
     }
 
-    return centralBackendAdapter.authValidatePasswordResetCode(payload || {});
+    try {
+      const result = await centralBackendAdapter.authValidatePasswordResetCode(payload || {});
+      logPasswordReset('validate_completed', payload, { endpoint: '/auth/password-reset/validate', status: result?.success ? 'success' : 'failed' });
+      return result;
+    } catch (error) {
+      logPasswordReset('validate_error', payload, { endpoint: '/auth/password-reset/validate', status: 'error', error: error?.message || String(error || '') });
+      throw error;
+    }
   });
 
   ipcMain.handle('auth-password-reset-confirm', async (_event, payload = {}) => {
+    logPasswordReset('confirm_received', payload, { endpoint: '/auth/password-reset/confirm', status: 'received' });
     if (!isCentralEnabled()) {
+      logPasswordReset('confirm_blocked', payload, { endpoint: '/auth/password-reset/confirm', status: 'central_disabled' });
       throw new Error('Redefinicao de senha indisponivel sem backend central.');
     }
 
-    return centralBackendAdapter.authConfirmPasswordReset(payload || {});
+    try {
+      const result = await centralBackendAdapter.authConfirmPasswordReset(payload || {});
+      logPasswordReset('confirm_completed', payload, { endpoint: '/auth/password-reset/confirm', status: result?.success ? 'success' : 'failed' });
+      return result;
+    } catch (error) {
+      logPasswordReset('confirm_error', payload, { endpoint: '/auth/password-reset/confirm', status: 'error', error: error?.message || String(error || '') });
+      throw error;
+    }
   });
 
   ipcMain.handle('auth-list-users-public', async () => {

@@ -3,6 +3,26 @@
     throw new Error('Metodo indisponivel no desktop adapter: ' + name);
   };
 
+  const maskEmail = (email) => {
+    const [localPart = '', domain = ''] = String(email || '').trim().toLowerCase().split('@');
+    if (!localPart || !domain) return '';
+    const localMask = localPart.length <= 2
+      ? `${localPart[0] || '*'}*`
+      : `${localPart.slice(0, 2)}***`;
+    return `${localMask}@${domain}`;
+  };
+
+  const logPasswordReset = (stage, payload = {}, extra = {}) => {
+    console.info('[password-reset][desktop-adapter]', {
+      stage,
+      endpoint: extra.endpoint || '',
+      email: maskEmail(payload?.email || payload?.login || payload?.adminEmail || ''),
+      status: extra.status || '',
+      fallback: extra.fallback === true,
+      error: extra.error || '',
+    });
+  };
+
   const auth = {
     login: async (payload) => {
       if (!window.auth?.login) return unavailable('auth.login');
@@ -33,18 +53,42 @@
       return window.auth.changePassword(payload);
     },
     requestPasswordReset: async (payload) => {
-      if (window.auth?.requestPasswordReset) return window.auth.requestPasswordReset(payload);
-      if (window.__webAdapter?.auth?.requestPasswordReset) return window.__webAdapter.auth.requestPasswordReset(payload);
+      logPasswordReset('request_route', payload, { endpoint: '/auth/password-reset/request', status: 'started' });
+      if (window.auth?.requestPasswordReset) {
+        const result = await window.auth.requestPasswordReset(payload);
+        logPasswordReset('request_route', payload, { endpoint: '/auth/password-reset/request', status: 'window_auth' });
+        return result;
+      }
+      if (window.__webAdapter?.auth?.requestPasswordReset) {
+        logPasswordReset('request_route', payload, { endpoint: '/auth/password-reset/request', status: 'web_adapter', fallback: true });
+        return window.__webAdapter.auth.requestPasswordReset(payload);
+      }
       return unavailable('auth.requestPasswordReset');
     },
     validatePasswordResetCode: async (payload) => {
-      if (window.auth?.validatePasswordResetCode) return window.auth.validatePasswordResetCode(payload);
-      if (window.__webAdapter?.auth?.validatePasswordResetCode) return window.__webAdapter.auth.validatePasswordResetCode(payload);
+      logPasswordReset('validate_route', payload, { endpoint: '/auth/password-reset/validate', status: 'started' });
+      if (window.auth?.validatePasswordResetCode) {
+        const result = await window.auth.validatePasswordResetCode(payload);
+        logPasswordReset('validate_route', payload, { endpoint: '/auth/password-reset/validate', status: 'window_auth' });
+        return result;
+      }
+      if (window.__webAdapter?.auth?.validatePasswordResetCode) {
+        logPasswordReset('validate_route', payload, { endpoint: '/auth/password-reset/validate', status: 'web_adapter', fallback: true });
+        return window.__webAdapter.auth.validatePasswordResetCode(payload);
+      }
       return unavailable('auth.validatePasswordResetCode');
     },
     saveNewPassword: async (payload) => {
-      if (window.auth?.saveNewPassword) return window.auth.saveNewPassword(payload);
-      if (window.__webAdapter?.auth?.saveNewPassword) return window.__webAdapter.auth.saveNewPassword(payload);
+      logPasswordReset('confirm_route', payload, { endpoint: '/auth/password-reset/confirm', status: 'started' });
+      if (window.auth?.saveNewPassword) {
+        const result = await window.auth.saveNewPassword(payload);
+        logPasswordReset('confirm_route', payload, { endpoint: '/auth/password-reset/confirm', status: 'window_auth' });
+        return result;
+      }
+      if (window.__webAdapter?.auth?.saveNewPassword) {
+        logPasswordReset('confirm_route', payload, { endpoint: '/auth/password-reset/confirm', status: 'web_adapter', fallback: true });
+        return window.__webAdapter.auth.saveNewPassword(payload);
+      }
       return unavailable('auth.saveNewPassword');
     },
     impersonateClinic: async (clinicId) => {

@@ -15,6 +15,27 @@
   const cleanText = (value) => String(value || '').trim();
   const getBaseUrl = () => cleanText(window.__APP_API_BASE__ || DEFAULT_BASE || '').replace(/\/+$/, '');
 
+  const maskEmailForDiagnostics = (email) => {
+    const [localPart = '', domain = ''] = cleanText(email).toLowerCase().split('@');
+    if (!localPart || !domain) return '';
+    const localMask = localPart.length <= 2
+      ? `${localPart[0] || '*'}*`
+      : `${localPart.slice(0, 2)}***`;
+    return `${localMask}@${domain}`;
+  };
+
+  const logPasswordResetDiagnostic = (stage, payload = {}, extra = {}) => {
+    console.info('[password-reset][web-adapter]', {
+      stage,
+      endpoint: extra.endpoint || '',
+      baseUrl: getBaseUrl(),
+      email: maskEmailForDiagnostics(payload?.email || payload?.login || payload?.adminEmail || ''),
+      status: extra.status || '',
+      fallback: extra.fallback === true,
+      error: extra.error || '',
+    });
+  };
+
   const notImplemented = async (name) => {
     throw new Error(name + ' ainda nao implementado no backend web.');
   };
@@ -1299,26 +1320,78 @@
       return { success: true, user: mappedUser, clinic, token: result?.token || '' };
     },
     requestPasswordReset: async ({ email }) => {
-      const result = await request('POST', '/auth/password-reset/request', {
-        email: cleanText(email).toLowerCase(),
-      }, { auth: false });
-      return { success: result?.requested === true || result?.ok === true };
+      const payload = { email: cleanText(email).toLowerCase() };
+      logPasswordResetDiagnostic('request_call', payload, {
+        endpoint: '/auth/password-reset/request',
+        status: 'started',
+      });
+      try {
+        const result = await request('POST', '/auth/password-reset/request', payload, { auth: false });
+        logPasswordResetDiagnostic('request_completed', payload, {
+          endpoint: '/auth/password-reset/request',
+          status: result?.requested === true || result?.ok === true ? 'success' : 'failed',
+        });
+        return { success: result?.requested === true || result?.ok === true };
+      } catch (error) {
+        logPasswordResetDiagnostic('request_error', payload, {
+          endpoint: '/auth/password-reset/request',
+          status: 'error',
+          error: error?.message || String(error || ''),
+        });
+        throw error;
+      }
     },
     validatePasswordResetCode: async ({ email, code }) => {
-      const result = await request('POST', '/auth/password-reset/validate', {
+      const payload = {
         email: cleanText(email).toLowerCase(),
         code: cleanText(code),
-      }, { auth: false });
-      return { success: result?.valid === true || result?.ok === true };
+      };
+      logPasswordResetDiagnostic('validate_call', payload, {
+        endpoint: '/auth/password-reset/validate',
+        status: 'started',
+      });
+      try {
+        const result = await request('POST', '/auth/password-reset/validate', payload, { auth: false });
+        logPasswordResetDiagnostic('validate_completed', payload, {
+          endpoint: '/auth/password-reset/validate',
+          status: result?.valid === true || result?.ok === true ? 'success' : 'failed',
+        });
+        return { success: result?.valid === true || result?.ok === true };
+      } catch (error) {
+        logPasswordResetDiagnostic('validate_error', payload, {
+          endpoint: '/auth/password-reset/validate',
+          status: 'error',
+          error: error?.message || String(error || ''),
+        });
+        throw error;
+      }
     },
     saveNewPassword: async ({ email, code, newPassword, confirmPassword }) => {
-      const result = await request('POST', '/auth/password-reset/confirm', {
+      const payload = {
         email: cleanText(email).toLowerCase(),
         code: cleanText(code),
         newPassword: cleanText(newPassword),
         confirmPassword: cleanText(confirmPassword),
-      }, { auth: false });
-      return { success: result?.reset === true || result?.ok === true };
+      };
+      logPasswordResetDiagnostic('confirm_call', payload, {
+        endpoint: '/auth/password-reset/confirm',
+        status: 'started',
+      });
+      try {
+        const result = await request('POST', '/auth/password-reset/confirm', payload, { auth: false });
+        logPasswordResetDiagnostic('confirm_completed', payload, {
+          endpoint: '/auth/password-reset/confirm',
+          status: result?.reset === true || result?.ok === true ? 'success' : 'failed',
+        });
+        return { success: result?.reset === true || result?.ok === true };
+      } catch (error) {
+        logPasswordResetDiagnostic('confirm_error', payload, {
+          endpoint: '/auth/password-reset/confirm',
+          status: 'error',
+          error: error?.message || String(error || ''),
+        });
+        throw error;
+      }
     },
     logout: async () => {
       try {
