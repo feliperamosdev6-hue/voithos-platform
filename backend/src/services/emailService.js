@@ -20,16 +20,16 @@ const getEmailFrom = () => {
 
 const sendWithResend = async (payload) => {
   const resend = getResendClient();
-  const result = await resend.emails.send(payload);
+  const { data, error } = await resend.emails.send(payload);
 
-  if (result?.error) {
-    const message = result.error?.message || result.error?.name || 'Unknown Resend error';
-    const error = new Error(message);
-    error.resendError = result.error;
-    throw error;
+  if (error) {
+    const message = error?.message || error?.name || 'Unknown Resend error';
+    const resendError = new Error(message);
+    resendError.resendError = error;
+    throw resendError;
   }
 
-  return result;
+  return { data, error: null };
 };
 
 const sendVerificationEmail = async (email, code) => {
