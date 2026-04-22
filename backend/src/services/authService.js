@@ -48,6 +48,7 @@ const sanitizeUser = (user) => {
     id: user.id,
     nome: user.nome,
     email: user.email,
+    emailVerified: user.emailVerified === true,
     role: String(user.role || '').trim().toUpperCase(),
     clinicId: user.clinicId,
     isClinicAdmin: user.isClinicAdmin === true || ['ADMIN', 'SUPER_ADMIN'].includes(String(user.role || '').trim().toUpperCase()),
@@ -99,6 +100,32 @@ const requestPasswordReset = async ({ email }) => {
 
   return {
     requested: true,
+  };
+};
+
+const confirmEmailVerification = async ({ email, code }) => {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCode = normalizeCode(code);
+
+  if (!normalizedEmail) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
+  }
+
+  if (!/^\d{6}$/.test(normalizedCode)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'verification code must contain 6 digits.');
+  }
+
+  const updateResult = await userRepository.confirmEmailVerificationByEmailAndCode({
+    email: normalizedEmail,
+    code: normalizedCode,
+  });
+
+  if (!updateResult || updateResult.count === 0) {
+    throw new AppError(400, 'INVALID_VERIFICATION_CODE', 'Invalid or expired verification code.');
+  }
+
+  return {
+    verified: true,
   };
 };
 
@@ -392,6 +419,7 @@ module.exports = {
     logout,
     changePassword,
     requestPasswordReset,
+    confirmEmailVerification,
     validatePasswordResetCode,
     saveNewPassword,
     impersonateClinicAdmin,

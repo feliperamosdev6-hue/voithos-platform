@@ -103,6 +103,22 @@ const impersonateClinicAdmin = async (req, res, next) => {
   }
 };
 
+const confirmEmailVerificationFlow = async (req, res, next) => {
+  try {
+    const data = await authService.confirmEmailVerification({
+      email: req.body?.email || req.body?.login || req.body?.adminEmail || '',
+      code: req.body?.code || req.body?.verificationCode || req.body?.codigo || '',
+    });
+
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const requestPasswordResetFlow = async (req, res, next) => {
   try {
     const data = await authService.requestPasswordReset({
@@ -158,6 +174,7 @@ module.exports = {
   me,
   logout,
   changePassword,
+  confirmEmailVerificationFlow,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,

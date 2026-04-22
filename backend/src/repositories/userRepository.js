@@ -32,6 +32,25 @@ const userRepository = {
     data,
   }),
 
+  confirmEmailVerificationByEmailAndCode: async ({
+    email,
+    code,
+  }) => prisma.user.updateMany({
+    where: {
+      email: toRequiredString(email, 'email'),
+      emailVerificationCode: toRequiredString(code, 'code'),
+      emailVerificationExpiresAt: {
+        gt: new Date(),
+      },
+      ativo: true,
+    },
+    data: {
+      emailVerified: true,
+      emailVerificationCode: null,
+      emailVerificationExpiresAt: null,
+    },
+  }),
+
   updatePasswordResetByEmailAndCode: async ({
     email,
     code,
