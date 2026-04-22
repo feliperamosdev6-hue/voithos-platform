@@ -18,6 +18,20 @@ const getEmailFrom = () => {
   return from;
 };
 
+const sendWithResend = async (payload) => {
+  const resend = getResendClient();
+  const result = await resend.emails.send(payload);
+
+  if (result?.error) {
+    const message = result.error?.message || result.error?.name || 'Unknown Resend error';
+    const error = new Error(message);
+    error.resendError = result.error;
+    throw error;
+  }
+
+  return result;
+};
+
 const sendVerificationEmail = async (email, code) => {
   const to = String(email || '').trim().toLowerCase();
   const verificationCode = String(code || '').trim();
@@ -30,9 +44,7 @@ const sendVerificationEmail = async (email, code) => {
     throw new Error('Verification code must contain 6 digits.');
   }
 
-  const resend = getResendClient();
-
-  return resend.emails.send({
+  return sendWithResend({
     from: getEmailFrom(),
     to,
     subject: 'Confirme seu e-mail - Voithos',
@@ -65,9 +77,7 @@ const sendPasswordResetEmail = async (email, code) => {
     throw new Error('Password reset code must contain 6 digits.');
   }
 
-  const resend = getResendClient();
-
-  return resend.emails.send({
+  return sendWithResend({
     from: getEmailFrom(),
     to,
     subject: 'Redefina sua senha - Voithos',
