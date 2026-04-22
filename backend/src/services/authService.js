@@ -90,6 +90,14 @@ const requestPasswordReset = async ({ email }) => {
     })
     : { count: 0 };
 
+  if (!user || user.ativo === false) {
+    console.info('[auth] password reset requested for non-active account', {
+      email: maskEmail(normalizedEmail),
+      accountFound: Boolean(user),
+      active: user?.ativo !== false,
+    });
+  }
+
   if (updateResult?.count > 0) {
     try {
       const emailResult = await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
