@@ -312,6 +312,65 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || null;
   };
 
+  const authRequestPasswordReset = async ({ email, login, adminEmail } = {}) => {
+    const response = await withTimeout(`${config.baseUrl}/auth/password-reset/request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email || login || adminEmail || '',
+      }),
+    });
+    await ensureOk(response);
+    const payload = await response.json();
+    const data = payload?.data || {};
+    return { success: data?.requested === true || payload?.ok === true };
+  };
+
+  const authValidatePasswordResetCode = async ({ email, login, adminEmail, code, resetCode, codigo } = {}) => {
+    const response = await withTimeout(`${config.baseUrl}/auth/password-reset/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email || login || adminEmail || '',
+        code: code || resetCode || codigo || '',
+      }),
+    });
+    await ensureOk(response);
+    const payload = await response.json();
+    const data = payload?.data || {};
+    return { success: data?.valid === true || payload?.ok === true };
+  };
+
+  const authConfirmPasswordReset = async ({
+    email,
+    login,
+    adminEmail,
+    code,
+    resetCode,
+    codigo,
+    newPassword,
+    confirmPassword,
+    senhaNova,
+    senha,
+    confirmarSenha,
+    passwordConfirmation,
+  } = {}) => {
+    const response = await withTimeout(`${config.baseUrl}/auth/password-reset/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email || login || adminEmail || '',
+        code: code || resetCode || codigo || '',
+        newPassword: newPassword || senhaNova || senha || '',
+        confirmPassword: confirmPassword || confirmarSenha || passwordConfirmation || '',
+      }),
+    });
+    await ensureOk(response);
+    const payload = await response.json();
+    const data = payload?.data || {};
+    return { success: data?.reset === true || payload?.ok === true };
+  };
+
   const authMe = async (userToken) => {
     const payload = await requestJsonWithUserToken('/auth/me', userToken, { method: 'GET' });
     return payload?.data || null;
@@ -1831,6 +1890,9 @@ const createCentralBackendAdapter = (options = {}) => {
     login,
     authLogin,
     authSignup,
+    authRequestPasswordReset,
+    authValidatePasswordResetCode,
+    authConfirmPasswordReset,
     authMe,
     authLogout,
     authChangePassword,

@@ -303,6 +303,30 @@ const registerAuthHandlers = ({
     return { success: true };
   });
 
+  ipcMain.handle('auth-password-reset-request', async (_event, payload = {}) => {
+    if (!isCentralEnabled()) {
+      throw new Error('Redefinicao de senha indisponivel sem backend central.');
+    }
+
+    return centralBackendAdapter.authRequestPasswordReset(payload || {});
+  });
+
+  ipcMain.handle('auth-password-reset-validate', async (_event, payload = {}) => {
+    if (!isCentralEnabled()) {
+      throw new Error('Validacao de codigo indisponivel sem backend central.');
+    }
+
+    return centralBackendAdapter.authValidatePasswordResetCode(payload || {});
+  });
+
+  ipcMain.handle('auth-password-reset-confirm', async (_event, payload = {}) => {
+    if (!isCentralEnabled()) {
+      throw new Error('Redefinicao de senha indisponivel sem backend central.');
+    }
+
+    return centralBackendAdapter.authConfirmPasswordReset(payload || {});
+  });
+
   ipcMain.handle('auth-list-users-public', async () => {
     const session = await readSessionCache().catch(() => null);
     if (isCentralEnabled() && String(session?.source || '').trim() === 'central') {
