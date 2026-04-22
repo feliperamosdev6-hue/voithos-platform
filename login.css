@@ -10,6 +10,7 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    overflow-x: hidden;
 }
 
 .login-container {
@@ -276,4 +277,69 @@ body {
 .success-panel .flow-copy {
     max-width: 320px;
     margin: 8px auto 20px;
+}
+
+@media (max-width: 768px) {
+    body {
+        align-items: flex-start;
+        justify-content: flex-start;
+        min-height: 100dvh;
+        padding: 16px;
+    }
+
+    .login-container {
+        width: 100%;
+    }
+
+    .login-box {
+        max-width: none;
+        padding: 28px 18px 22px;
+        border-radius: 16px;
+    }
+
+    .title {
+        font-size: 2rem;
+    }
+
+    .flow-title {
+        font-size: 1.3rem;
+    }
+
+    .flow-copy {
+        font-size: 0.95rem;
+    }
+
+    .flow-card {
+        padding: 16px 14px;
+    }
+
+    .btn-login,
+    .btn-secondary,
+    .btn-link {
+        min-height: 44px;
+    }
+
+    .footer-container {
+        position: static;
+        margin: 18px 0 4px;
+        text-align: center;
+    }
+}
+
+@media (max-width: 420px) {
+    .login-box {
+        padding: 24px 14px 20px;
+    }
+
+    .title {
+        font-size: 1.8rem;
+    }
+
+    .title-logo {
+        max-width: 150px;
+    }
+
+    .flow-title {
+        font-size: 1.2rem;
+    }
 }

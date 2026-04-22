@@ -403,3 +403,81 @@
 .gestao-item:focus-visible {
   background: #f0fdf9;
 }
+
+@media (max-width: 768px) {
+  .header-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .header-container h1,
+  .header-container .logo {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .main-nav {
+    margin-left: 0;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .main-nav ul {
+    width: max-content;
+    min-width: 100%;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 12px;
+    padding-bottom: 4px;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .attn-menu,
+  .gestao-menu,
+  .user-menu {
+    min-width: 0;
+  }
+
+  .attn-toggle,
+  .gestao-toggle,
+  .user-menu-toggle {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .attn-dropdown,
+  .gestao-dropdown,
+  .user-menu-dropdown {
+    left: 0;
+    right: 0;
+    width: min(92vw, 340px);
+    max-width: calc(100vw - 28px);
+    margin-inline: auto;
+  }
+
+  .attn-item,
+  .gestao-item,
+  .user-menu-item {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 420px) {
+  .header-actions > * {
+    flex-basis: 100%;
+  }
+}
