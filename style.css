@@ -1836,19 +1836,25 @@ body {
   }
 
   .header-container {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    align-items: center;
+    gap: 10px 12px;
+    padding: 10px 14px;
   }
 
   .header-container h1,
   .header-container .logo {
-    width: 100%;
-    justify-content: center;
+    grid-area: brand;
+    width: auto;
+    justify-self: start;
   }
 
   .main-nav {
+    grid-area: nav;
     margin-left: 0;
     width: 100%;
     overflow-x: auto;
@@ -1860,19 +1866,29 @@ body {
     min-width: 100%;
     flex-wrap: nowrap;
     justify-content: flex-start;
-    gap: 12px;
-    padding-bottom: 4px;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+
+  .main-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 8px 10px;
+    white-space: nowrap;
   }
 
   .header-actions {
+    grid-area: actions;
     width: 100%;
-    justify-content: space-between;
+    justify-self: end;
+    justify-content: flex-end;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
   }
 
   .header-actions > * {
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-width: 0;
   }
 
@@ -1885,8 +1901,10 @@ body {
   .attn-toggle,
   .gestao-toggle,
   .user-menu-toggle {
-    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
     justify-content: center;
+    line-height: 1.1;
   }
 
   .attn-dropdown,
@@ -1897,6 +1915,9 @@ body {
     width: min(92vw, 340px);
     max-width: calc(100vw - 28px);
     margin-inline: auto;
+    max-height: min(70vh, 420px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .routine-toolbar {
@@ -1921,16 +1942,18 @@ body {
 
   .card-container {
     grid-template-columns: 1fr;
-    gap: 14px;
+    gap: 12px;
   }
 
   .home-main .card {
     min-height: 0;
+    border-radius: 16px;
   }
 
   .home-main .card-panel-head {
     grid-template-columns: 1fr;
     align-items: start;
+    gap: 8px;
   }
 
   .home-main .home-gestao-tabs {
@@ -1941,35 +1964,52 @@ body {
 
   .home-main .home-gestao-tab {
     flex: 1 1 calc(50% - 3px);
+    min-height: 40px;
+    padding: 8px 10px;
   }
 
   .home-main .card-metrics {
-    gap: 8px;
+    gap: 6px;
   }
 
   .home-main .card-metric {
     flex-direction: column;
     align-items: flex-start;
+    gap: 4px;
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+
+  .home-main .card-title {
+    font-size: 1rem;
+  }
+
+  .home-main .card-sub {
+    font-size: 0.78rem;
   }
 
   .home-main .card-footer {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 
   .agenda-mini-header,
   .finance-mini-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 8px;
   }
 
   .finance-mini-actions {
     width: 100%;
     flex-wrap: wrap;
+    gap: 6px;
   }
 
   .finance-mini-body {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .finance-mini-chart {
@@ -1985,6 +2025,8 @@ body {
   .finance-mini-action,
   .agenda-mini-footer {
     width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
   }
 
   .notifications-bar {
@@ -2005,5 +2047,12 @@ body {
 
   .home-main .home-gestao-tab {
     flex-basis: 100%;
+  }
+
+  .actions-menu,
+  .attn-dropdown,
+  .gestao-dropdown,
+  .user-menu-dropdown {
+    width: min(94vw, 320px);
   }
 }

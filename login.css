@@ -284,7 +284,7 @@ body {
         align-items: flex-start;
         justify-content: flex-start;
         min-height: 100dvh;
-        padding: 16px;
+        padding: 12px;
     }
 
     .login-container {
@@ -293,30 +293,47 @@ body {
 
     .login-box {
         max-width: none;
-        padding: 28px 18px 22px;
+        padding: 24px 16px 20px;
         border-radius: 16px;
     }
 
     .title {
-        font-size: 2rem;
+        font-size: 1.9rem;
     }
 
     .flow-title {
-        font-size: 1.3rem;
+        font-size: 1.25rem;
     }
 
     .flow-copy {
-        font-size: 0.95rem;
+        font-size: 0.94rem;
+        line-height: 1.5;
     }
 
     .flow-card {
-        padding: 16px 14px;
+        padding: 14px 12px;
+    }
+
+    .input-group {
+        margin-bottom: 16px;
+    }
+
+    .input-group label {
+        font-size: 0.95rem;
+    }
+
+    .input-group input,
+    .input-group select {
+        min-height: 46px;
+        padding: 13px 12px;
+        font-size: 16px;
     }
 
     .btn-login,
     .btn-secondary,
     .btn-link {
         min-height: 44px;
+        padding: 12px 12px;
     }
 
     .footer-container {
@@ -328,11 +345,11 @@ body {
 
 @media (max-width: 420px) {
     .login-box {
-        padding: 24px 14px 20px;
+        padding: 22px 14px 18px;
     }
 
     .title {
-        font-size: 1.8rem;
+        font-size: 1.75rem;
     }
 
     .title-logo {
@@ -340,6 +357,6 @@ body {
     }
 
     .flow-title {
-        font-size: 1.2rem;
+        font-size: 1.18rem;
     }
 }
