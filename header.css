@@ -405,26 +405,28 @@
 }
 
 @media (max-width: 768px) {
+  body {
+    padding-top: 0;
+  }
+
   .header-container {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "brand actions"
-      "nav nav";
-    align-items: center;
-    gap: 10px 12px;
-    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 14px 12px;
   }
 
   .header-container h1,
   .header-container .logo {
-    grid-area: brand;
-    width: auto;
-    justify-self: start;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
 
   .main-nav {
-    grid-area: nav;
+    order: 3;
     margin-left: 0;
     width: 100%;
     overflow-x: auto;
@@ -435,7 +437,7 @@
     width: max-content;
     min-width: 100%;
     flex-wrap: nowrap;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 8px;
     padding-bottom: 2px;
   }
@@ -449,28 +451,22 @@
   }
 
   .header-actions {
-    grid-area: actions;
+    order: 2;
     width: 100%;
-    justify-self: end;
-    justify-content: flex-end;
-    flex-wrap: nowrap;
-    gap: 6px;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    max-width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .header-actions > * {
-    flex: 0 0 auto;
+    flex: 1 1 100px;
     min-width: 0;
   }
 
   .attn-menu,
   .gestao-menu,
   .user-menu {
-    flex: 0 0 auto;
-    min-width: 0;
+    flex: 1 1 100px;
   }
 
   .attn-toggle,
@@ -481,6 +477,7 @@
     justify-content: center;
     line-height: 1.1;
     white-space: nowrap;
+    width: 100%;
   }
 
   .attn-dropdown,
@@ -502,5 +499,8 @@
     min-height: 44px;
     padding: 12px 14px;
     white-space: normal;
+  }
+  .user-role-badge {
+    display: none;
   }
 }
