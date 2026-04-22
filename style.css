@@ -1883,18 +1883,23 @@ body {
     width: 100%;
     justify-self: end;
     justify-content: flex-end;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    max-width: 100%;
   }
 
   .header-actions > * {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     min-width: 0;
   }
 
   .attn-menu,
   .gestao-menu,
   .user-menu {
+    flex: 0 0 auto;
     min-width: 0;
   }
 
@@ -1905,6 +1910,7 @@ body {
     padding: 10px 12px;
     justify-content: center;
     line-height: 1.1;
+    white-space: nowrap;
   }
 
   .attn-dropdown,
@@ -2041,10 +2047,6 @@ body {
 }
 
 @media (max-width: 420px) {
-  .header-actions > * {
-    flex-basis: 100%;
-  }
-
   .home-main .home-gestao-tab {
     flex-basis: 100%;
   }
