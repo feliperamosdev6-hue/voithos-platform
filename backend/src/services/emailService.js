@@ -53,8 +53,44 @@ const sendVerificationEmail = async (email, code) => {
   });
 };
 
+const sendPasswordResetEmail = async (email, code) => {
+  const to = String(email || '').trim().toLowerCase();
+  const resetCode = String(code || '').trim();
+
+  if (!to) {
+    throw new Error('Password reset email recipient is required.');
+  }
+
+  if (!/^\d{6}$/.test(resetCode)) {
+    throw new Error('Password reset code must contain 6 digits.');
+  }
+
+  const resend = getResendClient();
+
+  return resend.emails.send({
+    from: getEmailFrom(),
+    to,
+    subject: 'Redefina sua senha - Voithos',
+    text: [
+      'Redefina sua senha na Voithos.',
+      '',
+      `Seu codigo de redefinicao e: ${resetCode}`,
+      '',
+      'Este codigo expira em 10 minutos.',
+      'Se voce nao solicitou a redefinicao, ignore este e-mail.',
+    ].join('\n'),
+    html: [
+      '<p>Redefina sua senha na Voithos.</p>',
+      `<p>Seu codigo de redefinicao e: <strong>${resetCode}</strong></p>`,
+      '<p>Este codigo expira em 10 minutos.</p>',
+      '<p>Se voce nao solicitou a redefinicao, ignore este e-mail.</p>',
+    ].join(''),
+  });
+};
+
 module.exports = {
   emailService: {
     sendVerificationEmail,
+    sendPasswordResetEmail,
   },
 };

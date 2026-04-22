@@ -4,6 +4,7 @@ const { AppError } = require('../errors/AppError');
 const { clinicRepository } = require('../repositories/clinicRepository');
 const { sessionRepository } = require('../repositories/sessionRepository');
 const { userRepository } = require('../repositories/userRepository');
+const { emailService } = require('./emailService');
 
 const SESSION_TTL_DAYS = 7;
 const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
@@ -90,12 +91,14 @@ const requestPasswordReset = async ({ email }) => {
     : { count: 0 };
 
   if (updateResult?.count > 0) {
-    console.info('[auth] password reset code issued', {
-      email: maskEmail(normalizedEmail),
-      code: resetCode,
-      expiresAt: expiresAt.toISOString(),
-      testMode: true,
-    });
+    try {
+      await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
+    } catch (emailError) {
+      console.error('[email] Failed to send password reset email', {
+        email: maskEmail(normalizedEmail),
+        error: emailError?.message || emailError,
+      });
+    }
   }
 
   return {
