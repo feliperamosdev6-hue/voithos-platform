@@ -62,6 +62,20 @@ const buildEmailFailure = (payload, stage, extra = {}) => {
   return failure;
 };
 
+const logResendResponseShape = (payload, response) => {
+  const responseData = response?.data;
+  console.info('[email][email-service][resend-shape]', {
+    email: maskEmail(Array.isArray(payload.to) ? payload.to[0] : payload.to || ''),
+    responseType: typeof response,
+    responseKeys: Object.keys(response || {}),
+    responseId: response?.id || '',
+    responseDataId: responseData?.id || '',
+    responseError: response?.error || null,
+    responseDataType: typeof responseData,
+    responseDataKeys: Object.keys(responseData || {}),
+  });
+};
+
 const sendWithResend = async (payload) => {
   const resend = getResendClient();
   const flow = String(payload?.idempotencyKey || '').startsWith('password-reset/')
@@ -78,6 +92,7 @@ const sendWithResend = async (payload) => {
     status: 'started',
   });
   const response = await resend.emails.send(payload);
+  logResendResponseShape(payload, response);
   logEmailDiagnostic(`${flow}_resend_call_completed`, payload, {
     endpoint: flow === 'password-reset'
       ? '/auth/password-reset/request'
