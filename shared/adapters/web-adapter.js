@@ -1551,7 +1551,12 @@
           clearWebSession();
           return null;
         }
-        return getStoredUser();
+        const storedUser = getStoredUser();
+        if (storedUser?.emailVerificationPending === true || storedUser?.emailVerified !== true) {
+          clearWebSession();
+          return null;
+        }
+        return storedUser;
       }
     },
     currentContext: async () => {
