@@ -1319,7 +1319,11 @@
       const clinic = result?.clinic ? normalizeClinicSessionData(result.clinic) : null;
       const mappedUser = mapCentralUserToDesktop(result?.user || {}, clinic);
       const token = cleanText(result?.token || '');
-      if (token && mappedUser) {
+      const pendingVerification = result?.pendingVerification === true
+        || mappedUser?.emailVerificationPending === true
+        || mappedUser?.emailVerified !== true;
+
+      if (token && mappedUser && !pendingVerification) {
         persistWebSession({ token, user: mappedUser, clinic });
       } else {
         clearWebSession();
@@ -1329,7 +1333,7 @@
         user: mappedUser,
         clinic,
         token,
-        pendingVerification: result?.pendingVerification === true,
+        pendingVerification,
         verificationExpiresAt: result?.verificationExpiresAt || null,
         resendAvailableAt: result?.resendAvailableAt || null,
       };
