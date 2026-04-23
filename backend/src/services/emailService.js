@@ -32,7 +32,7 @@ const maskEmail = (email) => {
 };
 
 const logEmailDiagnostic = (stage, payload = {}, extra = {}) => {
-  console.info('[password-reset][email-service]', {
+  console.info('[email][email-service]', {
     stage,
     endpoint: extra.endpoint || '',
     email: maskEmail(Array.isArray(payload.to) ? payload.to[0] : payload.to || ''),
@@ -48,37 +48,47 @@ const logEmailDiagnostic = (stage, payload = {}, extra = {}) => {
 
 const sendWithResend = async (payload) => {
   const resend = getResendClient();
-  const isPasswordReset = String(payload?.idempotencyKey || '').startsWith('password-reset/');
-  if (isPasswordReset) {
-    logEmailDiagnostic('resend_call_started', payload, {
-      endpoint: '/auth/password-reset/request',
-      status: 'started',
-    });
-  }
+  const flow = String(payload?.idempotencyKey || '').startsWith('password-reset/')
+    ? 'password-reset'
+    : String(payload?.idempotencyKey || '').startsWith('signup-verification/')
+      ? 'signup-verification'
+      : 'unknown';
+  logEmailDiagnostic(`${flow}_resend_call_started`, payload, {
+    endpoint: flow === 'password-reset'
+      ? '/auth/password-reset/request'
+      : flow === 'signup-verification'
+        ? '/auth/signup'
+        : '',
+    status: 'started',
+  });
   const { data, error } = await resend.emails.send(payload);
 
   if (error) {
-    if (isPasswordReset) {
-      logEmailDiagnostic('resend_call_failed', payload, {
-        endpoint: '/auth/password-reset/request',
-        status: 'failed',
-        error: error?.message || error?.name || 'Unknown Resend error',
-        resendError: error,
-      });
-    }
+    logEmailDiagnostic(`${flow}_resend_call_failed`, payload, {
+      endpoint: flow === 'password-reset'
+        ? '/auth/password-reset/request'
+        : flow === 'signup-verification'
+          ? '/auth/signup'
+          : '',
+      status: 'failed',
+      error: error?.message || error?.name || 'Unknown Resend error',
+      resendError: error,
+    });
     const message = error?.message || error?.name || 'Unknown Resend error';
     const resendError = new Error(message);
     resendError.resendError = error;
     throw resendError;
   }
 
-  if (isPasswordReset) {
-    logEmailDiagnostic('resend_call_completed', payload, {
-      endpoint: '/auth/password-reset/request',
-      status: 'accepted',
-      resendEmailId: data?.id || '',
-    });
-  }
+  logEmailDiagnostic(`${flow}_resend_call_completed`, payload, {
+    endpoint: flow === 'password-reset'
+      ? '/auth/password-reset/request'
+      : flow === 'signup-verification'
+        ? '/auth/signup'
+        : '',
+    status: 'accepted',
+    resendEmailId: data?.id || '',
+  });
 
   return { data, error: null };
 };
@@ -95,6 +105,14 @@ const sendVerificationEmail = async (email, code) => {
     throw new Error('Verification code must contain 6 digits.');
   }
 
+  logEmailDiagnostic('signup_verification_send_started', {
+    from: getEmailFrom(),
+    to,
+    subject: 'Confirme seu e-mail - Voithos',
+  }, {
+    endpoint: '/auth/signup',
+    status: 'started',
+  });
   return sendWithResend({
     from: getEmailFrom(),
     to,
@@ -129,6 +147,14 @@ const sendPasswordResetEmail = async (email, code) => {
     throw new Error('Password reset code must contain 6 digits.');
   }
 
+  logEmailDiagnostic('password_reset_send_started', {
+    from: getEmailFrom(),
+    to,
+    subject: 'Redefina sua senha - Voithos',
+  }, {
+    endpoint: '/auth/password-reset/request',
+    status: 'started',
+  });
   return sendWithResend({
     from: getEmailFrom(),
     to,

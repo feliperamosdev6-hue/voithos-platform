@@ -64,6 +64,16 @@ const logPasswordReset = (stage, details = {}) => {
   });
 };
 
+const logAuthDiagnostic = (stage, details = {}) => {
+  console.info('[auth][auth-service]', {
+    stage,
+    endpoint: details.endpoint || '',
+    email: details.email ? maskEmail(details.email) : '',
+    status: details.status || '',
+    error: details.error || '',
+  });
+};
+
 const sanitizeUser = (user) => {
   if (!user) return null;
   const emailVerificationPending = user.emailVerified !== true && Boolean(user.emailVerificationCode);
@@ -96,6 +106,7 @@ const verifyPassword = async (password, hash) => {
 
 const requestPasswordReset = async ({ email }) => {
   const normalizedEmail = normalizeEmail(email);
+  let deliveryConfirmed = false;
   logPasswordReset('request_started', {
     endpoint: '/auth/password-reset/request',
     email: normalizedEmail,
@@ -164,6 +175,7 @@ const requestPasswordReset = async ({ email }) => {
         status: 'started',
       });
       const emailResult = await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
+      deliveryConfirmed = true;
       logPasswordReset('email_send_accepted', {
         endpoint: '/auth/password-reset/request',
         email: normalizedEmail,
@@ -190,6 +202,7 @@ const requestPasswordReset = async ({ email }) => {
 
   return {
     requested: true,
+    deliveryConfirmed,
   };
 };
 
@@ -291,33 +304,79 @@ const finalizePendingSignup = async (pendingSignup) => {
 const confirmEmailVerification = async ({ email, code }) => {
   const normalizedEmail = normalizeEmail(email);
   const normalizedCode = normalizeCode(code);
+  logAuthDiagnostic('email_verification_started', {
+    endpoint: '/auth/email-verification/confirm',
+    email: normalizedEmail,
+    status: 'started',
+  });
 
   if (!normalizedEmail) {
+    logAuthDiagnostic('email_verification_validation_failed', {
+      endpoint: '/auth/email-verification/confirm',
+      email: normalizedEmail,
+      status: 'missing_email',
+    });
     throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
   }
 
   if (!/^\d{6}$/.test(normalizedCode)) {
+    logAuthDiagnostic('email_verification_validation_failed', {
+      endpoint: '/auth/email-verification/confirm',
+      email: normalizedEmail,
+      status: 'invalid_code_format',
+    });
     throw new AppError(400, 'VALIDATION_ERROR', 'verification code must contain 6 digits.');
   }
 
   const pendingSignup = await pendingSignupRepository.findByEmail(normalizedEmail);
+  logAuthDiagnostic('email_verification_pending_signup_lookup', {
+    endpoint: '/auth/email-verification/confirm',
+    email: normalizedEmail,
+    status: pendingSignup ? 'found' : 'not_found',
+  });
   const pendingExpiresAt = pendingSignup?.verificationExpiresAt ? new Date(pendingSignup.verificationExpiresAt).getTime() : 0;
   if (pendingSignup) {
     if (String(pendingSignup.verificationCode || '') !== normalizedCode || !pendingExpiresAt || pendingExpiresAt <= Date.now()) {
+      logAuthDiagnostic('email_verification_pending_signup_invalid', {
+        endpoint: '/auth/email-verification/confirm',
+        email: normalizedEmail,
+        status: 'invalid_or_expired',
+      });
       throw new AppError(400, 'INVALID_VERIFICATION_CODE', 'Invalid or expired verification code.');
     }
-    return finalizePendingSignup(pendingSignup);
+    const result = await finalizePendingSignup(pendingSignup);
+    logAuthDiagnostic('email_verification_pending_signup_finalized', {
+      endpoint: '/auth/email-verification/confirm',
+      email: normalizedEmail,
+      status: 'success',
+    });
+    return result;
   }
 
+  logAuthDiagnostic('email_verification_fallback_user_lookup', {
+    endpoint: '/auth/email-verification/confirm',
+    email: normalizedEmail,
+    status: 'started',
+  });
   const updateResult = await userRepository.confirmEmailVerificationByEmailAndCode({
     email: normalizedEmail,
     code: normalizedCode,
   });
 
   if (!updateResult || updateResult.count === 0) {
+    logAuthDiagnostic('email_verification_fallback_invalid', {
+      endpoint: '/auth/email-verification/confirm',
+      email: normalizedEmail,
+      status: 'invalid_or_expired',
+    });
     throw new AppError(400, 'INVALID_VERIFICATION_CODE', 'Invalid or expired verification code.');
   }
 
+  logAuthDiagnostic('email_verification_fallback_completed', {
+    endpoint: '/auth/email-verification/confirm',
+    email: normalizedEmail,
+    status: 'success',
+  });
   return {
     verified: true,
   };

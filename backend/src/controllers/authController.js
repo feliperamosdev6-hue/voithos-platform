@@ -24,6 +24,17 @@ const logPasswordReset = (stage, req, extra = {}) => {
   });
 };
 
+const logAuthDiagnostic = (stage, req, extra = {}) => {
+  console.info('[auth][auth-controller]', {
+    stage,
+    endpoint: req?.originalUrl || req?.path || extra.endpoint || '',
+    method: req?.method || '',
+    email: maskEmail(req?.body?.email || req?.body?.login || req?.body?.adminEmail || ''),
+    status: extra.status || '',
+    error: extra.error || '',
+  });
+};
+
 const login = async (req, res, next) => {
   try {
     const result = await authService.login(req.body || {});
@@ -38,12 +49,15 @@ const login = async (req, res, next) => {
 
 const signup = async (req, res, next) => {
   try {
+    logAuthDiagnostic('signup_received', req, { status: 'received' });
     const result = await clinicService.publicSignup(req.body || {});
+    logAuthDiagnostic('signup_completed', req, { status: 'success' });
     return res.status(201).json({
       ok: true,
       data: result,
     });
   } catch (error) {
+    logAuthDiagnostic('signup_error', req, { status: 'error', error: error?.message || String(error || '') });
     return next(error);
   }
 };
@@ -126,16 +140,19 @@ const impersonateClinicAdmin = async (req, res, next) => {
 
 const confirmEmailVerificationFlow = async (req, res, next) => {
   try {
+    logAuthDiagnostic('email_verification_received', req, { status: 'received' });
     const data = await authService.confirmEmailVerification({
       email: req.body?.email || req.body?.login || req.body?.adminEmail || '',
       code: req.body?.code || req.body?.verificationCode || req.body?.codigo || '',
     });
+    logAuthDiagnostic('email_verification_completed', req, { status: 'success' });
 
     return res.status(200).json({
       ok: true,
       data,
     });
   } catch (error) {
+    logAuthDiagnostic('email_verification_error', req, { status: 'error', error: error?.message || String(error || '') });
     return next(error);
   }
 };

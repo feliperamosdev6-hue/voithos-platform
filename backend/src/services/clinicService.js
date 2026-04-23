@@ -2986,14 +2986,31 @@ const clinicService = {
     }
 
     try {
+      console.info('[signup][clinic-service]', {
+        stage: 'signup_started',
+        email: adminEmail,
+        clinic: nomeFantasia,
+      });
       const emailVerificationCode = generateEmailVerificationCode();
       const emailVerificationExpiresAt = getEmailVerificationExpiresAt();
       const duplicatedClinic = await clinicRepository.findByDocument(document.documentNumber);
+      console.info('[signup][clinic-service]', {
+        stage: 'clinic_lookup_completed',
+        email: adminEmail,
+        clinic: nomeFantasia,
+        status: duplicatedClinic ? 'duplicate_found' : 'available',
+      });
       if (duplicatedClinic) {
         throw new AppError(409, 'CLINIC_DOCUMENT_EXISTS', 'CPF/CNPJ already exists.');
       }
 
       const duplicatedUser = await userRepository.findByEmail(adminEmail);
+      console.info('[signup][clinic-service]', {
+        stage: 'user_lookup_completed',
+        email: adminEmail,
+        clinic: nomeFantasia,
+        status: duplicatedUser ? 'duplicate_found' : 'available',
+      });
       if (duplicatedUser) {
         throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
       }
@@ -3015,15 +3032,27 @@ const clinicService = {
         verificationExpiresAt: emailVerificationExpiresAt,
         resendAvailableAt: getEmailVerificationResendAvailableAt(),
       });
+      console.info('[signup][clinic-service]', {
+        stage: 'pending_signup_saved',
+        email: adminEmail,
+        clinic: nomeFantasia,
+      });
 
       try {
+        console.info('[signup][clinic-service]', {
+          stage: 'verification_email_send_started',
+          email: adminEmail,
+          clinic: nomeFantasia,
+        });
         const emailResult = await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
         console.info('[email] Signup verification email accepted', {
+          stage: 'verification_email_send_completed',
           email: adminEmail,
           resendEmailId: emailResult?.data?.id || '',
         });
       } catch (emailError) {
         console.error('[email] Failed to send signup verification email', {
+          stage: 'verification_email_send_failed',
           email: adminEmail,
           error: emailError?.message || emailError,
           resendError: emailError?.resendError || null,

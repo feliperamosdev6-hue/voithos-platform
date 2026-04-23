@@ -41,6 +41,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const authApi = window.appApi?.auth || window.auth;
   const RESEND_WAIT_SECONDS = 5 * 60;
   const VERIFICATION_WAIT_SECONDS = 5 * 60;
+  const getUiBaseUrl = () => {
+    try {
+      return String(window.__APP_API_BASE__ || localStorage.getItem('apiBase') || '').trim();
+    } catch (_error) {
+      return String(window.__APP_API_BASE__ || '').trim();
+    }
+  };
   const resetFlowState = {
     email: '',
     maskedEmail: '',
@@ -98,6 +105,21 @@ document.addEventListener('DOMContentLoaded', () => {
       status: details.status || '',
       fallback: details.fallback === true,
       error: details.error || '',
+      baseUrl: getUiBaseUrl(),
+    });
+  };
+
+  const isWebBuild = window.__VOITHOS_DEPLOY_TARGET__ === 'render';
+  const logAuthUiDiagnostic = (stage, details = {}) => {
+    if (!isWebBuild) return;
+    console.info('[auth][ui]', {
+      stage,
+      endpoint: details.endpoint || '',
+      email: details.email ? maskEmail(details.email) : '',
+      status: details.status || '',
+      baseUrl: getUiBaseUrl(),
+      error: details.error || '',
+      pendingVerification: details.pendingVerification === true,
     });
   };
 
@@ -339,6 +361,11 @@ document.addEventListener('DOMContentLoaded', () => {
   confirmVerificationButton?.addEventListener('click', async () => {
     const code = normalizeDigits(emailVerificationCodeInput?.value || '', 6);
     const email = verificationFlowState.email || String(emailInput?.value || '').trim().toLowerCase();
+    logAuthUiDiagnostic('signup_verification_click', {
+      endpoint: '/auth/email-verification/confirm',
+      email,
+      status: 'started',
+    });
     if (code.length !== 6) {
       setFlowMessage(verificationMessage, 'Digite o código de 6 dígitos.');
       return;
@@ -352,6 +379,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const result = await authApi.confirmEmailVerification({
         email,
         code,
+      });
+      logAuthUiDiagnostic('signup_verification_result', {
+        endpoint: '/auth/email-verification/confirm',
+        email,
+        status: result?.success ? 'success' : 'failed',
+        pendingVerification: result?.user?.emailVerified !== true,
       });
       if (!result?.success) {
         throw new Error('verification_failed');
@@ -535,6 +568,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    logAuthUiDiagnostic('signup_submit', {
+      endpoint: '/auth/signup',
+      email: adminEmail,
+      status: 'started',
+    });
     try {
       const result = await authApi.signup({
         documentType,
@@ -546,6 +584,12 @@ document.addEventListener('DOMContentLoaded', () => {
         telefone,
         password,
         passwordConfirmation,
+      });
+      logAuthUiDiagnostic('signup_result', {
+        endpoint: '/auth/signup',
+        email: adminEmail,
+        status: result?.success ? 'success' : 'failed',
+        pendingVerification: result?.pendingVerification === true,
       });
 
       if (result?.success && result?.user) {
@@ -560,6 +604,12 @@ document.addEventListener('DOMContentLoaded', () => {
       setSignupMessage('Nao foi possivel criar a conta.');
     } catch (err) {
       console.error('Erro no cadastro publico', err);
+      logAuthUiDiagnostic('signup_error', {
+        endpoint: '/auth/signup',
+        email: adminEmail,
+        status: 'error',
+        error: err?.message || String(err || ''),
+      });
       setSignupMessage(err?.message || 'Nao foi possivel criar a conta.');
     }
   });

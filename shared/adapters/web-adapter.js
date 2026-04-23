@@ -13,7 +13,31 @@
   let staticProcedureCatalogLoading = null;
 
   const cleanText = (value) => String(value || '').trim();
-  const getBaseUrl = () => cleanText(window.__APP_API_BASE__ || DEFAULT_BASE || '').replace(/\/+$/, '');
+  const getBaseUrl = () => {
+    const runtimeBase = cleanText(window.__APP_API_BASE__ || '');
+    if (runtimeBase) return runtimeBase.replace(/\/+$/, '');
+    if (window.__VOITHOS_DEPLOY_TARGET__ === 'render') return '';
+    return cleanText(DEFAULT_BASE || '').replace(/\/+$/, '');
+  };
+  const getBaseDiagnostics = () => ({
+    resolvedBaseUrl: getBaseUrl(),
+    runtimeBaseUrl: cleanText(window.__APP_API_BASE__ || ''),
+    storageBaseUrl: cleanText(DEFAULT_BASE || ''),
+  });
+
+  const logWebAuthDiagnostic = (stage, details = {}) => {
+    console.info('[web-auth][adapter]', {
+      stage,
+      ...getBaseDiagnostics(),
+      endpoint: cleanText(details.endpoint || ''),
+      method: cleanText(details.method || ''),
+      status: cleanText(details.status || ''),
+      fallback: details.fallback === true,
+      email: maskEmailForDiagnostics(details.email || ''),
+      error: cleanText(details.error || ''),
+      responseStatus: details.responseStatus || '',
+    });
+  };
 
   const maskEmailForDiagnostics = (email) => {
     const [localPart = '', domain = ''] = cleanText(email).toLowerCase().split('@');
@@ -985,18 +1009,50 @@
   };
 
   const request = async (method, path, body, options = {}) => {
-    const response = await performFetch(method, path, body ? JSON.stringify(body) : undefined, {
-      ...options,
-      contentType: 'application/json',
+    logWebAuthDiagnostic('request_started', {
+      endpoint: path,
+      method,
+      status: 'started',
+      fallback: false,
     });
-    const payload = await parseResponsePayload(response);
+    try {
+      const response = await performFetch(method, path, body ? JSON.stringify(body) : undefined, {
+        ...options,
+        contentType: 'application/json',
+      });
+      logWebAuthDiagnostic('request_response', {
+        endpoint: path,
+        method,
+        status: response.ok ? 'ok' : 'error',
+        responseStatus: response.status,
+        fallback: false,
+      });
+      const payload = await parseResponsePayload(response);
 
-    if (!response.ok) {
-      const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
-      throw new Error(message);
+      if (!response.ok) {
+        const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
+        logWebAuthDiagnostic('request_failed', {
+          endpoint: path,
+          method,
+          status: 'http_error',
+          responseStatus: response.status,
+          error: message,
+          fallback: false,
+        });
+        throw new Error(message);
+      }
+
+      return payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
+    } catch (error) {
+      logWebAuthDiagnostic('request_error', {
+        endpoint: path,
+        method,
+        status: 'exception',
+        error: error?.message || String(error || ''),
+        fallback: false,
+      });
+      throw error;
     }
-
-    return payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
   };
 
   const requestRawBody = async (method, path, body, options = {}) => {
@@ -1393,11 +1449,17 @@
       });
       try {
         const result = await request('POST', '/auth/password-reset/request', payload, { auth: false });
+        const deliveryConfirmed = result?.deliveryConfirmed === true
+          || (result?.deliveryConfirmed == null && (result?.requested === true || result?.ok === true));
         logPasswordResetDiagnostic('request_completed', payload, {
           endpoint: '/auth/password-reset/request',
-          status: result?.requested === true || result?.ok === true ? 'success' : 'failed',
+          status: deliveryConfirmed ? 'success' : 'failed',
         });
-        return { success: result?.requested === true || result?.ok === true };
+        return {
+          success: deliveryConfirmed,
+          requested: result?.requested === true || result?.ok === true,
+          deliveryConfirmed,
+        };
       } catch (error) {
         logPasswordResetDiagnostic('request_error', payload, {
           endpoint: '/auth/password-reset/request',
