@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = 'change-password.html';
       return true;
     }
-    if (user?.emailVerificationPending === true || user?.emailVerified !== true) {
+    if (user?.emailVerificationPending === true) {
       goToVerification(
         user?.email || fallbackEmail,
         verificationMessageText || 'Seu e-mail precisa ser confirmado para continuar.'
