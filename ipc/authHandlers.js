@@ -260,6 +260,7 @@ const registerAuthHandlers = ({
       pendingVerification: result?.pendingVerification === true,
       verificationExpiresAt: result?.verificationExpiresAt || null,
       resendAvailableAt: result?.resendAvailableAt || null,
+      sendCount: Number(result?.sendCount || 0),
     };
   });
 
@@ -419,6 +420,30 @@ const registerAuthHandlers = ({
       return result;
     } catch (error) {
       logPasswordReset('email_verification_error', payload, { endpoint: '/auth/email-verification/confirm', status: 'error', error: error?.message || String(error || '') });
+      throw error;
+    }
+  });
+
+  ipcMain.handle('auth-email-verification-resend', async (_event, payload = {}) => {
+    logPasswordReset('email_verification_resend_received', payload, { endpoint: '/auth/email-verification/resend', status: 'received' });
+    if (!isCentralEnabled()) {
+      logPasswordReset('email_verification_resend_blocked', payload, { endpoint: '/auth/email-verification/resend', status: 'central_disabled' });
+      throw new Error('Reenvio de e-mail indisponivel sem backend central.');
+    }
+
+    try {
+      const result = await centralBackendAdapter.authResendEmailVerification(payload || {});
+      logPasswordReset('email_verification_resend_completed', payload, {
+        endpoint: '/auth/email-verification/resend',
+        status: result?.success ? 'success' : (result?.blocked ? 'blocked' : 'failed'),
+      });
+      return result;
+    } catch (error) {
+      logPasswordReset('email_verification_resend_error', payload, {
+        endpoint: '/auth/email-verification/resend',
+        status: 'error',
+        error: error?.message || String(error || ''),
+      });
       throw error;
     }
   });

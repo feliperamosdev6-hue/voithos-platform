@@ -320,6 +320,31 @@ const createCentralBackendAdapter = (options = {}) => {
     };
   };
 
+  const authResendEmailVerification = async ({ email, login, adminEmail } = {}) => {
+    const response = await withTimeout(`${config.baseUrl}/auth/email-verification/resend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email || login || adminEmail || '',
+      }),
+    });
+    await ensureOk(response);
+    const payload = await response.json();
+    const data = payload?.data || {};
+    return {
+      success: data?.deliveryConfirmed === true || data?.resent === true || payload?.ok === true,
+      resent: data?.resent === true,
+      blocked: data?.blocked === true,
+      reason: data?.reason || '',
+      message: data?.message || '',
+      resendAvailableAt: data?.resendAvailableAt || '',
+      verificationExpiresAt: data?.verificationExpiresAt || '',
+      sendCount: Number(data?.sendCount || 0),
+      deliveryConfirmed: data?.deliveryConfirmed === true,
+      pendingVerification: data?.pendingVerification === true,
+    };
+  };
+
   const authSignup = async ({
     documentType,
     documentNumber,
@@ -1984,6 +2009,7 @@ const createCentralBackendAdapter = (options = {}) => {
     authLogin,
     authSignup,
     authConfirmEmailVerification,
+    authResendEmailVerification,
     authRequestPasswordReset,
     authValidatePasswordResetCode,
     authConfirmPasswordReset,

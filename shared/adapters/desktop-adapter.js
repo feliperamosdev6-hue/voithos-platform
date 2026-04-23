@@ -70,6 +70,11 @@
       if (window.__webAdapter?.auth?.confirmEmailVerification) return window.__webAdapter.auth.confirmEmailVerification(payload);
       return unavailable('auth.confirmEmailVerification');
     },
+    resendEmailVerification: async (payload) => {
+      if (window.auth?.resendEmailVerification) return window.auth.resendEmailVerification(payload);
+      if (window.__webAdapter?.auth?.resendEmailVerification) return window.__webAdapter.auth.resendEmailVerification(payload);
+      return unavailable('auth.resendEmailVerification');
+    },
     validatePasswordResetCode: async (payload) => {
       logPasswordReset('validate_route', payload, { endpoint: '/auth/password-reset/validate', status: 'started' });
       if (window.auth?.validatePasswordResetCode) {

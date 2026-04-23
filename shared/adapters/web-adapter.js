@@ -1392,6 +1392,7 @@
         pendingVerification,
         verificationExpiresAt: result?.verificationExpiresAt || null,
         resendAvailableAt: result?.resendAvailableAt || null,
+        sendCount: Number(result?.sendCount || 0),
       };
     },
     confirmEmailVerification: async ({ email, code }) => {
@@ -1435,6 +1436,42 @@
       } catch (error) {
         logPasswordResetDiagnostic('email_verification_error', payload, {
           endpoint: '/auth/email-verification/confirm',
+          status: 'error',
+          error: error?.message || String(error || ''),
+        });
+        throw error;
+      }
+    },
+    resendEmailVerification: async ({ email }) => {
+      const payload = {
+        email: cleanText(email).toLowerCase(),
+      };
+      logPasswordResetDiagnostic('email_verification_resend_call', payload, {
+        endpoint: '/auth/email-verification/resend',
+        status: 'started',
+      });
+      try {
+        const result = await request('POST', '/auth/email-verification/resend', payload, { auth: false });
+        const deliveryConfirmed = result?.deliveryConfirmed === true || result?.resent === true || result?.ok === true;
+        logPasswordResetDiagnostic('email_verification_resend_completed', payload, {
+          endpoint: '/auth/email-verification/resend',
+          status: result?.blocked === true ? 'blocked' : (deliveryConfirmed ? 'success' : 'failed'),
+        });
+        return {
+          success: deliveryConfirmed,
+          resent: result?.resent === true,
+          blocked: result?.blocked === true,
+          reason: result?.reason || '',
+          message: result?.message || '',
+          resendAvailableAt: result?.resendAvailableAt || null,
+          verificationExpiresAt: result?.verificationExpiresAt || null,
+          sendCount: Number(result?.sendCount || 0),
+          deliveryConfirmed,
+          pendingVerification: result?.pendingVerification === true || deliveryConfirmed,
+        };
+      } catch (error) {
+        logPasswordResetDiagnostic('email_verification_resend_error', payload, {
+          endpoint: '/auth/email-verification/resend',
           status: 'error',
           error: error?.message || String(error || ''),
         });

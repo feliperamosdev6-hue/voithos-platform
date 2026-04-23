@@ -157,6 +157,26 @@ const confirmEmailVerificationFlow = async (req, res, next) => {
   }
 };
 
+const resendEmailVerificationFlow = async (req, res, next) => {
+  try {
+    logAuthDiagnostic('email_verification_resend_received', req, { status: 'received' });
+    const data = await authService.resendEmailVerification({
+      email: req.body?.email || req.body?.login || req.body?.adminEmail || '',
+    });
+    logAuthDiagnostic('email_verification_resend_completed', req, {
+      status: data?.deliveryConfirmed === true || data?.resent === true ? 'success' : 'blocked',
+    });
+
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    logAuthDiagnostic('email_verification_resend_error', req, { status: 'error', error: error?.message || String(error || '') });
+    return next(error);
+  }
+};
+
 const requestPasswordResetFlow = async (req, res, next) => {
   try {
     logPasswordReset('request_received', req, { status: 'received' });
@@ -222,6 +242,7 @@ module.exports = {
   logout,
   changePassword,
   confirmEmailVerificationFlow,
+  resendEmailVerificationFlow,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,

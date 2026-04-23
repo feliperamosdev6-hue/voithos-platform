@@ -27,6 +27,7 @@ const pendingSignupRepository = {
     verificationCode,
     verificationExpiresAt,
     resendAvailableAt,
+    sendCount = 1,
   }) => {
     const normalizedEmail = toRequiredString(email, 'email');
     const normalizedPasswordHash = toRequiredString(passwordHash, 'passwordHash');
@@ -37,6 +38,7 @@ const pendingSignupRepository = {
     const normalizedResendAvailableAt = resendAvailableAt
       ? (resendAvailableAt instanceof Date ? resendAvailableAt : new Date(resendAvailableAt))
       : null;
+    const normalizedSendCount = Math.max(0, Number(sendCount) || 0);
 
     const rows = await prisma.$queryRaw`
       INSERT INTO "PendingSignup" (
@@ -58,7 +60,7 @@ const pendingSignupRepository = {
         ${normalizedCode},
         ${normalizedVerificationExpiresAt},
         ${normalizedResendAvailableAt},
-        1,
+        ${normalizedSendCount},
         NOW(),
         NOW()
       )
@@ -68,7 +70,7 @@ const pendingSignupRepository = {
         "verificationCode" = EXCLUDED."verificationCode",
         "verificationExpiresAt" = EXCLUDED."verificationExpiresAt",
         "resendAvailableAt" = EXCLUDED."resendAvailableAt",
-        "sendCount" = COALESCE("PendingSignup"."sendCount", 0) + 1,
+        "sendCount" = EXCLUDED."sendCount",
         "updatedAt" = NOW()
       RETURNING *
     `;

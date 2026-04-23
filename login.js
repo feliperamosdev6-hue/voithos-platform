@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordMessage = document.getElementById('password-message');
   const authApi = window.appApi?.auth || window.auth;
   const RESEND_WAIT_SECONDS = 5 * 60;
-  const VERIFICATION_WAIT_SECONDS = 5 * 60;
+  const VERIFICATION_WAIT_SECONDS = 2 * 60;
   const getUiBaseUrl = () => {
     try {
       return String(window.__APP_API_BASE__ || localStorage.getItem('apiBase') || '').trim();
@@ -57,6 +57,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const verificationFlowState = {
     email: '',
     maskedEmail: '',
+    resendAvailableAt: '',
+    sendCount: 0,
     resendTimerId: null,
   };
 
@@ -151,27 +153,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const startVerificationTimer = () => {
+  const startVerificationTimer = (resendAvailableAt = '') => {
     stopAllTimers();
-    let remainingSeconds = VERIFICATION_WAIT_SECONDS;
+    const fallbackTargetAt = Date.now() + (VERIFICATION_WAIT_SECONDS * 1000);
+    const parsedTargetAt = resendAvailableAt ? new Date(resendAvailableAt).getTime() : 0;
+    const targetAt = Number.isFinite(parsedTargetAt) && parsedTargetAt > 0 ? parsedTargetAt : fallbackTargetAt;
 
     const updateLabel = () => {
       if (!resendVerificationPlaceholder) return;
+      const remainingMs = Math.max(0, targetAt - Date.now());
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      if (remainingSeconds <= 0) {
+        resendVerificationPlaceholder.disabled = false;
+        resendVerificationPlaceholder.textContent = 'Reenviar código';
+        return;
+      }
       resendVerificationPlaceholder.disabled = true;
       resendVerificationPlaceholder.textContent = `Reenviar código em ${formatResendWait(remainingSeconds)}`;
     };
 
     updateLabel();
     verificationFlowState.resendTimerId = window.setInterval(() => {
-      remainingSeconds -= 1;
+      const remainingSeconds = Math.ceil(Math.max(0, targetAt - Date.now()) / 1000);
       if (remainingSeconds <= 0) {
         if (verificationFlowState.resendTimerId) {
           window.clearInterval(verificationFlowState.resendTimerId);
           verificationFlowState.resendTimerId = null;
         }
         if (resendVerificationPlaceholder) {
-          resendVerificationPlaceholder.disabled = true;
-          resendVerificationPlaceholder.textContent = 'Reenvio disponível em breve';
+          resendVerificationPlaceholder.disabled = false;
+          resendVerificationPlaceholder.textContent = 'Reenviar código';
         }
         return;
       }
@@ -235,12 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Acesse sua conta para continuar');
   };
 
-  const goToVerification = (email, message) => {
+  const goToVerification = (email, message, verificationMeta = {}) => {
     stopAllTimers();
     setVerificationTarget(email || verificationFlowState.email || '');
+    verificationFlowState.resendAvailableAt = String(verificationMeta?.resendAvailableAt || '');
+    verificationFlowState.sendCount = Number(verificationMeta?.sendCount || 0);
     showScreen('verification');
     updateSubtitle('Confirme seu e-mail');
-    startVerificationTimer();
+    startVerificationTimer(verificationFlowState.resendAvailableAt);
     setFlowMessage(
       verificationMessage,
       message || (verificationFlowState.maskedEmail ? `Digite o código enviado para ${verificationFlowState.maskedEmail}.` : 'Digite o código enviado para seu e-mail.')
@@ -284,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Senha redefinida');
   };
 
-  const routeAuthenticatedUser = (user, fallbackEmail = '', verificationMessageText = '') => {
+  const routeAuthenticatedUser = (user, fallbackEmail = '', verificationMessageText = '', verificationMeta = {}) => {
     if (user?.tipo === 'super_admin') {
       window.location.href = 'super-admin.html';
       return true;
@@ -296,7 +309,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (user?.emailVerificationPending === true) {
       goToVerification(
         user?.email || fallbackEmail,
-        verificationMessageText || 'Seu e-mail precisa ser confirmado para continuar.'
+        verificationMessageText || 'Seu e-mail precisa ser confirmado para continuar.',
+        verificationMeta
       );
       return true;
     }
@@ -346,8 +360,53 @@ document.addEventListener('DOMContentLoaded', () => {
   backToLoginFromPassword?.addEventListener('click', goToLogin);
   backToLoginFromSuccess?.addEventListener('click', goToLogin);
 
-  resendVerificationPlaceholder?.addEventListener('click', () => {
-    window.alert('Reenvio ainda indisponível nesta etapa.');
+  resendVerificationPlaceholder?.addEventListener('click', async () => {
+    const email = verificationFlowState.email || String(emailInput?.value || '').trim().toLowerCase();
+    logAuthUiDiagnostic('signup_resend_click', {
+      endpoint: '/auth/email-verification/resend',
+      email,
+      status: 'started',
+    });
+    if (!email) {
+      setFlowMessage(verificationMessage, 'Informe o e-mail do cadastro para reenviar o código.');
+      return;
+    }
+    if (!authApi?.resendEmailVerification) {
+      setFlowMessage(verificationMessage, 'Reenvio de e-mail indisponível neste ambiente.');
+      return;
+    }
+
+    try {
+      const result = await authApi.resendEmailVerification({ email });
+      const resendAccepted = result?.success === true || result?.deliveryConfirmed === true || result?.resent === true;
+      logAuthUiDiagnostic('signup_resend_result', {
+        endpoint: '/auth/email-verification/resend',
+        email,
+        status: result?.blocked === true ? 'blocked' : (resendAccepted ? 'success' : 'failed'),
+      });
+      if (result?.resendAvailableAt) {
+        verificationFlowState.resendAvailableAt = String(result.resendAvailableAt || '');
+        startVerificationTimer(verificationFlowState.resendAvailableAt);
+      }
+      if (result?.blocked === true) {
+        setFlowMessage(verificationMessage, result?.message || 'Reenvio temporariamente indisponível.');
+        return;
+      }
+      if (!resendAccepted) {
+        setFlowMessage(verificationMessage, result?.message || 'Não foi possível reenviar o código agora.');
+        return;
+      }
+      setFlowMessage(verificationMessage, result?.message || `Novo código enviado para ${verificationFlowState.maskedEmail}.`);
+    } catch (error) {
+      console.error('Erro ao reenviar código de confirmação', error);
+      logAuthUiDiagnostic('signup_resend_error', {
+        endpoint: '/auth/email-verification/resend',
+        email,
+        status: 'error',
+        error: error?.message || String(error || ''),
+      });
+      setFlowMessage(verificationMessage, error?.message || 'Não foi possível reenviar o código agora.');
+    }
   });
 
   resendCodePlaceholder?.addEventListener('click', () => {
@@ -596,7 +655,11 @@ document.addEventListener('DOMContentLoaded', () => {
         routeAuthenticatedUser(
           result.user,
           adminEmail,
-          `Enviamos um código para ${maskEmail(result.user?.email || adminEmail)}. Confirme para acessar o Index.`
+          `Enviamos um código para ${maskEmail(result.user?.email || adminEmail)}. Confirme para acessar o Index.`,
+          {
+            resendAvailableAt: result?.resendAvailableAt || '',
+            sendCount: result?.sendCount || 0,
+          }
         );
         return;
       }

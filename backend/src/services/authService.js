@@ -10,7 +10,9 @@ const { emailService } = require('./emailService');
 
 const SESSION_TTL_DAYS = 7;
 const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
-const SIGNUP_RESEND_WAIT_MINUTES = 5;
+const SIGNUP_RESEND_WAIT_MINUTES = 2;
+const SIGNUP_RESEND_LIMIT = 3;
+const SIGNUP_RESEND_BLOCK_MINUTES = 15;
 const SUPER_ADMIN_EMAIL = String(process.env.VOITHOS_SUPERADMIN_EMAIL || 'superadmin@voithos.local').trim().toLowerCase();
 const SUPER_ADMIN_PASSWORD = String(process.env.VOITHOS_SUPERADMIN_PASSWORD || 'voithos@2026').trim();
 const SUPER_ADMIN_CLINIC_EMAIL = String(process.env.VOITHOS_SUPERADMIN_CLINIC_EMAIL || 'superadmin-clinic@voithos.local').trim().toLowerCase();
@@ -30,7 +32,21 @@ const addMinutes = (date, minutes) => {
   return next;
 };
 
-const getSignupResendAvailableAt = () => addMinutes(new Date(), SIGNUP_RESEND_WAIT_MINUTES);
+const getSignupResendAvailableAt = (sendCount = 1) => addMinutes(
+  new Date(),
+  Number(sendCount) >= SIGNUP_RESEND_LIMIT
+    ? SIGNUP_RESEND_BLOCK_MINUTES
+    : SIGNUP_RESEND_WAIT_MINUTES
+);
+
+const formatSignupResendWait = (targetAt) => {
+  const targetTime = new Date(targetAt).getTime();
+  if (!Number.isFinite(targetTime)) return 'alguns minutos';
+  const totalSeconds = Math.max(0, Math.ceil((targetTime - Date.now()) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}m ${seconds}s`;
+};
 
 const generateSixDigitCode = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0');
 
@@ -393,6 +409,163 @@ const confirmEmailVerification = async ({ email, code }) => {
   };
 };
 
+const resendEmailVerification = async ({ email }) => {
+  const normalizedEmail = normalizeEmail(email);
+  logAuthDiagnostic('email_verification_resend_started', {
+    endpoint: '/auth/email-verification/resend',
+    email: normalizedEmail,
+    status: 'started',
+  });
+
+  if (!normalizedEmail) {
+    logAuthDiagnostic('email_verification_resend_validation_failed', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: 'missing_email',
+    });
+    throw new AppError(400, 'VALIDATION_ERROR', 'email is required.');
+  }
+
+  const pendingSignup = await pendingSignupRepository.findByEmail(normalizedEmail);
+  if (!pendingSignup) {
+    logAuthDiagnostic('email_verification_resend_not_found', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: 'not_found',
+    });
+    throw new AppError(404, 'PENDING_SIGNUP_NOT_FOUND', 'Pending signup not found.');
+  }
+
+  const pendingExpiresAt = pendingSignup.verificationExpiresAt
+    ? new Date(pendingSignup.verificationExpiresAt).getTime()
+    : 0;
+  if (!pendingExpiresAt || pendingExpiresAt <= Date.now()) {
+    logAuthDiagnostic('email_verification_resend_expired', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: 'expired',
+    });
+    throw new AppError(400, 'PENDING_SIGNUP_EXPIRED', 'Verification code expired.');
+  }
+
+  const currentSendCount = Math.max(0, Number(pendingSignup.sendCount) || 0);
+  const currentResendAt = pendingSignup.resendAvailableAt
+    ? new Date(pendingSignup.resendAvailableAt).getTime()
+    : 0;
+  const now = Date.now();
+
+  if (currentResendAt && currentResendAt > now) {
+    const remaining = formatSignupResendWait(currentResendAt);
+    const resendBlocked = currentSendCount >= SIGNUP_RESEND_LIMIT;
+    logAuthDiagnostic('email_verification_resend_blocked', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: resendBlocked ? 'limit_blocked' : 'cooldown_blocked',
+    });
+    return {
+      resent: false,
+      blocked: true,
+      reason: resendBlocked ? 'limit' : 'cooldown',
+      message: resendBlocked
+        ? `Limite de 3 envios atingido. Aguarde ${remaining} para tentar novamente.`
+        : `Aguarde ${remaining} para reenviar o codigo.`,
+      resendAvailableAt: new Date(currentResendAt).toISOString(),
+      verificationExpiresAt: pendingSignup.verificationExpiresAt || null,
+      sendCount: currentSendCount,
+      deliveryConfirmed: false,
+      pendingVerification: true,
+    };
+  }
+
+  const nextSendCount = currentSendCount >= SIGNUP_RESEND_LIMIT ? 1 : Math.max(1, currentSendCount + 1);
+  const nextResendAvailableAt = getSignupResendAvailableAt(nextSendCount);
+  const verificationCode = generateSixDigitCode();
+  const verificationExpiresAt = addMinutes(new Date(), PASSWORD_RESET_CODE_TTL_MINUTES);
+
+  const updatedPendingSignup = await pendingSignupRepository.upsertByEmail({
+    email: normalizedEmail,
+    passwordHash: pendingSignup.passwordHash,
+    signupData: pendingSignup.signupData,
+    verificationCode,
+    verificationExpiresAt,
+    resendAvailableAt: nextResendAvailableAt,
+    sendCount: nextSendCount,
+  });
+
+  logAuthDiagnostic('email_verification_resend_code_persisted', {
+    endpoint: '/auth/email-verification/resend',
+    email: normalizedEmail,
+    status: 'persisted',
+    sendCount: nextSendCount,
+  });
+
+  try {
+    logAuthDiagnostic('email_verification_resend_email_started', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: 'started',
+    });
+    const emailResult = await emailService.sendVerificationEmail(normalizedEmail, verificationCode);
+    const deliveryConfirmed = emailResult?.success === true;
+    if (deliveryConfirmed) {
+      logAuthDiagnostic('email_verification_resend_email_accepted', {
+        endpoint: '/auth/email-verification/resend',
+        email: normalizedEmail,
+        status: 'success',
+      });
+      return {
+        resent: true,
+        blocked: false,
+        reason: '',
+        message: 'Novo codigo enviado com sucesso.',
+        resendAvailableAt: updatedPendingSignup?.resendAvailableAt || nextResendAvailableAt,
+        verificationExpiresAt: updatedPendingSignup?.verificationExpiresAt || verificationExpiresAt,
+        sendCount: nextSendCount,
+        deliveryConfirmed: true,
+        pendingVerification: true,
+      };
+    }
+
+    logAuthDiagnostic('email_verification_resend_email_failed', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: 'failed',
+      error: emailResult?.error || 'Email send failed.',
+      resendError: emailResult?.resendError || null,
+    });
+    return {
+      resent: false,
+      blocked: false,
+      reason: 'delivery_failed',
+      message: 'Nao foi possivel enviar o codigo de confirmacao agora.',
+      resendAvailableAt: updatedPendingSignup?.resendAvailableAt || nextResendAvailableAt,
+      verificationExpiresAt: updatedPendingSignup?.verificationExpiresAt || verificationExpiresAt,
+      sendCount: nextSendCount,
+      deliveryConfirmed: false,
+      pendingVerification: true,
+    };
+  } catch (emailError) {
+    logAuthDiagnostic('email_verification_resend_email_failed', {
+      endpoint: '/auth/email-verification/resend',
+      email: normalizedEmail,
+      status: 'failed',
+      error: emailError?.message || String(emailError || ''),
+      resendError: emailError?.resendError || null,
+    });
+    return {
+      resent: false,
+      blocked: false,
+      reason: 'delivery_failed',
+      message: 'Nao foi possivel enviar o codigo de confirmacao agora.',
+      resendAvailableAt: updatedPendingSignup?.resendAvailableAt || nextResendAvailableAt,
+      verificationExpiresAt: updatedPendingSignup?.verificationExpiresAt || verificationExpiresAt,
+      sendCount: nextSendCount,
+      deliveryConfirmed: false,
+      pendingVerification: true,
+    };
+  }
+};
+
 const validatePasswordResetCode = async ({ email, code }) => {
   const normalizedEmail = normalizeEmail(email);
   const normalizedCode = normalizeCode(code);
@@ -684,6 +857,7 @@ module.exports = {
     changePassword,
     requestPasswordReset,
     confirmEmailVerification,
+    resendEmailVerification,
     validatePasswordResetCode,
     saveNewPassword,
     impersonateClinicAdmin,

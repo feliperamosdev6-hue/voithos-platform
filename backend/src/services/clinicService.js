@@ -51,9 +51,17 @@ const getEmailVerificationExpiresAt = () => {
   return expiresAt;
 };
 
-const getEmailVerificationResendAvailableAt = () => {
+const SIGNUP_EMAIL_VERIFICATION_RESEND_WAIT_MINUTES = 2;
+const SIGNUP_EMAIL_VERIFICATION_RESEND_LIMIT = 3;
+const SIGNUP_EMAIL_VERIFICATION_BLOCK_MINUTES = 15;
+
+const getEmailVerificationResendAvailableAt = (sendCount = 1) => {
   const resendAt = new Date();
-  resendAt.setMinutes(resendAt.getMinutes() + 5);
+  resendAt.setMinutes(
+    resendAt.getMinutes() + (Number(sendCount) >= SIGNUP_EMAIL_VERIFICATION_RESEND_LIMIT
+      ? SIGNUP_EMAIL_VERIFICATION_BLOCK_MINUTES
+      : SIGNUP_EMAIL_VERIFICATION_RESEND_WAIT_MINUTES)
+  );
   return resendAt;
 };
 const sanitizeMarker = (value = {}) => {
@@ -3015,8 +3023,23 @@ const clinicService = {
         throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
       }
 
+      const existingPendingSignup = await pendingSignupRepository.findByEmail(adminEmail);
+      if (existingPendingSignup) {
+        const pendingExpiresAt = existingPendingSignup.verificationExpiresAt
+          ? new Date(existingPendingSignup.verificationExpiresAt).getTime()
+          : 0;
+        if (pendingExpiresAt > Date.now()) {
+          throw new AppError(
+            409,
+            'PENDING_SIGNUP_EXISTS',
+            'Ja existe um cadastro pendente para este e-mail. Confirme o codigo enviado ou use reenviar.'
+          );
+        }
+        await pendingSignupRepository.deleteByEmail(adminEmail);
+      }
+
       const passwordHash = await authService.hashPassword(password);
-      await pendingSignupRepository.upsertByEmail({
+      const pendingSignup = await pendingSignupRepository.upsertByEmail({
         email: adminEmail,
         passwordHash,
         signupData: {
@@ -3030,12 +3053,14 @@ const clinicService = {
         },
         verificationCode: emailVerificationCode,
         verificationExpiresAt: emailVerificationExpiresAt,
-        resendAvailableAt: getEmailVerificationResendAvailableAt(),
+        resendAvailableAt: getEmailVerificationResendAvailableAt(1),
+        sendCount: 1,
       });
       console.info('[signup][clinic-service]', {
         stage: 'pending_signup_saved',
         email: adminEmail,
         clinic: nomeFantasia,
+        sendCount: Number(pendingSignup?.sendCount || 0),
       });
 
       try {
@@ -3063,6 +3088,9 @@ const clinicService = {
       return {
         pendingVerification: true,
         emailVerificationSent: true,
+        resendAvailableAt: pendingSignup?.resendAvailableAt || null,
+        verificationExpiresAt: pendingSignup?.verificationExpiresAt || null,
+        sendCount: Number(pendingSignup?.sendCount || 0),
         user: {
           email: adminEmail,
           emailVerified: false,

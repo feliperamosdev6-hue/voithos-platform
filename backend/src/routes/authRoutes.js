@@ -6,6 +6,7 @@ const {
   me,
   changePassword,
   confirmEmailVerificationFlow,
+  resendEmailVerificationFlow,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,
@@ -18,6 +19,7 @@ const router = express.Router();
 router.post('/login', login);
 router.post('/signup', signup);
 router.post('/email-verification/confirm', confirmEmailVerificationFlow);
+router.post('/email-verification/resend', resendEmailVerificationFlow);
 router.post('/password-reset/request', requestPasswordResetFlow);
 router.post('/password-reset/validate', validatePasswordResetFlow);
 router.post('/password-reset/confirm', confirmPasswordResetFlow);
