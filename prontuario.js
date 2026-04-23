@@ -944,8 +944,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedService = updateResult?.service || findServiceById(serviceId) || service;
       financeEntryId = updateResult?.financeId || savedService?.financeiroId || savedService?.financeiro?.financeEntryId || financeEntryId;
 
+      let usedLegacyFinanceFallback = false;
+
       // Garante lancamento no Financeiro mesmo antes da realizacao (ex.: "Pago / A realizar").
       if (!financeEntryId && allowFinance && amount > 0 && financeApi.createOrUpdateProcedureRevenue) {
+        usedLegacyFinanceFallback = true;
         const upsert = await financeApi.createOrUpdateProcedureRevenue({
           financeEntryId: '',
           procedureId: serviceId,
@@ -981,7 +984,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      if (financeEntryId) {
+      if (financeEntryId && usedLegacyFinanceFallback) {
         const currentFinanceRow = Array.isArray(patientFinanceRows)
           ? patientFinanceRows.find((row) => String(row?.id || '') === String(financeEntryId))
           : null;
