@@ -1,13 +1,16 @@
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { AppError } = require('../errors/AppError');
+const { prisma } = require('../db/prisma');
 const { clinicRepository } = require('../repositories/clinicRepository');
+const { pendingSignupRepository } = require('../repositories/pendingSignupRepository');
 const { sessionRepository } = require('../repositories/sessionRepository');
 const { userRepository } = require('../repositories/userRepository');
 const { emailService } = require('./emailService');
 
 const SESSION_TTL_DAYS = 7;
 const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
+const SIGNUP_RESEND_WAIT_MINUTES = 5;
 const SUPER_ADMIN_EMAIL = String(process.env.VOITHOS_SUPERADMIN_EMAIL || 'superadmin@voithos.local').trim().toLowerCase();
 const SUPER_ADMIN_PASSWORD = String(process.env.VOITHOS_SUPERADMIN_PASSWORD || 'voithos@2026').trim();
 const SUPER_ADMIN_CLINIC_EMAIL = String(process.env.VOITHOS_SUPERADMIN_CLINIC_EMAIL || 'superadmin-clinic@voithos.local').trim().toLowerCase();
@@ -26,6 +29,8 @@ const addMinutes = (date, minutes) => {
   next.setMinutes(next.getMinutes() + Number(minutes || 0));
   return next;
 };
+
+const getSignupResendAvailableAt = () => addMinutes(new Date(), SIGNUP_RESEND_WAIT_MINUTES);
 
 const generateSixDigitCode = () => crypto.randomInt(0, 1000000).toString().padStart(6, '0');
 
@@ -188,6 +193,101 @@ const requestPasswordReset = async ({ email }) => {
   };
 };
 
+const extractPendingSignupData = (pendingSignup) => {
+  const rawData = pendingSignup?.signupData && typeof pendingSignup.signupData === 'object'
+    ? pendingSignup.signupData
+    : {};
+  return {
+    documentType: String(rawData.documentType || '').trim().toUpperCase(),
+    documentNumber: String(rawData.documentNumber || '').trim().replace(/\D/g, ''),
+    nomeFantasia: String(rawData.nomeFantasia || '').trim(),
+    adminNome: String(rawData.adminNome || '').trim(),
+    adminEmail: normalizeEmail(rawData.adminEmail || pendingSignup?.email || ''),
+    clinicEmail: normalizeEmail(rawData.clinicEmail || rawData.adminEmail || pendingSignup?.email || ''),
+    clinicPhone: String(rawData.clinicPhone || '').trim(),
+  };
+};
+
+const finalizePendingSignup = async (pendingSignup) => {
+  const signupData = extractPendingSignupData(pendingSignup);
+  const passwordHash = String(pendingSignup?.passwordHash || '').trim();
+  if (!signupData.nomeFantasia || !signupData.adminNome || !signupData.adminEmail || !signupData.documentNumber) {
+    throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup data is invalid.');
+  }
+  if (!passwordHash) {
+    throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup password hash is missing.');
+  }
+
+  const duplicateClinic = await clinicRepository.findByDocument(signupData.documentNumber);
+  if (duplicateClinic) {
+    throw new AppError(409, 'CLINIC_DOCUMENT_EXISTS', 'CPF/CNPJ already exists.');
+  }
+
+  const duplicateUser = await userRepository.findByEmail(signupData.adminEmail);
+  if (duplicateUser) {
+    throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    const clinic = await tx.clinic.create({
+      data: {
+        nomeFantasia: signupData.nomeFantasia,
+        razaoSocial: signupData.nomeFantasia,
+        cnpjCpf: signupData.documentNumber,
+        email: signupData.clinicEmail || signupData.adminEmail || null,
+        telefoneComercial: signupData.clinicPhone || null,
+        endereco: null,
+      },
+    });
+
+    const user = await tx.user.create({
+      data: {
+        clinicId: clinic.id,
+        nome: signupData.adminNome,
+        email: signupData.adminEmail,
+        passwordHash,
+        role: 'ADMIN',
+        isClinicAdmin: true,
+        ativo: true,
+        emailVerified: true,
+        emailVerificationCode: null,
+        emailVerificationExpiresAt: null,
+      },
+    });
+
+    await tx.$executeRaw`
+      DELETE FROM "PendingSignup"
+      WHERE "email" = ${signupData.adminEmail}
+    `;
+
+    const token = crypto.randomUUID();
+    const expiresAt = addDays(new Date(), SESSION_TTL_DAYS);
+    const session = await tx.session.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt,
+      },
+    });
+
+    return {
+      token: session.token,
+      clinic,
+      user,
+    };
+  });
+
+  return {
+    verified: true,
+    token: created.token,
+    clinic: {
+      ...created.clinic,
+      clinicId: created.clinic.id,
+    },
+    user: sanitizeUser(created.user),
+  };
+};
+
 const confirmEmailVerification = async ({ email, code }) => {
   const normalizedEmail = normalizeEmail(email);
   const normalizedCode = normalizeCode(code);
@@ -198,6 +298,15 @@ const confirmEmailVerification = async ({ email, code }) => {
 
   if (!/^\d{6}$/.test(normalizedCode)) {
     throw new AppError(400, 'VALIDATION_ERROR', 'verification code must contain 6 digits.');
+  }
+
+  const pendingSignup = await pendingSignupRepository.findByEmail(normalizedEmail);
+  const pendingExpiresAt = pendingSignup?.verificationExpiresAt ? new Date(pendingSignup.verificationExpiresAt).getTime() : 0;
+  if (pendingSignup) {
+    if (String(pendingSignup.verificationCode || '') !== normalizedCode || !pendingExpiresAt || pendingExpiresAt <= Date.now()) {
+      throw new AppError(400, 'INVALID_VERIFICATION_CODE', 'Invalid or expired verification code.');
+    }
+    return finalizePendingSignup(pendingSignup);
   }
 
   const updateResult = await userRepository.confirmEmailVerificationByEmailAndCode({

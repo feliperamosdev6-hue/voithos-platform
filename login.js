@@ -359,7 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setFlowMessage(verificationMessage, 'E-mail confirmado com sucesso. Entrando no sistema...');
       stopAllTimers();
       window.setTimeout(() => {
-        window.location.href = 'index.html';
+        routeAuthenticatedUser(result?.user || { email, emailVerified: true }, email);
       }, 700);
     } catch (error) {
       console.error('Erro ao confirmar e-mail', error);

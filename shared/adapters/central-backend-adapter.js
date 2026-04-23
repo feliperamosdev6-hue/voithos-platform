@@ -312,7 +312,12 @@ const createCentralBackendAdapter = (options = {}) => {
     await ensureOk(response);
     const payload = await response.json();
     const data = payload?.data || {};
-    return { success: data?.verified === true || payload?.ok === true };
+    return {
+      success: data?.verified === true || payload?.ok === true,
+      token: data?.token || '',
+      user: data?.user || null,
+      clinic: data?.clinic || null,
+    };
   };
 
   const authSignup = async ({

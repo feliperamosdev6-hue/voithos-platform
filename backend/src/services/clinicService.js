@@ -1,13 +1,13 @@
 const crypto = require('crypto');
 const { prisma } = require('../db/prisma');
 const { clinicRepository } = require('../repositories/clinicRepository');
+const { pendingSignupRepository } = require('../repositories/pendingSignupRepository');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
-const { userRepository } = require('../repositories/userRepository');
 const { appointmentService } = require('./appointmentService');
 const { patientClinicalService } = require('./patientClinicalService');
 const { financialService } = require('./financialService');
-const { authService, SESSION_TTL_DAYS } = require('./authService');
+const { authService } = require('./authService');
 const { emailService } = require('./emailService');
 const { AppError } = require('../errors/AppError');
 const XLSX = require('xlsx');
@@ -48,6 +48,12 @@ const getEmailVerificationExpiresAt = () => {
   const expiresAt = new Date();
   expiresAt.setMinutes(expiresAt.getMinutes() + 10);
   return expiresAt;
+};
+
+const getEmailVerificationResendAvailableAt = () => {
+  const resendAt = new Date();
+  resendAt.setMinutes(resendAt.getMinutes() + 5);
+  return resendAt;
 };
 const sanitizeMarker = (value = {}) => {
   if (!isPlainObject(value)) return null;
@@ -2981,78 +2987,32 @@ const clinicService = {
     try {
       const emailVerificationCode = generateEmailVerificationCode();
       const emailVerificationExpiresAt = getEmailVerificationExpiresAt();
+      const duplicatedClinic = await clinicRepository.findByDocument(document.documentNumber);
+      if (duplicatedClinic) {
+        throw new AppError(409, 'CLINIC_DOCUMENT_EXISTS', 'CPF/CNPJ already exists.');
+      }
 
-      const result = await prisma.$transaction(async (tx) => {
-        const duplicatedClinic = await tx.clinic.findFirst({
-          where: { cnpjCpf: document.documentNumber },
-        });
-        if (duplicatedClinic) {
-          throw new AppError(409, 'CLINIC_DOCUMENT_EXISTS', 'CPF/CNPJ already exists.');
-        }
+      const duplicatedUser = await userRepository.findByEmail(adminEmail);
+      if (duplicatedUser) {
+        throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
+      }
 
-        const duplicatedUser = await tx.user.findUnique({
-          where: { email: adminEmail },
-        });
-        if (duplicatedUser) {
-          throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
-        }
-
-        const passwordHash = await authService.hashPassword(password);
-        const createdClinic = await tx.clinic.create({
-          data: {
-            nomeFantasia,
-            razaoSocial: nomeFantasia,
-            cnpjCpf: document.documentNumber,
-            email: clinicEmail || null,
-            telefoneComercial: clinicPhone || null,
-            endereco: null,
-          },
-        });
-
-        const createdUser = await tx.user.create({
-          data: {
-            clinicId: createdClinic.id,
-            nome: adminNome,
-            email: adminEmail,
-            passwordHash,
-            role: 'ADMIN',
-            isClinicAdmin: true,
-            ativo: true,
-            emailVerified: false,
-            emailVerificationCode,
-            emailVerificationExpiresAt,
-          },
-        });
-
-        const token = crypto.randomUUID();
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + SESSION_TTL_DAYS);
-
-        const session = await tx.session.create({
-          data: {
-            userId: createdUser.id,
-            token,
-            expiresAt,
-          },
-        });
-
-        return {
-          token: session.token,
-          clinic: {
-            ...createdClinic,
-            clinicId: createdClinic.id,
-          },
-          user: {
-            id: createdUser.id,
-            nome: createdUser.nome,
-            email: createdUser.email,
-            emailVerified: createdUser.emailVerified === true,
-            emailVerificationPending: true,
-            role: createdUser.role,
-            clinicId: createdUser.clinicId,
-            isClinicAdmin: createdUser.isClinicAdmin === true,
-          },
-        };
+      const passwordHash = await authService.hashPassword(password);
+      await pendingSignupRepository.upsertByEmail({
+        email: adminEmail,
+        passwordHash,
+        signupData: {
+          documentType: document.documentType,
+          documentNumber: document.documentNumber,
+          nomeFantasia,
+          adminNome,
+          adminEmail,
+          clinicEmail,
+          clinicPhone,
+        },
+        verificationCode: emailVerificationCode,
+        verificationExpiresAt: emailVerificationExpiresAt,
+        resendAvailableAt: getEmailVerificationResendAvailableAt(),
       });
 
       try {
@@ -3067,9 +3027,20 @@ const clinicService = {
           error: emailError?.message || emailError,
           resendError: emailError?.resendError || null,
         });
+        throw emailError;
       }
 
-      return result;
+      return {
+        pendingVerification: true,
+        emailVerificationSent: true,
+        user: {
+          email: adminEmail,
+          emailVerified: false,
+          emailVerificationPending: true,
+          role: 'ADMIN',
+          isClinicAdmin: true,
+        },
+      };
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');

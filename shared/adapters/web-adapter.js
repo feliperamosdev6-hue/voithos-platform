@@ -1318,8 +1318,21 @@
       const result = await request('POST', '/auth/signup', payload || {}, { auth: false });
       const clinic = result?.clinic ? normalizeClinicSessionData(result.clinic) : null;
       const mappedUser = mapCentralUserToDesktop(result?.user || {}, clinic);
-      persistWebSession({ token: result?.token || '', user: mappedUser, clinic });
-      return { success: true, user: mappedUser, clinic, token: result?.token || '' };
+      const token = cleanText(result?.token || '');
+      if (token && mappedUser) {
+        persistWebSession({ token, user: mappedUser, clinic });
+      } else {
+        clearWebSession();
+      }
+      return {
+        success: true,
+        user: mappedUser,
+        clinic,
+        token,
+        pendingVerification: result?.pendingVerification === true,
+        verificationExpiresAt: result?.verificationExpiresAt || null,
+        resendAvailableAt: result?.resendAvailableAt || null,
+      };
     },
     confirmEmailVerification: async ({ email, code }) => {
       const payload = {
@@ -1339,19 +1352,26 @@
         if (result?.verified === true || result?.ok === true) {
           const storedUser = getStoredUser();
           const storedClinic = getStoredClinic();
-          if (storedUser && cleanText(storedUser?.email).toLowerCase() === payload.email) {
+          const token = cleanText(result?.token || getStoredToken());
+          const responseUser = mapCentralUserToDesktop(result?.user || storedUser || {}, storedClinic);
+          if (token && responseUser) {
             persistWebSession({
-              token: getStoredToken(),
+              token,
               user: {
-                ...storedUser,
+                ...responseUser,
                 emailVerified: true,
                 emailVerificationPending: false,
               },
-              clinic: storedClinic,
+              clinic: result?.clinic ? normalizeClinicSessionData(result.clinic) : storedClinic,
             });
           }
         }
-        return { success: result?.verified === true || result?.ok === true };
+        return {
+          success: result?.verified === true || result?.ok === true,
+          token: result?.token || '',
+          user: result?.user ? mapCentralUserToDesktop(result.user, result?.clinic ? normalizeClinicSessionData(result.clinic) : getStoredClinic()) : null,
+          clinic: result?.clinic ? normalizeClinicSessionData(result.clinic) : null,
+        };
       } catch (error) {
         logPasswordResetDiagnostic('email_verification_error', payload, {
           endpoint: '/auth/email-verification/confirm',

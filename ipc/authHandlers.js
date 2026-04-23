@@ -226,21 +226,17 @@ const registerAuthHandlers = ({
 
     const result = await centralBackendAdapter.authSignup(payload || {});
     const mappedUser = sanitizeUser(mapCentralUserToDesktop(result?.user || {}));
-    setCurrentUser(mappedUser);
-    await createSession(mappedUser, undefined, {
-      source: 'central',
-      remoteToken: result?.token || '',
-      userSnapshot: mappedUser,
-      isImpersonatedSession: false,
-    });
     logCentralAuth('auth_signup_from=central', {
       userId: mappedUser?.id || '',
       clinicId: mappedUser?.clinicId || '',
     });
     return {
       success: true,
-      user: sanitizeUser(currentUserRef()),
+      user: mappedUser,
       clinic: result?.clinic || null,
+      pendingVerification: result?.pendingVerification === true,
+      verificationExpiresAt: result?.verificationExpiresAt || null,
+      resendAvailableAt: result?.resendAvailableAt || null,
     };
   });
 
@@ -386,13 +382,25 @@ const registerAuthHandlers = ({
 
     try {
       const result = await centralBackendAdapter.authConfirmEmailVerification(payload || {});
+      const resultUser = result?.user ? sanitizeUser(mapCentralUserToDesktop(result.user)) : null;
       const currentUser = currentUserRef?.() || null;
-      if (currentUser && String(currentUser.email || '').trim().toLowerCase() === String(payload?.email || payload?.login || payload?.adminEmail || '').trim().toLowerCase()) {
-        setCurrentUser(sanitizeUser({
-          ...currentUser,
+      const emailMatches = String(currentUser?.email || resultUser?.email || '').trim().toLowerCase()
+        === String(payload?.email || payload?.login || payload?.adminEmail || '').trim().toLowerCase();
+      if (emailMatches) {
+        const mappedUser = sanitizeUser({
+          ...(currentUser || resultUser || {}),
           emailVerified: true,
           emailVerificationPending: false,
-        }));
+        });
+        setCurrentUser(mappedUser);
+        if (result?.token && mappedUser?.id) {
+          await createSession(mappedUser, undefined, {
+            source: 'central',
+            remoteToken: result?.token || '',
+            userSnapshot: mappedUser,
+            isImpersonatedSession: false,
+          });
+        }
       }
       logPasswordReset('email_verification_completed', payload, { endpoint: '/auth/email-verification/confirm', status: result?.success ? 'success' : 'failed' });
       return result;

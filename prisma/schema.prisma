@@ -240,6 +240,22 @@ model Session {
   @@index([expiresAt])
 }
 
+model PendingSignup {
+  id                     String   @id @default(uuid())
+  email                  String   @unique
+  passwordHash           String
+  signupData             Json
+  verificationCode       String
+  verificationExpiresAt  DateTime
+  resendAvailableAt      DateTime?
+  sendCount              Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([verificationExpiresAt])
+  @@index([resendAvailableAt])
+}
+
 model Patient {
   id               String            @id @default(uuid())
   clinicId         String
