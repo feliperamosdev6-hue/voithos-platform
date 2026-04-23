@@ -46,6 +46,22 @@ const logEmailDiagnostic = (stage, payload = {}, extra = {}) => {
   });
 };
 
+const buildEmailFailure = (payload, stage, extra = {}) => {
+  const errorMessage = extra.error || 'Email send failed.';
+  logEmailDiagnostic(stage, payload, {
+    ...extra,
+    status: extra.status || 'failed',
+    error: errorMessage,
+    resendEmailId: '',
+  });
+  const failure = new Error(errorMessage);
+  failure.success = false;
+  failure.resendEmailId = '';
+  failure.data = null;
+  failure.resendError = extra.resendError || null;
+  return failure;
+};
+
 const sendWithResend = async (payload) => {
   const resend = getResendClient();
   const flow = String(payload?.idempotencyKey || '').startsWith('password-reset/')
@@ -61,10 +77,20 @@ const sendWithResend = async (payload) => {
         : '',
     status: 'started',
   });
-  const { data, error } = await resend.emails.send(payload);
+  const response = await resend.emails.send(payload);
+  logEmailDiagnostic(`${flow}_resend_call_completed`, payload, {
+    endpoint: flow === 'password-reset'
+      ? '/auth/password-reset/request'
+      : flow === 'signup-verification'
+        ? '/auth/signup'
+        : '',
+    status: 'response_received',
+    resendEmailId: response?.data?.id || '',
+  });
 
-  if (error) {
-    logEmailDiagnostic(`${flow}_resend_call_failed`, payload, {
+  if (!response || response.error) {
+    const error = response?.error || null;
+    throw buildEmailFailure(payload, `${flow}_resend_call_failed`, {
       endpoint: flow === 'password-reset'
         ? '/auth/password-reset/request'
         : flow === 'signup-verification'
@@ -74,23 +100,38 @@ const sendWithResend = async (payload) => {
       error: error?.message || error?.name || 'Unknown Resend error',
       resendError: error,
     });
-    const message = error?.message || error?.name || 'Unknown Resend error';
-    const resendError = new Error(message);
-    resendError.resendError = error;
-    throw resendError;
   }
 
-  logEmailDiagnostic(`${flow}_resend_call_completed`, payload, {
+  if (!response?.data || !response.data.id) {
+    throw buildEmailFailure(payload, `${flow}_resend_call_failed`, {
+      endpoint: flow === 'password-reset'
+        ? '/auth/password-reset/request'
+        : flow === 'signup-verification'
+          ? '/auth/signup'
+          : '',
+      status: 'failed',
+      error: 'Resend did not return a message id.',
+      resendError: null,
+    });
+  }
+
+  logEmailDiagnostic(`${flow}_resend_call_accepted`, payload, {
     endpoint: flow === 'password-reset'
       ? '/auth/password-reset/request'
       : flow === 'signup-verification'
         ? '/auth/signup'
         : '',
     status: 'accepted',
-    resendEmailId: data?.id || '',
+    resendEmailId: response.data.id,
   });
 
-  return { data, error: null };
+  return {
+    success: true,
+    resendEmailId: response.data.id,
+    data: response.data,
+    error: null,
+    resendError: null,
+  };
 };
 
 const sendVerificationEmail = async (email, code) => {

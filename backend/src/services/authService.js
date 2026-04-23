@@ -175,13 +175,23 @@ const requestPasswordReset = async ({ email }) => {
         status: 'started',
       });
       const emailResult = await emailService.sendPasswordResetEmail(normalizedEmail, resetCode);
-      deliveryConfirmed = true;
-      logPasswordReset('email_send_accepted', {
-        endpoint: '/auth/password-reset/request',
-        email: normalizedEmail,
-        status: 'accepted',
-        resendEmailId: emailResult?.data?.id || '',
-      });
+      deliveryConfirmed = emailResult?.success === true;
+      if (deliveryConfirmed) {
+        logPasswordReset('email_send_accepted', {
+          endpoint: '/auth/password-reset/request',
+          email: normalizedEmail,
+          status: 'accepted',
+          resendEmailId: emailResult?.resendEmailId || emailResult?.data?.id || '',
+        });
+      } else {
+        logPasswordReset('email_send_failed', {
+          endpoint: '/auth/password-reset/request',
+          email: normalizedEmail,
+          status: 'failed',
+          error: emailResult?.error || 'Email send failed.',
+          resendError: emailResult?.resendError || null,
+        });
+      }
     } catch (emailError) {
       logPasswordReset('email_send_failed', {
         endpoint: '/auth/password-reset/request',
@@ -190,6 +200,7 @@ const requestPasswordReset = async ({ email }) => {
         error: emailError?.message || emailError,
         resendError: emailError?.resendError || null,
       });
+      deliveryConfirmed = false;
     }
   }
 
