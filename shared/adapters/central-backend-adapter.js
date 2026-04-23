@@ -300,6 +300,21 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || null;
   };
 
+  const authConfirmEmailVerification = async ({ email, login, adminEmail, code, verificationCode, codigo } = {}) => {
+    const response = await withTimeout(`${config.baseUrl}/auth/email-verification/confirm`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email || login || adminEmail || '',
+        code: code || verificationCode || codigo || '',
+      }),
+    });
+    await ensureOk(response);
+    const payload = await response.json();
+    const data = payload?.data || {};
+    return { success: data?.verified === true || payload?.ok === true };
+  };
+
   const authSignup = async ({
     documentType,
     documentNumber,
@@ -1963,6 +1978,7 @@ const createCentralBackendAdapter = (options = {}) => {
     login,
     authLogin,
     authSignup,
+    authConfirmEmailVerification,
     authRequestPasswordReset,
     authValidatePasswordResetCode,
     authConfirmPasswordReset,

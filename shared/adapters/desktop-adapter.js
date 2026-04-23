@@ -65,6 +65,11 @@
       }
       return unavailable('auth.requestPasswordReset');
     },
+    confirmEmailVerification: async (payload) => {
+      if (window.auth?.confirmEmailVerification) return window.auth.confirmEmailVerification(payload);
+      if (window.__webAdapter?.auth?.confirmEmailVerification) return window.__webAdapter.auth.confirmEmailVerification(payload);
+      return unavailable('auth.confirmEmailVerification');
+    },
     validatePasswordResetCode: async (payload) => {
       logPasswordReset('validate_route', payload, { endpoint: '/auth/password-reset/validate', status: 'started' });
       if (window.auth?.validatePasswordResetCode) {

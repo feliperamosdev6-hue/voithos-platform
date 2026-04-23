@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('auth', {
   currentContext: () => ipcRenderer.invoke('auth-current-context'),
   listUsers: () => ipcRenderer.invoke('auth-list-users-public'),
   changePassword: (payload) => ipcRenderer.invoke('auth-change-password', payload),
+  confirmEmailVerification: (payload) => ipcRenderer.invoke('auth-email-verification-confirm', payload),
   requestPasswordReset: (payload) => invokePasswordReset('auth-password-reset-request', payload, '/auth/password-reset/request'),
   validatePasswordResetCode: (payload) => invokePasswordReset('auth-password-reset-validate', payload, '/auth/password-reset/validate'),
   saveNewPassword: (payload) => invokePasswordReset('auth-password-reset-confirm', payload, '/auth/password-reset/confirm'),

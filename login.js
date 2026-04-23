@@ -10,16 +10,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const screenSubtitle = document.getElementById('screen-subtitle');
   const screens = {
     login: document.getElementById('screen-login'),
+    verification: document.getElementById('screen-verification'),
     recovery: document.getElementById('screen-recovery'),
     code: document.getElementById('screen-code'),
     password: document.getElementById('screen-password'),
     success: document.getElementById('screen-success'),
   };
+  const emailVerificationCodeInput = document.getElementById('verification-code-input');
+  const confirmVerificationButton = document.getElementById('confirm-verification-button');
+  const resendVerificationPlaceholder = document.getElementById('resend-verification-placeholder');
+  const backToLoginFromVerification = document.getElementById('back-to-login-from-verification');
+  const verificationEmailBadge = document.getElementById('verification-email-badge');
+  const verificationMessage = document.getElementById('verification-message');
   const recoveryEmailInput = document.getElementById('recovery-email');
   const sendCodeButton = document.getElementById('send-code-button');
   const backToLoginFromRecovery = document.getElementById('back-to-login-from-recovery');
   const maskedEmailBadge = document.getElementById('masked-email-badge');
-  const verificationCodeInput = document.getElementById('verification-code');
+  const resetCodeInput = document.getElementById('verification-code');
   const validateCodeButton = document.getElementById('validate-code-button');
   const resendCodePlaceholder = document.getElementById('resend-code-placeholder');
   const backToLoginFromCode = document.getElementById('back-to-login-from-code');
@@ -33,10 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const passwordMessage = document.getElementById('password-message');
   const authApi = window.appApi?.auth || window.auth;
   const RESEND_WAIT_SECONDS = 5 * 60;
+  const VERIFICATION_WAIT_SECONDS = 5 * 60;
   const resetFlowState = {
     email: '',
     maskedEmail: '',
     code: '',
+    resendTimerId: null,
+  };
+  const verificationFlowState = {
+    email: '',
+    maskedEmail: '',
     resendTimerId: null,
   };
 
@@ -65,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleSignupForm(false);
     setError('');
     setSignupMessage('');
+    if (verificationMessage) verificationMessage.textContent = '';
   };
 
   const maskEmail = (email) => {
@@ -97,6 +111,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const setFlowMessage = (element, message) => {
     if (element) element.textContent = message || '';
+  };
+
+  const stopAllTimers = () => {
+    stopResendTimer();
+    if (verificationFlowState.resendTimerId) {
+      window.clearInterval(verificationFlowState.resendTimerId);
+      verificationFlowState.resendTimerId = null;
+    }
+  };
+
+  const setVerificationTarget = (email) => {
+    verificationFlowState.email = String(email || '').trim().toLowerCase();
+    verificationFlowState.maskedEmail = maskEmail(verificationFlowState.email);
+    if (verificationEmailBadge) {
+      verificationEmailBadge.textContent = `Código enviado para ${verificationFlowState.maskedEmail}`;
+    }
+  };
+
+  const startVerificationTimer = () => {
+    stopAllTimers();
+    let remainingSeconds = VERIFICATION_WAIT_SECONDS;
+
+    const updateLabel = () => {
+      if (!resendVerificationPlaceholder) return;
+      resendVerificationPlaceholder.disabled = true;
+      resendVerificationPlaceholder.textContent = `Reenviar código em ${formatResendWait(remainingSeconds)}`;
+    };
+
+    updateLabel();
+    verificationFlowState.resendTimerId = window.setInterval(() => {
+      remainingSeconds -= 1;
+      if (remainingSeconds <= 0) {
+        if (verificationFlowState.resendTimerId) {
+          window.clearInterval(verificationFlowState.resendTimerId);
+          verificationFlowState.resendTimerId = null;
+        }
+        if (resendVerificationPlaceholder) {
+          resendVerificationPlaceholder.disabled = true;
+          resendVerificationPlaceholder.textContent = 'Reenvio disponível em breve';
+        }
+        return;
+      }
+      updateLabel();
+    }, 1000);
   };
 
   const formatResendWait = (seconds) => {
@@ -150,13 +208,29 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const goToLogin = () => {
-    stopResendTimer();
+    stopAllTimers();
     showScreen('login');
     updateSubtitle('Acesse sua conta para continuar');
   };
 
+  const goToVerification = (email, message) => {
+    stopAllTimers();
+    setVerificationTarget(email || verificationFlowState.email || '');
+    showScreen('verification');
+    updateSubtitle('Confirme seu e-mail');
+    startVerificationTimer();
+    setFlowMessage(
+      verificationMessage,
+      message || (verificationFlowState.maskedEmail ? `Digite o código enviado para ${verificationFlowState.maskedEmail}.` : 'Digite o código enviado para seu e-mail.')
+    );
+    if (emailVerificationCodeInput) {
+      emailVerificationCodeInput.value = '';
+      emailVerificationCodeInput.focus();
+    }
+  };
+
   const goToRecovery = () => {
-    stopResendTimer();
+    stopAllTimers();
     showScreen('recovery');
     updateSubtitle('Recuperação de senha');
     if (recoveryEmailInput) {
@@ -166,40 +240,49 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const goToCode = () => {
+    stopAllTimers();
     showScreen('code');
     updateSubtitle('Validação do código');
     startResendTimer();
-    if (verificationCodeInput) {
-      verificationCodeInput.focus();
+    if (resetCodeInput) {
+      resetCodeInput.focus();
     }
   };
 
   const goToPassword = () => {
-    stopResendTimer();
+    stopAllTimers();
     showScreen('password');
     updateSubtitle('Nova senha');
     if (newPasswordInput) newPasswordInput.focus();
   };
 
   const goToSuccess = () => {
-    stopResendTimer();
+    stopAllTimers();
     showScreen('success');
     updateSubtitle('Senha redefinida');
   };
 
-  const normalizeDigits = (value, maxLength) => String(value || '').replace(/\D/g, '').slice(0, maxLength);
-
-  const redirectAfterLogin = (user) => {
+  const routeAuthenticatedUser = (user, fallbackEmail = '', verificationMessageText = '') => {
     if (user?.tipo === 'super_admin') {
       window.location.href = 'super-admin.html';
-      return;
+      return true;
     }
     if (user?.mustChangePassword && !user?.isImpersonatedSession) {
       window.location.href = 'change-password.html';
-      return;
+      return true;
+    }
+    if (user?.emailVerificationPending === true || user?.emailVerified !== true) {
+      goToVerification(
+        user?.email || fallbackEmail,
+        verificationMessageText || 'Seu e-mail precisa ser confirmado para continuar.'
+      );
+      return true;
     }
     window.location.href = 'index.html';
+    return true;
   };
+
+  const normalizeDigits = (value, maxLength) => String(value || '').replace(/\D/g, '').slice(0, maxLength);
 
   const checkActiveSession = async () => {
     if (!authApi?.currentUser) return;
@@ -207,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const user = await authApi.currentUser();
       if (user) {
         if (user.tipo === 'super_admin') return;
-        redirectAfterLogin(user);
+        routeAuthenticatedUser(user, user?.email || '');
       }
     } catch (err) {
       console.warn('Nao foi possivel validar sessao existente.', err);
@@ -235,13 +318,53 @@ document.addEventListener('DOMContentLoaded', () => {
     goToLogin();
   });
 
+  backToLoginFromVerification?.addEventListener('click', goToLogin);
   backToLoginFromRecovery?.addEventListener('click', goToLogin);
   backToLoginFromCode?.addEventListener('click', goToLogin);
   backToLoginFromPassword?.addEventListener('click', goToLogin);
   backToLoginFromSuccess?.addEventListener('click', goToLogin);
 
+  resendVerificationPlaceholder?.addEventListener('click', () => {
+    window.alert('Reenvio ainda indisponível nesta etapa.');
+  });
+
   resendCodePlaceholder?.addEventListener('click', () => {
     window.alert('Reenvio ainda indisponível nesta etapa.');
+  });
+
+  emailVerificationCodeInput?.addEventListener('input', () => {
+    emailVerificationCodeInput.value = normalizeDigits(emailVerificationCodeInput.value, 6);
+  });
+
+  confirmVerificationButton?.addEventListener('click', async () => {
+    const code = normalizeDigits(emailVerificationCodeInput?.value || '', 6);
+    const email = verificationFlowState.email || String(emailInput?.value || '').trim().toLowerCase();
+    if (code.length !== 6) {
+      setFlowMessage(verificationMessage, 'Digite o código de 6 dígitos.');
+      return;
+    }
+    if (!authApi?.confirmEmailVerification) {
+      setFlowMessage(verificationMessage, 'Confirmação de e-mail indisponível neste ambiente.');
+      return;
+    }
+
+    try {
+      const result = await authApi.confirmEmailVerification({
+        email,
+        code,
+      });
+      if (!result?.success) {
+        throw new Error('verification_failed');
+      }
+      setFlowMessage(verificationMessage, 'E-mail confirmado com sucesso. Entrando no sistema...');
+      stopAllTimers();
+      window.setTimeout(() => {
+        window.location.href = 'index.html';
+      }, 700);
+    } catch (error) {
+      console.error('Erro ao confirmar e-mail', error);
+      setFlowMessage(verificationMessage, 'Código inválido ou expirado.');
+    }
   });
 
   sendCodeButton?.addEventListener('click', async () => {
@@ -280,7 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('request_failed');
       }
       setRecoveryTarget(email);
-      setFlowMessage(recoveryMessage, `Enviamos um código para ${resetFlowState.maskedEmail}.`);
+      setFlowMessage(recoveryMessage, `Se o e-mail estiver cadastrado, você receberá um código para ${resetFlowState.maskedEmail}.`);
       goToCode();
     } catch (error) {
       console.error('Erro ao solicitar redefinição de senha', error);
@@ -294,12 +417,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  verificationCodeInput?.addEventListener('input', () => {
-    verificationCodeInput.value = normalizeDigits(verificationCodeInput.value, 6);
-  });
-
   validateCodeButton?.addEventListener('click', async () => {
-    const code = normalizeDigits(verificationCodeInput?.value || '', 6);
+    const code = normalizeDigits(resetCodeInput?.value || '', 6);
     if (code.length !== 6) {
       setFlowMessage(codeMessage, 'Digite o código de 6 dígitos.');
       return;
@@ -341,7 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await authApi.saveNewPassword({
         email: resetFlowState.email || String(recoveryEmailInput?.value || '').trim().toLowerCase(),
-        code: resetFlowState.code || normalizeDigits(verificationCodeInput?.value || '', 6),
+        code: resetFlowState.code || normalizeDigits(resetCodeInput?.value || '', 6),
         newPassword,
         confirmPassword,
       });
@@ -376,7 +495,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await authApi.login({ email, senha });
       if (result?.success && result?.user) {
-        redirectAfterLogin(result.user);
+        routeAuthenticatedUser(result.user, email);
         return;
       }
       setError('Falha no login. Verifique suas credenciais.');
@@ -430,7 +549,11 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (result?.success && result?.user) {
-        redirectAfterLogin(result.user);
+        routeAuthenticatedUser(
+          result.user,
+          adminEmail,
+          `Enviamos um código para ${maskEmail(result.user?.email || adminEmail)}. Confirme para acessar o Index.`
+        );
         return;
       }
 

@@ -3046,6 +3046,8 @@ const clinicService = {
             id: createdUser.id,
             nome: createdUser.nome,
             email: createdUser.email,
+            emailVerified: createdUser.emailVerified === true,
+            emailVerificationPending: true,
             role: createdUser.role,
             clinicId: createdUser.clinicId,
             isClinicAdmin: createdUser.isClinicAdmin === true,

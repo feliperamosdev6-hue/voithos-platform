@@ -61,11 +61,13 @@ const logPasswordReset = (stage, details = {}) => {
 
 const sanitizeUser = (user) => {
   if (!user) return null;
+  const emailVerificationPending = user.emailVerified !== true && Boolean(user.emailVerificationCode);
   return {
     id: user.id,
     nome: user.nome,
     email: user.email,
     emailVerified: user.emailVerified === true,
+    emailVerificationPending,
     role: String(user.role || '').trim().toUpperCase(),
     clinicId: user.clinicId,
     isClinicAdmin: user.isClinicAdmin === true || ['ADMIN', 'SUPER_ADMIN'].includes(String(user.role || '').trim().toUpperCase()),

@@ -31,6 +31,26 @@
                 </form>
             </section>
 
+            <section id="screen-verification" class="auth-screen hidden">
+                <div class="flow-header">
+                    <p class="flow-kicker">Confirmação</p>
+                    <h2 class="flow-title">Confirme seu e-mail</h2>
+                    <p class="flow-copy">Digite o código de 6 dígitos enviado para sua conta para liberar o acesso ao sistema.</p>
+                </div>
+
+                <div class="flow-card">
+                    <div class="mask-badge" id="verification-email-badge">Código enviado para seu e-mail</div>
+                    <div class="input-group">
+                        <label for="verification-code-input">Código de verificação</label>
+                        <input type="text" id="verification-code-input" inputmode="numeric" maxlength="6" placeholder="000000">
+                    </div>
+                    <button type="button" class="btn-login" id="confirm-verification-button">Confirmar e-mail</button>
+                    <button type="button" class="btn-link" id="resend-verification-placeholder" disabled>Reenviar código em 5:00</button>
+                    <button type="button" class="btn-secondary" id="back-to-login-from-verification">Voltar ao login</button>
+                    <p class="flow-message" id="verification-message"></p>
+                </div>
+            </section>
+
             <section id="screen-recovery" class="auth-screen hidden">
                 <div class="flow-header">
                     <p class="flow-kicker">Recuperação de acesso</p>

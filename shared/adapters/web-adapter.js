@@ -912,6 +912,8 @@
     nome: user.nome || '',
     login: user.email || '',
     email: user.email || '',
+    emailVerified: user.emailVerified === true,
+    emailVerificationPending: user.emailVerificationPending === true,
     tipo: mapCentralRoleToTipo(user.role),
     role: cleanText(user.role).toUpperCase(),
     isActive: user.ativo !== false,
@@ -1318,6 +1320,46 @@
       const mappedUser = mapCentralUserToDesktop(result?.user || {}, clinic);
       persistWebSession({ token: result?.token || '', user: mappedUser, clinic });
       return { success: true, user: mappedUser, clinic, token: result?.token || '' };
+    },
+    confirmEmailVerification: async ({ email, code }) => {
+      const payload = {
+        email: cleanText(email).toLowerCase(),
+        code: cleanText(code),
+      };
+      logPasswordResetDiagnostic('email_verification_call', payload, {
+        endpoint: '/auth/email-verification/confirm',
+        status: 'started',
+      });
+      try {
+        const result = await request('POST', '/auth/email-verification/confirm', payload, { auth: false });
+        logPasswordResetDiagnostic('email_verification_completed', payload, {
+          endpoint: '/auth/email-verification/confirm',
+          status: result?.verified === true || result?.ok === true ? 'success' : 'failed',
+        });
+        if (result?.verified === true || result?.ok === true) {
+          const storedUser = getStoredUser();
+          const storedClinic = getStoredClinic();
+          if (storedUser && cleanText(storedUser?.email).toLowerCase() === payload.email) {
+            persistWebSession({
+              token: getStoredToken(),
+              user: {
+                ...storedUser,
+                emailVerified: true,
+                emailVerificationPending: false,
+              },
+              clinic: storedClinic,
+            });
+          }
+        }
+        return { success: result?.verified === true || result?.ok === true };
+      } catch (error) {
+        logPasswordResetDiagnostic('email_verification_error', payload, {
+          endpoint: '/auth/email-verification/confirm',
+          status: 'error',
+          error: error?.message || String(error || ''),
+        });
+        throw error;
+      }
     },
     requestPasswordReset: async ({ email }) => {
       const payload = { email: cleanText(email).toLowerCase() };

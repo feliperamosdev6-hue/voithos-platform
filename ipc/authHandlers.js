@@ -84,6 +84,8 @@ const registerAuthHandlers = ({
     nome: user.nome || '',
     login: user.email || '',
     email: user.email || '',
+    emailVerified: user.emailVerified === true,
+    emailVerificationPending: user.emailVerificationPending === true,
     tipo: mapCentralRoleToTipo(user.role),
     role: String(user.role || '').trim().toUpperCase(),
     isActive: user.ativo !== false,
@@ -371,6 +373,31 @@ const registerAuthHandlers = ({
       return result;
     } catch (error) {
       logPasswordReset('confirm_error', payload, { endpoint: '/auth/password-reset/confirm', status: 'error', error: error?.message || String(error || '') });
+      throw error;
+    }
+  });
+
+  ipcMain.handle('auth-email-verification-confirm', async (_event, payload = {}) => {
+    logPasswordReset('email_verification_received', payload, { endpoint: '/auth/email-verification/confirm', status: 'received' });
+    if (!isCentralEnabled()) {
+      logPasswordReset('email_verification_blocked', payload, { endpoint: '/auth/email-verification/confirm', status: 'central_disabled' });
+      throw new Error('Confirmacao de e-mail indisponivel sem backend central.');
+    }
+
+    try {
+      const result = await centralBackendAdapter.authConfirmEmailVerification(payload || {});
+      const currentUser = currentUserRef?.() || null;
+      if (currentUser && String(currentUser.email || '').trim().toLowerCase() === String(payload?.email || payload?.login || payload?.adminEmail || '').trim().toLowerCase()) {
+        setCurrentUser(sanitizeUser({
+          ...currentUser,
+          emailVerified: true,
+          emailVerificationPending: false,
+        }));
+      }
+      logPasswordReset('email_verification_completed', payload, { endpoint: '/auth/email-verification/confirm', status: result?.success ? 'success' : 'failed' });
+      return result;
+    } catch (error) {
+      logPasswordReset('email_verification_error', payload, { endpoint: '/auth/email-verification/confirm', status: 'error', error: error?.message || String(error || '') });
       throw error;
     }
   });
