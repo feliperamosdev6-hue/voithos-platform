@@ -139,6 +139,29 @@ const registerAuthHandlers = ({
     return { clinicId: context.clinicId || 'defaultClinic' };
   };
 
+  const isPendingVerificationUser = (user) => Boolean(user)
+    && (user.emailVerificationPending === true || user.emailVerified !== true);
+
+  const resolveCurrentUserFromSession = async () => {
+    const cachedUser = currentUserRef?.() || null;
+    if (isPendingVerificationUser(cachedUser) && isCentralEnabled()) {
+      try {
+        const refreshedUser = await restoreCentralSessionIfNeeded({ allowFallbackSnapshot: false });
+        if (refreshedUser) {
+          return refreshedUser;
+        }
+      } catch (_error) {
+        // Mantém o cache local se a revalidação central falhar.
+      }
+    }
+
+    if (cachedUser) return cachedUser;
+
+    return isCentralEnabled()
+      ? await restoreCentralSessionIfNeeded().catch(async () => restoreSession())
+      : await restoreSession();
+  };
+
   const requireSuperAdmin = () => {
     const user = currentUserRef?.() || null;
     if (!user || user.tipo !== 'super_admin') {
@@ -259,24 +282,14 @@ const registerAuthHandlers = ({
   });
 
   ipcMain.handle('auth-current-user', async () => {
-    let user = currentUserRef?.() || null;
-    if (!user) {
-      user = isCentralEnabled()
-        ? await restoreCentralSessionIfNeeded().catch(async () => restoreSession())
-        : await restoreSession();
-      if (user) setCurrentUser(user);
-    }
+    const user = await resolveCurrentUserFromSession();
+    if (user) setCurrentUser(user);
     return sanitizeUser(user);
   });
 
   ipcMain.handle('auth-current-context', async () => {
-    let user = currentUserRef?.() || null;
-    if (!user) {
-      user = isCentralEnabled()
-        ? await restoreCentralSessionIfNeeded().catch(async () => restoreSession())
-        : await restoreSession();
-      if (user) setCurrentUser(user);
-    }
+    const user = await resolveCurrentUserFromSession();
+    if (user) setCurrentUser(user);
 
     const context = typeof buildAccessContext === 'function' ? buildAccessContext(user) : {
       accessProfile: user?.tipo === 'super_admin' ? 'SUPERADMIN' : 'ANONYMOUS',
