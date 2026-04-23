@@ -4,6 +4,7 @@ const { clinicRepository } = require('../repositories/clinicRepository');
 const { pendingSignupRepository } = require('../repositories/pendingSignupRepository');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
+const { userRepository } = require('../repositories/userRepository');
 const { appointmentService } = require('./appointmentService');
 const { patientClinicalService } = require('./patientClinicalService');
 const { financialService } = require('./financialService');
@@ -3027,7 +3028,7 @@ const clinicService = {
           error: emailError?.message || emailError,
           resendError: emailError?.resendError || null,
         });
-        throw emailError;
+        throw new AppError(502, 'SIGNUP_VERIFICATION_EMAIL_FAILED', 'Nao foi possivel enviar o codigo de confirmacao agora.');
       }
 
       return {
