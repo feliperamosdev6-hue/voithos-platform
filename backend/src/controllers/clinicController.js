@@ -1,5 +1,6 @@
 const { clinicService } = require('../services/clinicService');
 const { campaignService } = require('../services/campaignService');
+const { outboundMessageService } = require('../services/outboundMessageService');
 const { whatsappNgClient } = require('../adapters/whatsappNgClient');
 const { AppError } = require('../errors/AppError');
 const { isInternalServiceRequest, requireSuperAdmin } = require('../utils/accessControl');
@@ -329,6 +330,33 @@ const connectMyWhatsApp = async (req, res, next) => {
   }
 };
 
+const disconnectMyWhatsApp = async (req, res, next) => {
+  try {
+    const data = await whatsappNgClient.disconnectClinic({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const deleteMyWhatsAppInstance = async (req, res, next) => {
+  try {
+    const clinicId = req?.auth?.clinicId;
+    const data = await whatsappNgClient.deleteClinicInstance({ clinicId });
+    await outboundMessageService.resetClinicWhatsappReplyContexts({
+      clinicId,
+      reason: 'Clinic WhatsApp instance deleted by operator. Pending confirmation contexts were cleared before reconnect.',
+    }).catch((error) => {
+      console.warn('[clinicController] Failed to reset WhatsApp reply contexts after instance delete:', error?.message || error);
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const listMyCampaigns = async (req, res, next) => {
   try {
     const data = await campaignService.listCampaigns({
@@ -416,6 +444,8 @@ module.exports = {
   getMyWhatsAppConnection,
   refreshMyWhatsAppConnection,
   connectMyWhatsApp,
+  disconnectMyWhatsApp,
+  deleteMyWhatsAppInstance,
   listMyCampaigns,
   replaceMyCampaigns,
   createMyCampaign,

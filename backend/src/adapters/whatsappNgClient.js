@@ -208,6 +208,44 @@ const whatsappNgClient = {
     const qr = await request(`/instances/${encodeURIComponent(connection.instanceId)}/qr`);
     return normalizeConnection({ ...connection, ...qr }, normalizedClinicId);
   },
+  disconnectClinic: async ({ clinicId }) => {
+    const connection = await whatsappNgClient.getConnectionByClinic({ clinicId });
+    if (!connection.instanceId) {
+      return normalizeConnection({
+        clinicId,
+        status: 'NOT_CONFIGURED',
+        operationalStatus: 'NOT_CONFIGURED',
+        disconnected: false,
+      }, clinicId);
+    }
+    const result = await request(`/instances/${encodeURIComponent(connection.instanceId)}/disconnect`, {
+      method: 'POST',
+    });
+    return normalizeConnection({ ...connection, ...result, disconnected: true }, clinicId);
+  },
+  deleteClinicInstance: async ({ clinicId }) => {
+    const connection = await whatsappNgClient.getConnectionByClinic({ clinicId });
+    if (!connection.instanceId) {
+      return normalizeConnection({
+        clinicId,
+        status: 'NOT_CONFIGURED',
+        operationalStatus: 'NOT_CONFIGURED',
+        deleted: false,
+      }, clinicId);
+    }
+    const result = await request(`/instances/${encodeURIComponent(connection.instanceId)}`, {
+      method: 'DELETE',
+    });
+    return {
+      ...result,
+      clinicId,
+      instanceId: connection.instanceId,
+      exists: false,
+      status: 'NOT_CONFIGURED',
+      operationalStatus: 'NOT_CONFIGURED',
+      deleted: true,
+    };
+  },
   sendMessage: async ({ clinicId, phone, body, auditBody, appointmentId }) => request('/messages/send', {
     method: 'POST',
     body: {

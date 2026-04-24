@@ -1357,6 +1357,8 @@
     getWhatsAppConnection: async () => request('GET', '/clinics/me/whatsapp/connection', null, { auth: true }),
     refreshWhatsAppConnection: async () => request('POST', '/clinics/me/whatsapp/connection/refresh', {}, { auth: true }),
     connectWhatsApp: async () => request('POST', '/clinics/me/whatsapp/connect', {}, { auth: true }),
+    disconnectWhatsApp: async () => request('POST', '/clinics/me/whatsapp/disconnect', {}, { auth: true }),
+    deleteWhatsAppInstance: async () => request('DELETE', '/clinics/me/whatsapp/instance', null, { auth: true }),
   };
 
   const auth = {
