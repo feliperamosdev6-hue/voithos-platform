@@ -1541,6 +1541,29 @@ main {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #f8fafc;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.notif-item:hover {
+  background: #eef6ff;
+  border-color: #c7ddf6;
+}
+
+.notif-item:focus-visible {
+  outline: none;
+  border-color: #1f9a8a;
+  box-shadow: 0 0 0 3px rgba(31, 154, 138, 0.18);
+}
+
+.notif-item:active {
+  transform: translateY(1px);
 }
 
 .notif-item h4 {

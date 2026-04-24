@@ -36,6 +36,7 @@
 console.log('[AGENDA] agendamentos.js carregado');
 const AGENDA_PREFILL_PATIENT_KEY = 'agendaPrefillPatient';
 const AGENDA_PREFILL_DRAFT_KEY = 'agendaPrefillDraft';
+const AGENDA_NOTIFICATION_TARGET_KEY = 'agendaNotificationTarget';
 const AGENDA_AUTO_REFRESH_MS = 30000;
 
 const getClinicStorageKey = (baseKey) => {
@@ -637,6 +638,33 @@ const consumeAgendaDraftContext = () => {
   }
 };
 
+const consumeAgendaNotificationTarget = () => {
+  try {
+    const raw = sessionStorage.getItem(getClinicStorageKey(AGENDA_NOTIFICATION_TARGET_KEY))
+      || sessionStorage.getItem(AGENDA_NOTIFICATION_TARGET_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(getClinicStorageKey(AGENDA_NOTIFICATION_TARGET_KEY));
+    sessionStorage.removeItem(AGENDA_NOTIFICATION_TARGET_KEY);
+    const target = JSON.parse(raw);
+    const activeClinicId = String(currentUser?.clinicId || '').trim();
+    const targetClinicId = String(target?.clinicId || '').trim();
+    if (activeClinicId && targetClinicId && targetClinicId !== activeClinicId) {
+      console.warn('[AGENDA] stale_agenda_notification_target_detected=true', {
+        clinicId: activeClinicId,
+        targetClinicId,
+        appointmentId: target?.appointmentId || '',
+      });
+      return null;
+    }
+    return target;
+  } catch (err) {
+    sessionStorage.removeItem(getClinicStorageKey(AGENDA_NOTIFICATION_TARGET_KEY));
+    sessionStorage.removeItem(AGENDA_NOTIFICATION_TARGET_KEY);
+    console.warn('[AGENDA] invalid_agenda_notification_target_context', err?.message || err);
+    return null;
+  }
+};
+
 const applyPatientPrefillToModal = (patient, refs) => {
   if (!patient || !refs) return;
   const patientValue = patient.id || patient.prontuario || patient._id || '';
@@ -645,6 +673,54 @@ const applyPatientPrefillToModal = (patient, refs) => {
   if (refs.patientToggle) refs.patientToggle.textContent = patientName;
   if (refs.filtroPaciente) refs.filtroPaciente.value = patientName;
   renderPacientesOptions(patientName);
+};
+
+const findAgendaAppointmentById = (appointmentId) => {
+  const normalizedId = String(appointmentId || '').trim();
+  if (!normalizedId) return null;
+  const pools = [
+    Array.isArray(state.dayAgendamentos) ? state.dayAgendamentos : [],
+    Array.isArray(state.rangeAgendamentos) ? state.rangeAgendamentos : [],
+  ];
+  for (const pool of pools) {
+    const found = pool.find((appt) => String(appt?.id || appt?.agendamentoId || '').trim() === normalizedId);
+    if (found) return found;
+  }
+  return null;
+};
+
+const openAgendaTargetFromNotification = async () => {
+  const target = consumeAgendaNotificationTarget();
+  if (!target) return false;
+
+  const appointmentId = String(target?.appointmentId || '').trim();
+  const patientContext = target?.patient || null;
+  const draftContext = target?.draftContext || null;
+  const targetDate = String(target?.date || target?.data || '').trim();
+
+  if (targetDate && targetDate !== state.selectedDate) {
+    state.selectedDate = normalizeDateLocal(targetDate);
+    await refreshData();
+  }
+
+  if (appointmentId) {
+    let appointment = findAgendaAppointmentById(appointmentId);
+    if (appointment) {
+      openAgendaDrawer(appointment);
+      return true;
+    }
+  }
+
+  if (patientContext || draftContext) {
+    await abrirModalNovoAgendamento(null, {
+      defaultDate: state.selectedDate,
+      patientContext,
+      draftContext,
+    });
+    return true;
+  }
+
+  return false;
 };
 
 const openNewAppointmentForTimeSlot = async ({ date, time }) => {
@@ -2277,6 +2353,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await preencherPacientesSelect();
   await initAgenda();
   await maybeOpenFromQuery();
+  await openAgendaTargetFromNotification();
 });
 
 window.addEventListener('beforeunload', () => {

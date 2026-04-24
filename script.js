@@ -102,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let homeGestaoFinanceData = { receita: 0, pendentes: 0, inadimplencia: 0 };
     let homeGestaoOperacionalData = { estoqueTotal: 0, estoqueCritico: 0, laboratorioPendentes: 0 };
     let notifItems = [];
+    let renderedNotifItems = [];
     let centralNotifItems = [];
     let notifTab = 'geral';
     let notifViewed = false;
@@ -168,6 +169,138 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notifSub) notifSub.textContent = 'Voce tem 0 notificacoes novas';
     };
 
+    const getClinicStorageKey = (baseKey) => {
+        const clinicId = String(currentUser?.clinicId || '').trim();
+        return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+    };
+
+    const persistNotificationContext = (storage, key, value) => {
+        if (!storage || !key) return;
+        try {
+            storage.setItem(key, JSON.stringify(value));
+        } catch (_) {}
+    };
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[char] || char);
+
+    const normalizeNotificationPatient = (notification = {}) => {
+        const meta = notification?.meta || {};
+        const patientId = String(
+            meta?.patientId
+            || notification?.patientId
+            || meta?.id
+            || notification?.id
+            || ''
+        ).trim();
+        const patientName = String(meta?.patientName || notification?.patientName || notification?.patient || '').trim();
+        const prontuario = String(meta?.prontuario || notification?.prontuario || patientId).trim();
+
+        if (!patientId && !prontuario && !patientName) return null;
+        return {
+            id: patientId || prontuario || patientName,
+            prontuario: prontuario || patientId || patientName,
+            nome: patientName || 'Paciente',
+            clinicId: String(currentUser?.clinicId || '').trim(),
+        };
+    };
+
+    const persistAgendaNotificationContext = (notification = {}) => {
+        const patient = normalizeNotificationPatient(notification);
+        const meta = notification?.meta || {};
+        const appointmentId = String(meta?.appointmentId || notification?.appointmentId || '').trim();
+        const draftContext = {
+            tipo: String(meta?.tipo || notification?.title || 'Consulta').trim() || 'Consulta',
+            status: String(meta?.status || 'em_aberto').trim() || 'em_aberto',
+            dentistaId: String(meta?.dentistaId || '').trim(),
+        };
+        const target = {
+            clinicId: String(currentUser?.clinicId || '').trim(),
+            appointmentId,
+            date: String(meta?.data || notification?.data || '').trim(),
+            patient,
+            draftContext,
+        };
+        persistNotificationContext(sessionStorage, getClinicStorageKey('agendaNotificationTarget'), target);
+        if (patient) {
+            persistNotificationContext(sessionStorage, getClinicStorageKey('agendaPrefillPatient'), patient);
+            persistNotificationContext(sessionStorage, getClinicStorageKey('prontuarioPatient'), patient);
+        }
+        persistNotificationContext(sessionStorage, getClinicStorageKey('agendaPrefillDraft'), draftContext);
+    };
+
+    const persistPatientNotificationContext = (notification = {}) => {
+        const patient = normalizeNotificationPatient(notification);
+        if (!patient) return;
+        persistNotificationContext(sessionStorage, getClinicStorageKey('prontuarioPatient'), patient);
+    };
+
+    const resolveNotificationTarget = (notification = {}) => {
+        const meta = notification?.meta || {};
+        const type = String(notification?.type || '').trim().toLowerCase();
+        const destination = String(meta?.destination || '').trim().toLowerCase();
+        const patient = normalizeNotificationPatient(notification);
+        const patientId = String(meta?.patientId || notification?.patientId || patient?.id || '').trim();
+        const appointmentId = String(meta?.appointmentId || notification?.appointmentId || '').trim();
+        const planId = String(meta?.planId || notification?.planId || '').trim();
+        const accountId = String(meta?.accountId || notification?.accountId || '').trim();
+        const notificationKind = String(meta?.kind || '').trim().toLowerCase();
+
+        if (destination === 'agenda' || notificationKind === 'appointment' || type === 'agenda' || appointmentId) {
+            return {
+                href: 'agendamentos.html',
+                category: 'agenda',
+                persist: () => persistAgendaNotificationContext(notification),
+            };
+        }
+
+        if (destination === 'planos' || planId) {
+            return {
+                href: `planos.html?planId=${encodeURIComponent(planId)}`,
+                category: 'financeiro',
+                persist: () => {
+                    if (patient) persistNotificationContext(sessionStorage, getClinicStorageKey('prontuarioPatient'), patient);
+                },
+            };
+        }
+
+        if (destination === 'prontuario' || type === 'paciente' || (patientId && !appointmentId)) {
+            return {
+                href: 'prontuario.html',
+                category: 'pacientes',
+                persist: () => persistPatientNotificationContext(notification),
+            };
+        }
+
+        if (destination === 'financeiro' || type === 'financeiro' || accountId) {
+            return {
+                href: 'pagamentos.html',
+                category: 'financeiro',
+                persist: () => {
+                    if (patient) persistNotificationContext(sessionStorage, getClinicStorageKey('prontuarioPatient'), patient);
+                },
+            };
+        }
+
+        return {
+            href: 'index.html',
+            category: 'geral',
+            persist: () => {},
+        };
+    };
+
+    const activateNotification = (notification = {}) => {
+        const target = resolveNotificationTarget(notification);
+        markNotificationsViewed();
+        target.persist?.();
+        window.location.href = target.href;
+    };
+
     const toggleNotif = (ev) => {
         ev?.stopPropagation();
         if (!notifPanel || !notifToggle) return;
@@ -194,6 +327,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (notifPanel) {
         notifPanel.addEventListener('click', (ev) => ev.stopPropagation());
+    }
+
+    if (notifBody) {
+        notifBody.addEventListener('click', (ev) => {
+            const button = ev.target.closest('[data-notification-index]');
+            if (!button || !notifBody.contains(button)) return;
+            const index = Number(button.dataset.notificationIndex);
+            const notification = renderedNotifItems[index];
+            if (!notification) return;
+            activateNotification(notification);
+        });
     }
 
     notifTabs.forEach((tab) => {
@@ -528,6 +672,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const items = notifTab === 'geral'
             ? notifItems
             : notifItems.filter((item) => item.type === notifTab);
+        renderedNotifItems = items;
 
         if (!items.length) {
             notifBody.innerHTML = `
@@ -539,14 +684,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const html = items.map((item) => `
-            <div class="notif-item">
+        const html = items.map((item, index) => `
+            <button
+                class="notif-item"
+                type="button"
+                data-notification-index="${index}"
+                aria-label="${escapeHtml(item.title)}. ${escapeHtml(item.description)}"
+            >
                 <div>
-                    <h4>${item.title}</h4>
-                    <p>${item.description}</p>
+                    <h4>${escapeHtml(item.title)}</h4>
+                    <p>${escapeHtml(item.description)}</p>
                 </div>
-                <span class="notif-tag">${item.tag}</span>
-            </div>
+                <span class="notif-tag">${escapeHtml(item.tag)}</span>
+            </button>
         `).join('');
 
         notifBody.innerHTML = `<div class="notif-list">${html}</div>`;
@@ -583,6 +733,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     title,
                     description,
                     tag: statusLabel[statusKey] || statusKey,
+                    meta: {
+                        destination: 'agenda',
+                        kind: 'appointment',
+                        appointmentId: a.id || a.agendamentoId || '',
+                        patientId: a.pacienteId || a.prontuario || '',
+                        patientName: paciente,
+                        status: statusKey,
+                        dentistaId: a.dentistaId || '',
+                        tipo: tipo,
+                        data: a.data || '',
+                        horaInicio: a.horaInicio || '',
+                        horaFim: a.horaFim || '',
+                    },
                 };
             });
 
@@ -604,6 +767,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     title: 'Agendamento em atraso',
                     description: `${paciente} - ${tipo} - ${horario}`,
                     tag: 'Atraso',
+                    meta: {
+                        destination: 'agenda',
+                        kind: 'appointment',
+                        appointmentId: a.id || a.agendamentoId || '',
+                        patientId: a.pacienteId || a.prontuario || '',
+                        patientName: paciente,
+                        status: 'em_aberto',
+                        dentistaId: a.dentistaId || '',
+                        tipo,
+                        data: a.data || '',
+                        horaInicio: a.horaInicio || '',
+                        horaFim: a.horaFim || '',
+                    },
                 };
             });
 
@@ -624,6 +800,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const dueSoon = reminders?.dueSoon || { count: 0, totalAmount: 0, items: [] };
         const partialOutstanding = reminders?.partialOutstanding || { count: 0, totalAmount: 0, items: [] };
         const items = [];
+        const buildFinanceMeta = (entry = {}) => {
+            const planId = String(entry?.planId || '').trim();
+            return {
+                destination: planId ? 'planos' : 'financeiro',
+                kind: 'financial',
+                planId,
+                accountId: String(entry?.accountId || entry?.financialAccountId || '').trim(),
+                patientId: String(entry?.patientId || '').trim(),
+                patientName: String(entry?.patientName || entry?.description || '').trim(),
+                dueDate: entry?.dueDate || '',
+                remainingAmount: entry?.remainingAmount || 0,
+                status: entry?.status || '',
+            };
+        };
         const appendSamples = (group, tag, title) => {
             (Array.isArray(group?.items) ? group.items : []).slice(0, 2).forEach((entry) => {
                 const who = entry?.patientName || entry?.description || 'Recebivel';
@@ -633,42 +823,51 @@ document.addEventListener('DOMContentLoaded', () => {
                     title,
                     description: `${who}${due} • ${formatCurrency(entry?.remainingAmount || 0)}`,
                     tag,
+                    meta: buildFinanceMeta(entry),
                 });
             });
         };
         if (overdue.count > 0) {
+            const first = Array.isArray(overdue.items) ? overdue.items[0] : null;
             items.push({
                 type: 'financeiro',
                 title: 'Recebiveis em atraso',
                 description: `${overdue.count} item(ns) em atraso • ${formatCurrency(overdue.totalAmount)}`,
                 tag: 'Atraso',
+                meta: buildFinanceMeta(first || {}),
             });
             appendSamples(overdue, 'Atraso', 'Cobrar atraso');
         }
         if (dueToday.count > 0) {
+            const first = Array.isArray(dueToday.items) ? dueToday.items[0] : null;
             items.push({
                 type: 'financeiro',
                 title: 'Recebiveis vencem hoje',
                 description: `${dueToday.count} item(ns) • ${formatCurrency(dueToday.totalAmount)}`,
                 tag: 'Hoje',
+                meta: buildFinanceMeta(first || {}),
             });
             appendSamples(dueToday, 'Hoje', 'Vence hoje');
         }
         if (dueSoon.count > 0) {
+            const first = Array.isArray(dueSoon.items) ? dueSoon.items[0] : null;
             items.push({
                 type: 'financeiro',
                 title: 'Recebiveis proximos do vencimento',
                 description: `${dueSoon.count} item(ns) em ate 3 dias • ${formatCurrency(dueSoon.totalAmount)}`,
                 tag: '3 dias',
+                meta: buildFinanceMeta(first || {}),
             });
             appendSamples(dueSoon, '3 dias', 'Vence em breve');
         }
         if (partialOutstanding.count > 0) {
+            const first = Array.isArray(partialOutstanding.items) ? partialOutstanding.items[0] : null;
             items.push({
                 type: 'financeiro',
                 title: 'Saldos parciais pendentes',
                 description: `${partialOutstanding.count} conta(s) parcial(is) • ${formatCurrency(partialOutstanding.totalAmount)}`,
                 tag: 'Parcial',
+                meta: buildFinanceMeta(first || {}),
             });
             appendSamples(partialOutstanding, 'Parcial', 'Saldo restante');
         }
@@ -681,9 +880,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const createdAt = String(event?.createdAt || '').trim();
             const phone = String(event?.phone || '').trim();
             const payload = event?.payload || {};
+            const patientId = String(event?.patientId || payload?.patientId || '').trim();
+            const appointmentId = String(event?.appointmentId || payload?.appointmentId || '').trim();
+            const planId = String(event?.planId || payload?.planId || '').trim();
+            const accountId = String(payload?.financialAccountId || payload?.accountId || event?.accountId || '').trim();
             let title = 'Atualizacao via WhatsApp';
             let description = `${phone ? `Paciente ${phone}` : 'Paciente'} respondeu pelo WhatsApp.`;
             let tag = 'WhatsApp';
+            let destination = 'geral';
+            let category = 'geral';
+
+            if (type.startsWith('APPOINTMENT_')) {
+                destination = 'agenda';
+                category = 'agenda';
+            } else if (type.startsWith('PLAN_MESSAGE_')) {
+                destination = 'planos';
+                category = 'financeiro';
+            }
 
             if (type === 'APPOINTMENT_CONFIRMED') {
                 title = 'Consulta confirmada no WhatsApp';
@@ -697,6 +910,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 title = 'Lembrete enviado no WhatsApp';
                 description = `${phone ? `Paciente ${phone}` : 'Paciente'} recebeu lembrete de consulta.`;
                 tag = 'Lembrete';
+            } else if (type === 'PLAN_MESSAGE_DISPATCH_STARTED') {
+                title = 'Envio de plano iniciado';
+                description = `${phone ? `Paciente ${phone}` : 'Paciente'} recebeu disparo de parcela.`;
+                tag = 'Plano';
+            } else if (type === 'PLAN_MESSAGE_DISPATCH_COMPLETED') {
+                title = 'Parcela enviada no WhatsApp';
+                description = `${phone ? `Paciente ${phone}` : 'Paciente'} recebeu mensagem da parcela.`;
+                tag = 'Plano';
+            } else if (type === 'PLAN_MESSAGE_DISPATCH_BLOCKED') {
+                title = 'Disparo de plano bloqueado';
+                description = `${phone ? `Paciente ${phone}` : 'Paciente'} ficou sem envio da parcela.`;
+                tag = 'Plano';
+            } else if (type === 'PLAN_MESSAGE_DISPATCH_FAILED') {
+                title = 'Falha no disparo de plano';
+                description = `${phone ? `Paciente ${phone}` : 'Paciente'} nao recebeu mensagem da parcela.`;
+                tag = 'Plano';
             }
 
             if (payload?.nextStatus && type !== 'APPOINTMENT_REMINDER_SENT') {
@@ -711,10 +940,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             return {
-                type: 'agenda',
+                type: category,
                 title,
                 description,
                 tag,
+                meta: {
+                    destination: destination === 'geral' ? 'index.html' : destination,
+                    kind: type.startsWith('PLAN_MESSAGE_') ? 'financial' : (type.startsWith('APPOINTMENT_') ? 'appointment' : 'general'),
+                    appointmentId,
+                    patientId,
+                    patientName: phone ? `Paciente ${phone}` : 'Paciente',
+                    planId,
+                    accountId,
+                    status: String(payload?.nextStatus || payload?.status || '').trim(),
+                },
             };
         });
     };
@@ -1549,11 +1788,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (homeAutoRefreshTimer) clearInterval(homeAutoRefreshTimer);
     });
 });
-
-
-
-
-
 
 
 
