@@ -138,6 +138,15 @@ const pickLinkedFinancialAccount = (row = {}) => {
   return accounts.find((item) => cleanText(item?.status).toUpperCase() !== 'CANCELED') || accounts[0] || null;
 };
 
+const sumLinkedAccountPayments = (account = {}) => {
+  const transactions = Array.isArray(account?.transactions) ? account.transactions : [];
+  return roundMoney(
+    transactions
+      .filter((item) => cleanText(item?.type).toUpperCase() === 'PAYMENT')
+      .reduce((acc, item) => acc + roundMoney(item?.amount ?? 0), 0),
+  );
+};
+
 const buildProcedureFinancialSnapshot = ({
   payload = {},
   financeAccount = null,
@@ -328,7 +337,13 @@ const syncProcedureFinancialAccount = async ({
       payload: financePayload,
     });
 
-  if (allowPaymentRegistration && paymentStatus === 'PAID' && roundMoney(financeAccount?.remainingAmount ?? amount) > 0) {
+  const previousPaidAmount = sumLinkedAccountPayments(linkedAccount);
+  const shouldRegisterAutomaticPayment = allowPaymentRegistration
+    && paymentStatus === 'PAID'
+    && roundMoney(financeAccount?.remainingAmount ?? amount) > 0
+    && previousPaidAmount < roundMoney(amount);
+
+  if (shouldRegisterAutomaticPayment) {
     financeAccount = await financialService.registerPayment({
       clinicId,
       accountId: financeAccount.id,

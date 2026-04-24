@@ -875,12 +875,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const baseFinanceiro = service.financeiro || {};
     let financeEntryId = baseFinanceiro.financeEntryId || service.financeiroId || '';
     const currentMethod = normalizePaymentMethodUpper(baseFinanceiro.paymentMethod || service.paymentMethod || service.metodoPagamento || 'PIX');
-    const amount = getServiceAmount(service);
-    const allowFinance = service.gerarFinanceiro !== false;
-    const financePatch = {
-      paymentMethod: currentMethod,
-      metodoPagamento: paymentMethodToFinance(currentMethod),
-    };
     const servicePatch = {
       financeiro: {
         ...baseFinanceiro,
@@ -895,9 +889,6 @@ document.addEventListener('DOMContentLoaded', () => {
       servicePatch.paymentStatus = 'PENDING';
       servicePatch.financeiro.paymentStatus = 'PENDING';
       servicePatch.financeiro.paidAt = null;
-      financePatch.paymentStatus = 'PENDING';
-      financePatch.status = 'pendente';
-      financePatch.paidAt = null;
     } else if (option === 'PAGO_A_REALIZAR') {
       servicePatch.status = 'a-realizar';
       servicePatch.dataRealizacao = null;
@@ -905,9 +896,6 @@ document.addEventListener('DOMContentLoaded', () => {
       servicePatch.paymentStatus = 'PAID';
       servicePatch.financeiro.paymentStatus = 'PAID';
       servicePatch.financeiro.paidAt = baseFinanceiro.paidAt || nowIso();
-      financePatch.paymentStatus = 'PAID';
-      financePatch.status = 'pago';
-      financePatch.paidAt = baseFinanceiro.paidAt || new Date().toISOString();
     } else if (option === 'PAGO') {
       servicePatch.status = 'realizado';
       servicePatch.dataRealizacao = service.dataRealizacao || service.finishedAt || service.finalizadoEm || nowIso();
@@ -915,9 +903,6 @@ document.addEventListener('DOMContentLoaded', () => {
       servicePatch.paymentStatus = 'PAID';
       servicePatch.financeiro.paymentStatus = 'PAID';
       servicePatch.financeiro.paidAt = baseFinanceiro.paidAt || nowIso();
-      financePatch.paymentStatus = 'PAID';
-      financePatch.status = 'pago';
-      financePatch.paidAt = baseFinanceiro.paidAt || new Date().toISOString();
     } else if (option === 'REALIZADO_AG_PAGAMENTO') {
       servicePatch.status = 'realizado';
       servicePatch.dataRealizacao = service.dataRealizacao || service.finishedAt || service.finalizadoEm || nowIso();
@@ -925,9 +910,6 @@ document.addEventListener('DOMContentLoaded', () => {
       servicePatch.paymentStatus = 'PENDING';
       servicePatch.financeiro.paymentStatus = 'PENDING';
       servicePatch.financeiro.paidAt = null;
-      financePatch.paymentStatus = 'PENDING';
-      financePatch.status = 'pendente';
-      financePatch.paidAt = null;
     } else {
       return;
     }
@@ -944,67 +926,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const savedService = updateResult?.service || findServiceById(serviceId) || service;
       financeEntryId = updateResult?.financeId || savedService?.financeiroId || savedService?.financeiro?.financeEntryId || financeEntryId;
 
-      let usedLegacyFinanceFallback = false;
-
-      // Garante lancamento no Financeiro mesmo antes da realizacao (ex.: "Pago / A realizar").
-      if (!financeEntryId && allowFinance && amount > 0 && financeApi.createOrUpdateProcedureRevenue) {
-        usedLegacyFinanceFallback = true;
-        const upsert = await financeApi.createOrUpdateProcedureRevenue({
-          financeEntryId: '',
-          procedureId: serviceId,
-          patientId: currentPatient.id || currentPatient._id || '',
-          prontuario: currentPatient.prontuario || '',
-          patientName: currentPatient.nome || currentPatient.fullName || currentPatient.name || '',
-          procedureName: savedService.tipo || savedService.nome || savedService.procedimento || 'Procedimento',
-          descricao: `Procedimento: ${savedService.tipo || savedService.nome || savedService.procedimento || 'Procedimento'}`,
-          valor: amount,
-          status: financePatch.paymentStatus || 'PENDING',
-          paymentMethod: currentMethod,
-          dueDate: savedService?.financeiro?.dueDate || savedService?.vencimento || null,
-          paidAt: financePatch.paidAt || null,
-          installments: savedService?.financeiro?.installments ?? null,
-          data: toDateOnlyValue(savedService.dataRealizacao || savedService.registeredAt || savedService.createdAt || '') || undefined,
-        });
-        financeEntryId = upsert?.lancamento?.id || upsert?.id || '';
-        if (financeEntryId) {
-          await servicesApi.update?.({
-            prontuario: currentPatient.prontuario,
-            service: {
-              id: serviceId,
-              financeiroId: financeEntryId,
-              financeiro: {
-                ...(savedService.financeiro || {}),
-                financeEntryId,
-                paymentStatus: servicePatch.financeiro?.paymentStatus || 'PENDING',
-                paymentMethod: currentMethod,
-                paidAt: servicePatch.financeiro?.paidAt || null,
-              },
-            },
-          });
-        }
-      }
-
-      if (financeEntryId && usedLegacyFinanceFallback) {
-        const currentFinanceRow = Array.isArray(patientFinanceRows)
-          ? patientFinanceRows.find((row) => String(row?.id || '') === String(financeEntryId))
-          : null;
-        const currentFinanceStatus = normalizePaymentStatusUpper(
-          currentFinanceRow?.paymentStatus
-            || currentFinanceRow?.status
-            || 'PENDING'
-        );
-
-        if (financePatch.paymentStatus === 'PAID' && financeApi.confirmPayment && currentFinanceStatus !== 'PAID') {
-          await financeApi.confirmPayment({
-            financeEntryId,
-            amount,
-            paymentMethod: currentMethod,
-            paidAt: financePatch.paidAt || nowIso(),
-          });
-        } else if (financeApi.update) {
-          await financeApi.update({ id: financeEntryId, ...financePatch });
-        }
-      }
       emitFinanceUpdated();
       await refreshProcedimentos();
       await refreshPatientFinance();
