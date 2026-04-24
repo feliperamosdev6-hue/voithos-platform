@@ -147,6 +147,12 @@ const sumLinkedAccountPayments = (account = {}) => {
   );
 };
 
+const buildProcedurePaymentIdempotencyKey = ({ procedureRow = {}, payload = {}, amount = 0 } = {}) => {
+  const externalReference = cleanText(procedureRow?.externalId || payload?.id || payload?.externalId);
+  if (!externalReference) return '';
+  return `procedure-payment:${externalReference}:${roundMoney(amount).toFixed(2)}`;
+};
+
 const buildProcedureFinancialSnapshot = ({
   payload = {},
   financeAccount = null,
@@ -355,6 +361,11 @@ const syncProcedureFinancialAccount = async ({
         category: PROCEDURE_FINANCIAL_CATEGORY,
         procedureId: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
         patientProcedureId: cleanText(procedureRow?.id),
+        idempotencyKey: buildProcedurePaymentIdempotencyKey({
+          procedureRow,
+          payload,
+          amount: roundMoney(financeAccount?.remainingAmount ?? amount),
+        }),
       },
     });
   }

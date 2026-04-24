@@ -1065,6 +1065,51 @@ const financialService = {
     }
     if (amountToPersist <= 0) throw new AppError(400, 'VALIDATION_ERROR', 'amount must be greater than zero.');
 
+    const normalizedIdempotencyKey = cleanText(metadata?.idempotencyKey);
+    const existingPayment = Array.isArray(row.transactions) ? row.transactions.find((transaction) => {
+      if (cleanText(transaction?.type).toUpperCase() !== 'PAYMENT') return false;
+      if (cleanText(transaction?.installmentId || '') !== cleanText(targetInstallment?.id || '')) return false;
+      if (roundMoney(transaction?.amount || 0) !== amountToPersist) return false;
+      if (normalizedIdempotencyKey && cleanText(transaction?.metadata?.idempotencyKey) === normalizedIdempotencyKey) return true;
+      if (!normalizedIdempotencyKey) {
+        const transactionMetadata = transaction?.metadata && typeof transaction.metadata === 'object' ? transaction.metadata : {};
+        const payloadMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+        const sameOrigin = cleanText(transactionMetadata.origin || '').toLowerCase() === cleanText(payloadMetadata.origin || '').toLowerCase();
+        const sameCategory = cleanText(transactionMetadata.category || '').toLowerCase() === cleanText(payloadMetadata.category || '').toLowerCase();
+        const sameProcedure = cleanText(transactionMetadata.procedureId || '').toLowerCase() === cleanText(payloadMetadata.procedureId || '').toLowerCase();
+        const samePatientProcedure = cleanText(transactionMetadata.patientProcedureId || '').toLowerCase() === cleanText(payloadMetadata.patientProcedureId || '').toLowerCase();
+        return sameOrigin && sameCategory && sameProcedure && samePatientProcedure;
+      }
+      return false;
+    }) : null;
+
+    if (existingPayment) {
+      const refreshedExisting = await financialRepository.findFinancialAccountByIdAndClinic({
+        clinicId: normalizedClinicId,
+        accountId: normalizedAccountId,
+      });
+      const nextStatusExisting = summarizeAccountStatus({
+        installments: refreshedExisting.installments || [],
+        transactions: refreshedExisting.transactions || [],
+        totalAmount: refreshedExisting.totalAmount,
+        rowStatus: refreshedExisting.status,
+      });
+      if (nextStatusExisting !== refreshedExisting.status) {
+        await financialRepository.updateFinancialAccount({
+          id: normalizedAccountId,
+          clinicId: normalizedClinicId,
+          data: {
+            status: nextStatusExisting,
+            paymentMethod: normalizedMethod,
+          },
+        });
+      }
+      return mapAccountToLegacy(await financialRepository.findFinancialAccountByIdAndClinic({
+        clinicId: normalizedClinicId,
+        accountId: normalizedAccountId,
+      }));
+    }
+
     await financialRepository.createTransaction({
       clinicId: normalizedClinicId,
       accountId: normalizedAccountId,
