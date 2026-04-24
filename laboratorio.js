@@ -20,7 +20,10 @@
       const patients = (await patientsApi.list?.()) || [];
       patients.forEach((p) => {
         const opt = document.createElement('option');
-        opt.value = p.prontuario || p.id || '';
+        const pacienteId = p.prontuario || p.id || '';
+        opt.value = pacienteId;
+        opt.dataset.nome = p.nome || p.fullName || 'Paciente';
+        opt.dataset.prontuario = pacienteId;
         const labelNome = p.nome || p.fullName || 'Paciente';
         const prontuario = p.prontuario ? ` (${p.prontuario})` : '';
         opt.textContent = `${labelNome}${prontuario}`;
@@ -68,7 +71,7 @@
     document.getElementById('titulo-modal-lab').textContent = editId ? 'Editar registro' : 'Novo registro';
 
     document.getElementById('input-laboratorio').value = registro?.laboratorio || '';
-    document.getElementById('input-paciente').value = registro?.paciente || '';
+    document.getElementById('input-paciente').value = registro?.patientId || registro?.prontuario || registro?.paciente || '';
     document.getElementById('input-peca').value = registro?.peca || '';
     document.getElementById('input-entrada').value = registro?.entrada || new Date().toISOString().split('T')[0];
     document.getElementById('input-saida').value = registro?.saida || '';
@@ -106,10 +109,15 @@
   }
 
   async function salvarRegistro() {
+    const pacienteSelect = document.getElementById('input-paciente');
+    const pacienteId = pacienteSelect?.value?.trim() || '';
+    const pacienteNome = pacienteSelect?.selectedOptions?.[0]?.dataset?.nome || pacienteId;
     const payload = {
       id: editId,
       laboratorio: document.getElementById('input-laboratorio').value.trim(),
-      paciente: document.getElementById('input-paciente').value.trim(),
+      paciente: pacienteNome,
+      patientId: pacienteId,
+      prontuario: pacienteId,
       peca: document.getElementById('input-peca').value.trim(),
       entrada: document.getElementById('input-entrada').value,
       saida: document.getElementById('input-saida').value,
@@ -125,9 +133,10 @@
       }
       fecharModal();
       await carregarRegistros();
+      alert('Serviço de laboratório salvo com sucesso.');
     } catch (err) {
       console.error('Erro ao salvar registro de laboratório:', err);
-      alert('Erro ao salvar registro.');
+      alert(err?.message ? `Erro ao salvar registro: ${err.message}` : 'Erro ao salvar registro.');
     }
   }
 
