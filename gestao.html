@@ -548,7 +548,6 @@
             <a class="nav-item-operacional active" id="nav-operacional-laboratorio" href="laboratorio.html">Laboratório</a>
             <button class="nav-item-operacional estoque-item" id="btn-operacional-open-estoque" type="button">
               Estoque
-              <span class="menu-badge">Em breve</span>
             </button>
           </div>
         </nav>
@@ -574,7 +573,7 @@
           <article class="hub-card">
             <div class="hub-card-title">
               <h2>Estoque</h2>
-              <p>Módulo em desenvolvimento, usando placeholder atual.</p>
+              <p>Controle local por clínica com itens, mínimo e quantidade atual.</p>
             </div>
             <button id="btn-operacional-open-estoque-card" class="btn-secundario" type="button">Abrir estoque</button>
           </article>
@@ -740,6 +739,12 @@
       <label for="input-estoque-minimo">Estoque mínimo</label>
       <input id="input-estoque-minimo" type="number" min="0" step="1" />
 
+      <label for="input-estoque-atual">Quantidade atual</label>
+      <input id="input-estoque-atual" type="number" min="0" step="1" placeholder="Ex.: 24" />
+      <small class="estoque-field-help">Use a quantidade hoje disponível. O mínimo é um alerta separado.</small>
+
+      <p id="estoque-form-feedback" class="estoque-form-feedback" role="status" aria-live="polite"></p>
+
       <div class="modal-actions">
         <button id="btn-cancelar-estoque" class="btn-secundario" type="button">Cancelar</button>
         <button id="btn-salvar-estoque" class="btn-primario" type="button">Concluir</button>
@@ -754,7 +759,6 @@
     <script src="header.js"></script>
 </body>
 </html>
-
 
 
 

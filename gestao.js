@@ -693,6 +693,7 @@
   let estoqueProdutos = [];
   let estoqueBusca = '';
   let estoqueEditId = null;
+  let estoqueSaveInFlight = false;
   let activeRowMenu = null;
   const getEstoqueStorageKey = () => {
     const clinicId = String(usuarioLogado?.clinicId || '').trim();
@@ -823,8 +824,17 @@
     return Math.trunc(n);
   };
 
+  const setEstoqueFeedback = (message = '', type = '') => {
+    const feedback = document.getElementById('estoque-form-feedback');
+    if (!feedback) return;
+    feedback.textContent = message || '';
+    feedback.dataset.type = type || '';
+    feedback.classList.toggle('is-error', type === 'error');
+    feedback.classList.toggle('is-success', type === 'success');
+  };
+
   const getStockStatus = (item) => {
-    const atual = normalizeStockNumber(item?.estoqueAtual);
+    const atual = normalizeStockNumber(item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? item?.estoqueMinimo);
     const minimo = normalizeStockNumber(item?.estoqueMinimo);
     if (atual <= 0) return { key: 'critical', label: 'Crítico' };
     if (atual <= minimo) return { key: 'low', label: 'Baixo' };
@@ -853,11 +863,16 @@
     const categoriaEl = document.getElementById('input-estoque-categoria');
     const unidadeEl = document.getElementById('input-estoque-unidade');
     const minimoEl = document.getElementById('input-estoque-minimo');
+    const atualEl = document.getElementById('input-estoque-atual');
 
     if (nomeEl) nomeEl.value = item?.nome || '';
     if (categoriaEl) categoriaEl.value = item?.categoria || 'EPI';
     if (unidadeEl) unidadeEl.value = item?.unidade || 'Unidade';
     if (minimoEl) minimoEl.value = normalizeStockNumber(item?.estoqueMinimo);
+    if (atualEl) atualEl.value = normalizeStockNumber(
+      item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? item?.estoqueMinimo ?? 0
+    );
+    setEstoqueFeedback('', '');
     bg.classList.remove('hidden');
   };
 
@@ -866,44 +881,97 @@
     if (!bg) return;
     bg.classList.add('hidden');
     estoqueEditId = null;
+    estoqueSaveInFlight = false;
+    const saveBtn = document.getElementById('btn-salvar-estoque');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Concluir';
+    }
+    setEstoqueFeedback('', '');
   };
 
   const saveEstoqueProduto = () => {
+    if (estoqueSaveInFlight) return;
     const nomeEl = document.getElementById('input-estoque-nome');
     const categoriaEl = document.getElementById('input-estoque-categoria');
     const unidadeEl = document.getElementById('input-estoque-unidade');
     const minimoEl = document.getElementById('input-estoque-minimo');
+    const atualEl = document.getElementById('input-estoque-atual');
+    const saveBtn = document.getElementById('btn-salvar-estoque');
 
     const nome = String(nomeEl?.value || '').trim();
-    const categoria = String(categoriaEl?.value || 'EPI');
-    const unidade = String(unidadeEl?.value || 'Unidade');
-    const estoqueMinimo = normalizeStockNumber(minimoEl?.value);
+    const categoria = String(categoriaEl?.value || '').trim();
+    const unidade = String(unidadeEl?.value || '').trim();
+    const estoqueMinimoRaw = String(minimoEl?.value ?? '').trim();
+    const estoqueAtualRaw = String(atualEl?.value ?? '').trim();
+    const estoqueMinimo = estoqueMinimoRaw === '' ? NaN : Number(estoqueMinimoRaw);
+    const estoqueAtual = estoqueAtualRaw === '' ? NaN : Number(estoqueAtualRaw);
     if (!nome) {
-      alert('Informe o nome do produto.');
+      setEstoqueFeedback('Informe o nome do produto.', 'error');
+      nomeEl?.focus?.();
+      return;
+    }
+    if (!categoria) {
+      setEstoqueFeedback('Selecione uma categoria.', 'error');
+      categoriaEl?.focus?.();
+      return;
+    }
+    if (!unidade) {
+      setEstoqueFeedback('Selecione uma unidade de medida.', 'error');
+      unidadeEl?.focus?.();
+      return;
+    }
+    if (!Number.isFinite(estoqueMinimo) || estoqueMinimo < 0) {
+      setEstoqueFeedback('Informe um estoque mínimo válido.', 'error');
+      minimoEl?.focus?.();
+      return;
+    }
+    if (!Number.isFinite(estoqueAtual) || estoqueAtual < 0) {
+      setEstoqueFeedback('Informe uma quantidade atual válida.', 'error');
+      atualEl?.focus?.();
       return;
     }
 
-    if (estoqueEditId) {
-      estoqueProdutos = estoqueProdutos.map((item) => {
-        if (item.id !== estoqueEditId) return item;
-        return { ...item, nome, categoria, unidade, estoqueMinimo };
-      });
-    } else {
-      const novo = {
-        id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        nome,
-        categoria,
-        unidade,
-        estoqueMinimo,
-        estoqueAtual: estoqueMinimo,
-        createdAt: new Date().toISOString(),
-      };
-      estoqueProdutos.push(novo);
+    estoqueSaveInFlight = true;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Salvando...';
     }
 
-    writeEstoqueStorage(estoqueProdutos);
-    closeEstoqueModal();
-    renderEstoque();
+    try {
+      if (estoqueEditId) {
+        estoqueProdutos = estoqueProdutos.map((item) => {
+          if (item.id !== estoqueEditId) return item;
+          return { ...item, nome, categoria, unidade, estoqueMinimo, estoqueAtual };
+        });
+      } else {
+        const novo = {
+          id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          nome,
+          categoria,
+          unidade,
+          estoqueMinimo,
+          estoqueAtual,
+          createdAt: new Date().toISOString(),
+        };
+        estoqueProdutos.push(novo);
+      }
+
+      writeEstoqueStorage(estoqueProdutos);
+      renderEstoque();
+      setEstoqueFeedback('Produto salvo com sucesso.', 'success');
+      setTimeout(() => {
+        closeEstoqueModal();
+      }, 350);
+    } catch (err) {
+      console.error('Falha ao salvar estoque.', err);
+      setEstoqueFeedback(err?.message ? `Erro ao salvar estoque: ${err.message}` : 'Erro ao salvar estoque.', 'error');
+      estoqueSaveInFlight = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Concluir';
+      }
+    }
   };
 
   const renderEstoque = () => {
@@ -941,7 +1009,7 @@
         <td>${item.nome || ''}</td>
         <td>${item.categoria || ''}</td>
         <td>${item.unidade || ''}</td>
-        <td>${normalizeStockNumber(item.estoqueAtual)}</td>
+        <td>${normalizeStockNumber(item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo)}</td>
         <td>${normalizeStockNumber(item.estoqueMinimo)}</td>
         <td><span class="stock-status ${status.key}">${status.label}</span></td>
         <td class="actions-col">
@@ -1018,7 +1086,7 @@
         return;
       }
       if (action === 'stock-adjust') {
-        const atual = normalizeStockNumber(item.estoqueAtual);
+        const atual = normalizeStockNumber(item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo);
         const novoValor = prompt('Informe o novo estoque atual:', String(atual));
         if (novoValor === null) return;
         const estoqueAtual = normalizeStockNumber(novoValor);
@@ -2843,9 +2911,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
-
 
 
 
