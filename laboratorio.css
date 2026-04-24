@@ -257,6 +257,34 @@ body {
   margin-top: 6px;
 }
 
+.lab-field-help {
+  display: block;
+  margin-top: -2px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.lab-form-feedback {
+  min-height: 18px;
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+}
+
+.lab-form-feedback.is-success {
+  color: #1f7a5a;
+}
+
+.lab-form-feedback.is-error {
+  color: #b91c1c;
+}
+
+#input-paciente:disabled {
+  background: #f8fafc;
+  color: #475569;
+  cursor: not-allowed;
+}
+
 @media (max-width: 980px) {
   .lab-header {
     flex-direction: column;

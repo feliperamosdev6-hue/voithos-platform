@@ -139,6 +139,7 @@
 
       <label for="input-paciente">Paciente</label>
       <select id="input-paciente"></select>
+      <small id="input-paciente-help" class="lab-field-help">Selecione um paciente. Na edição, este vínculo fica bloqueado.</small>
 
       <label for="input-peca">Peça</label>
       <input id="input-peca" type="text" placeholder="Ex: Coroa, prótese..." />
@@ -157,6 +158,8 @@
         <option value="pendente">Pendente</option>
         <option value="entregue">Entregue</option>
       </select>
+
+      <p id="lab-form-feedback" class="lab-form-feedback" role="status" aria-live="polite"></p>
 
       <div class="modal-actions">
         <button id="btn-salvar-lab" class="btn-primario">Salvar</button>

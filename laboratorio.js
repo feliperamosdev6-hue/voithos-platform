@@ -1,8 +1,8 @@
-
 (function () {
   const appApi = window.appApi || {};
   const patientsApi = appApi.patients || {};
   const laboratorioApi = appApi.laboratorio || {};
+
   const formatCurrency = (value) => {
     const v = Number(value) || 0;
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -10,6 +10,29 @@
 
   let registros = [];
   let editId = null;
+  let saveInFlight = false;
+
+  function setLabFeedback(message = '', type = '') {
+    const feedback = document.getElementById('lab-form-feedback');
+    if (!feedback) return;
+    feedback.textContent = message || '';
+    feedback.classList.toggle('is-success', type === 'success');
+    feedback.classList.toggle('is-error', type === 'error');
+  }
+
+  function updatePacienteFieldState() {
+    const select = document.getElementById('input-paciente');
+    const help = document.getElementById('input-paciente-help');
+    if (!select) return;
+    const locked = Boolean(editId);
+    select.disabled = locked;
+    select.title = locked ? 'Paciente bloqueado nesta edicao.' : '';
+    if (help) {
+      help.textContent = locked
+        ? 'Paciente bloqueado nesta edicao. Para mudar o vinculo, crie um novo registro.'
+        : 'Selecione um paciente. Na edicao, este vinculo fica bloqueado.';
+    }
+  }
 
   async function carregarPacientes() {
     const select = document.getElementById('input-paciente');
@@ -77,6 +100,8 @@
     document.getElementById('input-saida').value = registro?.saida || '';
     document.getElementById('input-valor').value = registro?.valor ?? '';
     document.getElementById('input-status').value = registro?.status || 'pendente';
+    setLabFeedback('', '');
+    updatePacienteFieldState();
 
     bg.classList.remove('hidden');
   }
@@ -85,6 +110,13 @@
     const bg = document.getElementById('modal-lab-bg');
     if (!bg) return;
     bg.classList.add('hidden');
+    saveInFlight = false;
+    const saveBtn = document.getElementById('btn-salvar-lab');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Salvar';
+    }
+    setLabFeedback('', '');
   }
 
   async function carregarRegistros() {
@@ -93,7 +125,7 @@
       renderTabela();
       await atualizarDash();
     } catch (err) {
-      console.error('Erro ao carregar registros do laboratório:', err);
+      console.error('Erro ao carregar registros do laboratorio:', err);
     }
   }
 
@@ -104,14 +136,16 @@
       document.getElementById('total-mes').textContent = formatCurrency(dash.totalMes || 0);
       document.getElementById('total-pendentes').textContent = String(dash.pendentes || 0);
     } catch (err) {
-      console.error('Erro ao carregar dashboard de laboratório:', err);
+      console.error('Erro ao carregar dashboard de laboratorio:', err);
     }
   }
 
   async function salvarRegistro() {
+    if (saveInFlight) return;
     const pacienteSelect = document.getElementById('input-paciente');
     const pacienteId = pacienteSelect?.value?.trim() || '';
     const pacienteNome = pacienteSelect?.selectedOptions?.[0]?.dataset?.nome || pacienteId;
+    const saveBtn = document.getElementById('btn-salvar-lab');
     const payload = {
       id: editId,
       laboratorio: document.getElementById('input-laboratorio').value.trim(),
@@ -126,17 +160,29 @@
     };
 
     try {
+      saveInFlight = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Salvando...';
+      }
       if (payload.id) {
         await laboratorioApi.update?.(payload);
       } else {
         await laboratorioApi.add?.(payload);
       }
-      fecharModal();
       await carregarRegistros();
-      alert('Serviço de laboratório salvo com sucesso.');
+      setLabFeedback('Servico de laboratorio salvo com sucesso.', 'success');
+      setTimeout(() => {
+        fecharModal();
+      }, 250);
     } catch (err) {
-      console.error('Erro ao salvar registro de laboratório:', err);
-      alert(err?.message ? `Erro ao salvar registro: ${err.message}` : 'Erro ao salvar registro.');
+      console.error('Erro ao salvar registro de laboratorio:', err);
+      setLabFeedback(err?.message ? `Erro ao salvar registro: ${err.message}` : 'Erro ao salvar registro.', 'error');
+      saveInFlight = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Salvar';
+      }
     }
   }
 
@@ -148,7 +194,7 @@
       await laboratorioApi.remove?.(id);
       await carregarRegistros();
     } catch (err) {
-      console.error('Erro ao excluir registro de laboratório:', err);
+      console.error('Erro ao excluir registro de laboratorio:', err);
       alert('Erro ao excluir registro.');
     }
   }
@@ -173,6 +219,9 @@
     document.getElementById('btn-novo')?.addEventListener('click', () => abrirModal());
     document.getElementById('btn-cancelar-lab')?.addEventListener('click', fecharModal);
     document.getElementById('btn-salvar-lab')?.addEventListener('click', salvarRegistro);
+    document.getElementById('input-paciente')?.addEventListener('change', () => {
+      if (editId) updatePacienteFieldState();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', async () => {
