@@ -2179,23 +2179,21 @@
   const laboratorio = {
     getDashboard: async () => {
       const clinicId = resolveLaboratoryClinicId();
-      return request('GET', `/internal/laboratory/dashboard?clinicId=${encodeURIComponent(clinicId)}`, null, { auth: true });
+      return request('GET', '/clinics/me/laboratory/dashboard', null, { auth: true });
     },
     list: async (payload = {}) => {
       const clinicId = resolveLaboratoryClinicId(payload);
       const patientId = resolveLaboratoryPatientId(payload);
       const query = new URLSearchParams();
-      if (clinicId) query.set('clinicId', clinicId);
       if (patientId) query.set('patientId', patientId);
-      return request('GET', `/internal/laboratory/orders${query.toString() ? `?${query.toString()}` : ''}`, null, { auth: true });
+      return request('GET', `/clinics/me/laboratory/orders${query.toString() ? `?${query.toString()}` : ''}`, null, { auth: true });
     },
     add: async (payload = {}) => {
       const clinicId = resolveLaboratoryClinicId(payload);
       const patientId = resolveLaboratoryPatientId(payload);
       if (!clinicId) throw new Error('clinicId is required.');
       if (!patientId) throw new Error('patientId/prontuario is required.');
-      return request('POST', '/internal/laboratory/orders', {
-        clinicId,
+      return request('POST', '/clinics/me/laboratory/orders', {
         patientId,
         appointmentId: cleanText(payload?.appointmentId || ''),
         labName: cleanText(payload?.labName || payload?.laboratorio || ''),
@@ -2218,8 +2216,7 @@
       const orderId = cleanText(payload?.id || payload?.orderId);
       if (!clinicId) throw new Error('clinicId is required.');
       if (!orderId) throw new Error('orderId is required.');
-      return request('PATCH', `/internal/laboratory/orders/${encodeURIComponent(orderId)}`, {
-        clinicId,
+      return request('PATCH', `/clinics/me/laboratory/orders/${encodeURIComponent(orderId)}`, {
         ...payload,
       }, { auth: true });
     },
@@ -2227,7 +2224,7 @@
       const orderId = cleanText(id?.id || id);
       const clinicId = resolveLaboratoryClinicId();
       if (!orderId) throw new Error('orderId is required.');
-      return request('DELETE', `/internal/laboratory/orders/${encodeURIComponent(orderId)}?clinicId=${encodeURIComponent(clinicId)}`, null, { auth: true });
+      return request('DELETE', `/clinics/me/laboratory/orders/${encodeURIComponent(orderId)}`, null, { auth: true });
     },
   };
 

@@ -28,6 +28,11 @@ const {
   connectMyWhatsApp,
   disconnectMyWhatsApp,
   deleteMyWhatsAppInstance,
+  listMyLaboratoryOrders,
+  createMyLaboratoryOrder,
+  updateMyLaboratoryOrder,
+  deleteMyLaboratoryOrder,
+  getMyLaboratoryDashboard,
   listMyCampaigns,
   replaceMyCampaigns,
   createMyCampaign,
@@ -69,6 +74,11 @@ router.post('/me/whatsapp/connection/refresh', refreshMyWhatsAppConnection);
 router.post('/me/whatsapp/connect', connectMyWhatsApp);
 router.post('/me/whatsapp/disconnect', disconnectMyWhatsApp);
 router.delete('/me/whatsapp/instance', deleteMyWhatsAppInstance);
+router.get('/me/laboratory/dashboard', getMyLaboratoryDashboard);
+router.get('/me/laboratory/orders', listMyLaboratoryOrders);
+router.post('/me/laboratory/orders', createMyLaboratoryOrder);
+router.patch('/me/laboratory/orders/:orderId', updateMyLaboratoryOrder);
+router.delete('/me/laboratory/orders/:orderId', deleteMyLaboratoryOrder);
 router.get('/me/campaigns', listMyCampaigns);
 router.put('/me/campaigns', replaceMyCampaigns);
 router.post('/me/campaigns', createMyCampaign);

@@ -1,5 +1,6 @@
 const { clinicService } = require('../services/clinicService');
 const { campaignService } = require('../services/campaignService');
+const { laboratoryService } = require('../services/laboratoryService');
 const { outboundMessageService } = require('../services/outboundMessageService');
 const { whatsappNgClient } = require('../adapters/whatsappNgClient');
 const { AppError } = require('../errors/AppError');
@@ -357,6 +358,67 @@ const deleteMyWhatsAppInstance = async (req, res, next) => {
   }
 };
 
+const listMyLaboratoryOrders = async (req, res, next) => {
+  try {
+    const clinicId = req?.auth?.clinicId;
+    const patientId = String(req.query?.patientId || '').trim();
+    const data = patientId
+      ? await laboratoryService.listOrdersByPatient({ clinicId, patientId })
+      : await laboratoryService.listOrdersByClinic({ clinicId });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createMyLaboratoryOrder = async (req, res, next) => {
+  try {
+    const data = await laboratoryService.createOrder({
+      clinicId: req?.auth?.clinicId,
+      payload: req?.body || {},
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updateMyLaboratoryOrder = async (req, res, next) => {
+  try {
+    const data = await laboratoryService.updateOrder({
+      clinicId: req?.auth?.clinicId,
+      orderId: req?.params?.orderId,
+      payload: req?.body || {},
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const deleteMyLaboratoryOrder = async (req, res, next) => {
+  try {
+    const data = await laboratoryService.deleteOrder({
+      clinicId: req?.auth?.clinicId,
+      orderId: req?.params?.orderId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getMyLaboratoryDashboard = async (req, res, next) => {
+  try {
+    const data = await laboratoryService.getLaboratoryDashboardSummary({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const listMyCampaigns = async (req, res, next) => {
   try {
     const data = await campaignService.listCampaigns({
@@ -446,6 +508,11 @@ module.exports = {
   connectMyWhatsApp,
   disconnectMyWhatsApp,
   deleteMyWhatsAppInstance,
+  listMyLaboratoryOrders,
+  createMyLaboratoryOrder,
+  updateMyLaboratoryOrder,
+  deleteMyLaboratoryOrder,
+  getMyLaboratoryDashboard,
   listMyCampaigns,
   replaceMyCampaigns,
   createMyCampaign,
