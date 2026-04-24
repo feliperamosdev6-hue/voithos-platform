@@ -1412,10 +1412,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const readHomeStockMetrics = () => {
-        const storageKey = 'voithos_estoque_produtos_v1';
-        try {
+        const clinicId = String(currentUser?.clinicId || '').trim();
+        const clinicStorageKey = clinicId ? `voithos_estoque_produtos_v1:${clinicId}` : '';
+        const legacyStorageKey = 'voithos_estoque_produtos_v1';
+        const readStockList = (storageKey) => {
+            if (!storageKey) return null;
             const raw = localStorage.getItem(storageKey);
-            const list = raw ? JSON.parse(raw) : [];
+            if (!raw) return null;
+            const list = JSON.parse(raw);
+            return Array.isArray(list) ? list : null;
+        };
+        try {
+            const list = readStockList(clinicStorageKey) || readStockList(legacyStorageKey) || [];
             if (!Array.isArray(list)) return { estoqueTotal: 0, estoqueCritico: 0 };
             const estoqueTotal = list.length;
             const estoqueCritico = list.filter((item) => {
