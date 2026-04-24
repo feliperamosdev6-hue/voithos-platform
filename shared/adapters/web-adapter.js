@@ -2162,12 +2162,73 @@
     remove: async (id) => request('DELETE', `/financial/accounts/${encodeURIComponent(cleanText(id?.id || id))}`, null, { auth: true }),
   };
 
+  const resolveLaboratoryPatientId = (payload = {}) => cleanText(
+    payload?.patientId
+    || payload?.prontuario
+    || payload?.patient?.id
+    || payload?.patient?.prontuario
+    || payload?.id
+  );
+
+  const resolveLaboratoryClinicId = (payload = {}) => cleanText(
+    payload?.clinicId
+    || getStoredClinic()?.clinicId
+    || getStoredClinic()?.id
+  );
+
   const laboratorio = {
-    getDashboard: async () => notImplemented('laboratorio.getDashboard'),
-    list: async () => notImplemented('laboratorio.list'),
-    add: async () => notImplemented('laboratorio.add'),
-    update: async () => notImplemented('laboratorio.update'),
-    remove: async () => notImplemented('laboratorio.remove'),
+    getDashboard: async () => {
+      const clinicId = resolveLaboratoryClinicId();
+      return request('GET', `/internal/laboratory/dashboard?clinicId=${encodeURIComponent(clinicId)}`, null, { auth: true });
+    },
+    list: async (payload = {}) => {
+      const clinicId = resolveLaboratoryClinicId(payload);
+      const patientId = resolveLaboratoryPatientId(payload);
+      const query = new URLSearchParams();
+      if (clinicId) query.set('clinicId', clinicId);
+      if (patientId) query.set('patientId', patientId);
+      return request('GET', `/internal/laboratory/orders${query.toString() ? `?${query.toString()}` : ''}`, null, { auth: true });
+    },
+    add: async (payload = {}) => {
+      const clinicId = resolveLaboratoryClinicId(payload);
+      const patientId = resolveLaboratoryPatientId(payload);
+      if (!clinicId) throw new Error('clinicId is required.');
+      if (!patientId) throw new Error('patientId/prontuario is required.');
+      return request('POST', '/internal/laboratory/orders', {
+        clinicId,
+        patientId,
+        appointmentId: cleanText(payload?.appointmentId || ''),
+        labName: cleanText(payload?.labName || payload?.laboratorio || ''),
+        description: cleanText(payload?.description || payload?.descricao || payload?.peca || ''),
+        status: cleanText(payload?.status || 'REQUESTED'),
+        requestedAt: payload?.requestedAt || payload?.entrada || new Date().toISOString(),
+        expectedAt: payload?.expectedAt || payload?.saida || null,
+        notes: payload?.notes || payload?.observacoes || '',
+        totalCost: payload?.totalCost ?? payload?.valor ?? 0,
+        paciente: payload?.paciente || '',
+        peca: payload?.peca || '',
+        prontuario: payload?.prontuario || patientId,
+        procedureId: payload?.procedureId || payload?.servicoId || '',
+        financeExpenseId: payload?.financeExpenseId || payload?.despesaLaboratorioId || '',
+        items: Array.isArray(payload?.items) ? payload.items : [],
+      }, { auth: true });
+    },
+    update: async (payload = {}) => {
+      const clinicId = resolveLaboratoryClinicId(payload);
+      const orderId = cleanText(payload?.id || payload?.orderId);
+      if (!clinicId) throw new Error('clinicId is required.');
+      if (!orderId) throw new Error('orderId is required.');
+      return request('PATCH', `/internal/laboratory/orders/${encodeURIComponent(orderId)}`, {
+        clinicId,
+        ...payload,
+      }, { auth: true });
+    },
+    remove: async (id) => {
+      const orderId = cleanText(id?.id || id);
+      const clinicId = resolveLaboratoryClinicId();
+      if (!orderId) throw new Error('orderId is required.');
+      return request('DELETE', `/internal/laboratory/orders/${encodeURIComponent(orderId)}?clinicId=${encodeURIComponent(clinicId)}`, null, { auth: true });
+    },
   };
 
   const plans = {
