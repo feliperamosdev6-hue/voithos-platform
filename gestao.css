@@ -558,6 +558,21 @@ body {
 
 .estoque-tools {
   gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.estoque-source-label {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.estoque-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 .estoque-empty-state {
@@ -614,6 +629,11 @@ body {
   color: #b91c1c;
 }
 
+.modal-estoque textarea {
+  resize: vertical;
+  min-height: 88px;
+}
+
 .stock-status {
   display: inline-flex;
   align-items: center;
@@ -639,6 +659,14 @@ body {
   background: rgba(185, 28, 28, 0.12);
   border: 1px solid rgba(185, 28, 28, 0.32);
   color: #b91c1c;
+}
+
+.stock-row-critical {
+  background: rgba(185, 28, 28, 0.04);
+}
+
+.stock-row-low {
+  background: rgba(217, 119, 6, 0.04);
 }
 
 .modal-estoque-header {
@@ -1394,6 +1422,5 @@ body {
 #tabela-lucratividade td {
   white-space: nowrap;
 }
-
 
 

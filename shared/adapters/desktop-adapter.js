@@ -324,6 +324,39 @@
     },
   };
 
+  const stock = {
+    list: async (payload) => {
+      if (window.api?.stock?.list) return window.api.stock.list(payload);
+      if (window.__webAdapter?.stock?.list) return window.__webAdapter.stock.list(payload);
+      return unavailable('stock.list');
+    },
+    create: async (payload) => {
+      if (window.api?.stock?.create) return window.api.stock.create(payload);
+      if (window.__webAdapter?.stock?.create) return window.__webAdapter.stock.create(payload);
+      return unavailable('stock.create');
+    },
+    update: async (payload) => {
+      if (window.api?.stock?.update) return window.api.stock.update(payload);
+      if (window.__webAdapter?.stock?.update) return window.__webAdapter.stock.update(payload);
+      return unavailable('stock.update');
+    },
+    adjustQuantity: async (payload) => {
+      if (window.api?.stock?.adjustQuantity) return window.api.stock.adjustQuantity(payload);
+      if (window.__webAdapter?.stock?.adjustQuantity) return window.__webAdapter.stock.adjustQuantity(payload);
+      return unavailable('stock.adjustQuantity');
+    },
+    deactivate: async (payload) => {
+      if (window.api?.stock?.deactivate) return window.api.stock.deactivate(payload);
+      if (window.__webAdapter?.stock?.deactivate) return window.__webAdapter.stock.deactivate(payload);
+      return unavailable('stock.deactivate');
+    },
+    delete: async (payload) => {
+      if (window.api?.stock?.delete) return window.api.stock.delete(payload);
+      if (window.__webAdapter?.stock?.delete) return window.__webAdapter.stock.delete(payload);
+      return unavailable('stock.delete');
+    },
+  };
+
   const plans = {
     list: async (payload) => {
       if (window.api?.plans?.list) return window.api.plans.list(payload);
@@ -696,6 +729,7 @@
       documents,
       finance,
       laboratorio,
+      stock,
       plans,
       campanhas,
       campanhasGlobal,

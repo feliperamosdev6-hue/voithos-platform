@@ -556,6 +556,7 @@
   const patientsApi = appApi.patients || window.api?.patients || {};
   const financeApi = appApi.finance || window.api?.finance || {};
   const servicesApi = appApi.services || window.api?.services || {};
+  const stockApi = appApi.stock || window.api?.stock || window.__webAdapter?.stock || {};
 
 
   const carregarPacientesReceita = async () => {
@@ -692,8 +693,12 @@
   let planGroupedReceitasIndex = new Map();
   let estoqueProdutos = [];
   let estoqueBusca = '';
+  let estoqueStatusFilter = 'all';
+  let estoqueCategoriaFilter = 'all';
   let estoqueEditId = null;
   let estoqueSaveInFlight = false;
+  let estoqueLoadInFlight = false;
+  let estoqueSource = 'local';
   let activeRowMenu = null;
   const getEstoqueStorageKey = () => {
     const clinicId = String(usuarioLogado?.clinicId || '').trim();
@@ -793,12 +798,43 @@
     renderTrendSection('trend-despesas', data);
   };
 
+  const normalizeStockNumber = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.trunc(n);
+  };
+
+  const normalizeStockItem = (item = {}) => {
+    const currentQuantity = normalizeStockNumber(item?.currentQuantity ?? item?.quantidadeAtual ?? item?.estoqueAtual ?? item?.quantidade ?? 0);
+    const minimumQuantity = normalizeStockNumber(item?.minimumQuantity ?? item?.estoqueMinimo ?? 0);
+    const createdAt = String(item?.createdAt || new Date().toISOString()).trim();
+    const updatedAt = String(item?.updatedAt || createdAt).trim();
+    return {
+      ...item,
+      id: String(item?.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`),
+      clinicId: String(item?.clinicId || usuarioLogado?.clinicId || '').trim(),
+      name: String(item?.name || item?.nome || '').trim(),
+      category: String(item?.category || item?.categoria || '').trim(),
+      unit: String(item?.unit || item?.unidade || '').trim(),
+      currentQuantity,
+      minimumQuantity,
+      notes: String(item?.notes || item?.observacoes || '').trim(),
+      active: item?.active !== false,
+      createdAt,
+      updatedAt,
+      estoqueAtual: currentQuantity,
+      estoqueMinimo: minimumQuantity,
+      quantidadeAtual: currentQuantity,
+      quantidade: currentQuantity,
+    };
+  };
+
   const readEstoqueStorage = () => {
     try {
-      const raw = window.localStorage.getItem(getEstoqueStorageKey());
+      const raw = window.localStorage.getItem(getEstoqueStorageKey()) || window.localStorage.getItem('voithos_estoque_produtos_v1');
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map((item) => normalizeStockItem(item)).filter((item) => item.active !== false) : [];
     } catch (err) {
       console.warn('Falha ao ler estoque no localStorage.', err);
       return [];
@@ -807,21 +843,44 @@
 
   const writeEstoqueStorage = (list) => {
     try {
-      window.localStorage.setItem(getEstoqueStorageKey(), JSON.stringify(list || []));
+      const normalized = (Array.isArray(list) ? list : [])
+        .map((item) => normalizeStockItem(item))
+        .filter((item) => item.active !== false);
+      window.localStorage.setItem(getEstoqueStorageKey(), JSON.stringify(normalized));
+      return normalized;
     } catch (err) {
       console.warn('Falha ao salvar estoque no localStorage.', err);
+      return Array.isArray(list) ? list : [];
     }
   };
 
-  const loadEstoqueForCurrentClinic = () => {
-    estoqueProdutos = readEstoqueStorage();
-    renderEstoque();
+  const setStockSourceLabel = (source) => {
+    estoqueSource = source === 'backend' ? 'backend' : 'local';
   };
 
-  const normalizeStockNumber = (value) => {
-    const n = Number(value);
-    if (!Number.isFinite(n) || n < 0) return 0;
-    return Math.trunc(n);
+  const loadEstoqueForCurrentClinic = async () => {
+    if (estoqueLoadInFlight) return estoqueProdutos;
+    estoqueLoadInFlight = true;
+    const clinicId = String(usuarioLogado?.clinicId || '').trim();
+    try {
+      if (stockApi?.list) {
+        const remote = await stockApi.list({ clinicId });
+        estoqueProdutos = (Array.isArray(remote) ? remote : []).map((item) => normalizeStockItem(item)).filter((item) => item.active !== false);
+        setStockSourceLabel(window.__stockSyncSource || 'backend');
+        writeEstoqueStorage(estoqueProdutos);
+      } else {
+        estoqueProdutos = readEstoqueStorage();
+        setStockSourceLabel('local');
+      }
+    } catch (err) {
+      console.warn('Falha ao carregar estoque central.', err);
+      estoqueProdutos = readEstoqueStorage();
+      setStockSourceLabel('local');
+    } finally {
+      estoqueLoadInFlight = false;
+      renderEstoque();
+    }
+    return estoqueProdutos;
   };
 
   const setEstoqueFeedback = (message = '', type = '') => {
@@ -834,8 +893,8 @@
   };
 
   const getStockStatus = (item) => {
-    const atual = normalizeStockNumber(item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? item?.estoqueMinimo);
-    const minimo = normalizeStockNumber(item?.estoqueMinimo);
+    const atual = normalizeStockNumber(item?.currentQuantity ?? item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? item?.estoqueMinimo);
+    const minimo = normalizeStockNumber(item?.minimumQuantity ?? item?.estoqueMinimo);
     if (atual <= 0) return { key: 'critical', label: 'Crítico' };
     if (atual <= minimo) return { key: 'low', label: 'Baixo' };
     return { key: 'ok', label: 'OK' };
@@ -844,8 +903,11 @@
   const getFilteredEstoque = () => {
     const q = String(estoqueBusca || '').toLowerCase().trim();
     return estoqueProdutos.filter((item) => {
+      if (item.active === false) return false;
+      if (estoqueStatusFilter !== 'all' && getStockStatus(item).key !== estoqueStatusFilter) return false;
+      if (estoqueCategoriaFilter !== 'all' && String(item.category || item.categoria || '').toLowerCase() !== String(estoqueCategoriaFilter).toLowerCase()) return false;
       if (!q) return true;
-      const text = [item.nome, item.categoria, item.unidade]
+      const text = [item.name, item.category, item.unit, item.notes]
         .map((v) => String(v || '').toLowerCase())
         .join(' ');
       return text.includes(q);
@@ -857,21 +919,25 @@
     if (!bg) return;
     estoqueEditId = item?.id || null;
     const title = document.getElementById('titulo-modal-estoque');
+    const saveBtn = document.getElementById('btn-salvar-estoque');
     if (title) title.textContent = estoqueEditId ? 'Editar produto' : 'Cadastrar produto';
+    if (saveBtn) saveBtn.textContent = estoqueEditId ? 'Salvar alterações' : 'Concluir';
 
     const nomeEl = document.getElementById('input-estoque-nome');
     const categoriaEl = document.getElementById('input-estoque-categoria');
     const unidadeEl = document.getElementById('input-estoque-unidade');
     const minimoEl = document.getElementById('input-estoque-minimo');
     const atualEl = document.getElementById('input-estoque-atual');
+    const notasEl = document.getElementById('input-estoque-notes');
 
-    if (nomeEl) nomeEl.value = item?.nome || '';
-    if (categoriaEl) categoriaEl.value = item?.categoria || 'EPI';
-    if (unidadeEl) unidadeEl.value = item?.unidade || 'Unidade';
-    if (minimoEl) minimoEl.value = normalizeStockNumber(item?.estoqueMinimo);
+    if (nomeEl) nomeEl.value = item?.name || item?.nome || '';
+    if (categoriaEl) categoriaEl.value = item?.category || item?.categoria || 'EPI';
+    if (unidadeEl) unidadeEl.value = item?.unit || item?.unidade || 'Unidade';
+    if (minimoEl) minimoEl.value = normalizeStockNumber(item?.minimumQuantity ?? item?.estoqueMinimo);
     if (atualEl) atualEl.value = normalizeStockNumber(
-      item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? item?.estoqueMinimo ?? 0
+      item?.currentQuantity ?? item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? item?.estoqueMinimo ?? 0
     );
+    if (notasEl) notasEl.value = item?.notes || item?.observacoes || '';
     setEstoqueFeedback('', '');
     bg.classList.remove('hidden');
   };
@@ -890,18 +956,20 @@
     setEstoqueFeedback('', '');
   };
 
-  const saveEstoqueProduto = () => {
+  const saveEstoqueProduto = async () => {
     if (estoqueSaveInFlight) return;
     const nomeEl = document.getElementById('input-estoque-nome');
     const categoriaEl = document.getElementById('input-estoque-categoria');
     const unidadeEl = document.getElementById('input-estoque-unidade');
     const minimoEl = document.getElementById('input-estoque-minimo');
     const atualEl = document.getElementById('input-estoque-atual');
+    const notasEl = document.getElementById('input-estoque-notes');
     const saveBtn = document.getElementById('btn-salvar-estoque');
 
     const nome = String(nomeEl?.value || '').trim();
     const categoria = String(categoriaEl?.value || '').trim();
     const unidade = String(unidadeEl?.value || '').trim();
+    const notas = String(notasEl?.value || '').trim();
     const estoqueMinimoRaw = String(minimoEl?.value ?? '').trim();
     const estoqueAtualRaw = String(atualEl?.value ?? '').trim();
     const estoqueMinimo = estoqueMinimoRaw === '' ? NaN : Number(estoqueMinimoRaw);
@@ -939,25 +1007,28 @@
     }
 
     try {
+      const payload = {
+        clinicId: String(usuarioLogado?.clinicId || '').trim(),
+        name: nome,
+        category: categoria,
+        unit: unidade,
+        currentQuantity: normalizeStockNumber(estoqueAtual),
+        minimumQuantity: normalizeStockNumber(estoqueMinimo),
+        notes: notas,
+      };
+
       if (estoqueEditId) {
-        estoqueProdutos = estoqueProdutos.map((item) => {
-          if (item.id !== estoqueEditId) return item;
-          return { ...item, nome, categoria, unidade, estoqueMinimo, estoqueAtual };
-        });
+        const updated = await stockApi?.update?.({ ...payload, itemId: estoqueEditId, id: estoqueEditId });
+        const normalized = normalizeStockItem(updated || { ...payload, id: estoqueEditId, active: true });
+        estoqueProdutos = estoqueProdutos.map((item) => (item.id === estoqueEditId ? normalized : item));
       } else {
-        const novo = {
-          id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-          nome,
-          categoria,
-          unidade,
-          estoqueMinimo,
-          estoqueAtual,
-          createdAt: new Date().toISOString(),
-        };
-        estoqueProdutos.push(novo);
+        const created = await stockApi?.create?.(payload);
+        const normalized = normalizeStockItem(created || payload);
+        estoqueProdutos = [normalized, ...estoqueProdutos.filter((item) => item.id !== normalized.id)];
       }
 
       writeEstoqueStorage(estoqueProdutos);
+      setStockSourceLabel(window.__stockSyncSource || 'backend');
       renderEstoque();
       setEstoqueFeedback('Produto salvo com sucesso.', 'success');
       setTimeout(() => {
@@ -969,7 +1040,7 @@
       estoqueSaveInFlight = false;
       if (saveBtn) {
         saveBtn.disabled = false;
-        saveBtn.textContent = 'Concluir';
+        saveBtn.textContent = estoqueEditId ? 'Salvar alterações' : 'Concluir';
       }
     }
   };
@@ -981,14 +1052,34 @@
     const totalEl = document.getElementById('estoque-resumo-total');
     const criticosEl = document.getElementById('estoque-resumo-criticos');
     const baixosEl = document.getElementById('estoque-resumo-baixos');
+    const categorySelect = document.getElementById('estoque-categoria-filtro');
+    const stockSourceEl = document.getElementById('estoque-source-label');
     if (!tableWrap || !emptyState || !tbody) return;
 
-    const totalProdutos = estoqueProdutos.length;
-    const criticos = estoqueProdutos.filter((item) => getStockStatus(item).key === 'critical').length;
-    const baixos = estoqueProdutos.filter((item) => getStockStatus(item).key === 'low').length;
+    const activeItems = estoqueProdutos.filter((item) => item.active !== false);
+    const totalProdutos = activeItems.length;
+    const criticos = activeItems.filter((item) => getStockStatus(item).key === 'critical').length;
+    const baixos = activeItems.filter((item) => getStockStatus(item).key === 'low').length;
     if (totalEl) totalEl.textContent = String(totalProdutos);
     if (criticosEl) criticosEl.textContent = String(criticos);
     if (baixosEl) baixosEl.textContent = String(baixos);
+    if (stockSourceEl) {
+      stockSourceEl.textContent = estoqueSource === 'backend' ? 'Salvo no sistema central' : 'Modo local';
+    }
+
+    if (categorySelect) {
+      const categories = Array.from(new Set(activeItems.map((item) => String(item.category || item.categoria || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const currentValue = String(estoqueCategoriaFilter || 'all');
+      const options = ['<option value="all">Todas</option>']
+        .concat(categories.map((category) => `<option value="${category.replace(/"/g, '&quot;')}">${category}</option>`));
+      categorySelect.innerHTML = options.join('');
+      categorySelect.value = categories.includes(currentValue) ? currentValue : 'all';
+    }
+
+    document.querySelectorAll('[data-stock-status-filter]').forEach((button) => {
+      const value = button.getAttribute('data-stock-status-filter') || 'all';
+      button.classList.toggle('active', value === estoqueStatusFilter);
+    });
 
     const lista = getFilteredEstoque();
     tbody.innerHTML = '';
@@ -1005,12 +1096,16 @@
     lista.forEach((item) => {
       const status = getStockStatus(item);
       const tr = document.createElement('tr');
+      tr.classList.add(`stock-row-${status.key}`);
       tr.innerHTML = `
-        <td>${item.nome || ''}</td>
-        <td>${item.categoria || ''}</td>
-        <td>${item.unidade || ''}</td>
-        <td>${normalizeStockNumber(item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo)}</td>
-        <td>${normalizeStockNumber(item.estoqueMinimo)}</td>
+        <td>
+          <div class="table-cell-main">${item.name || item.nome || ''}</div>
+          <div class="table-cell-sub">${item.notes || item.observacoes || ''}</div>
+        </td>
+        <td>${item.category || item.categoria || ''}</td>
+        <td>${item.unit || item.unidade || ''}</td>
+        <td>${normalizeStockNumber(item.currentQuantity ?? item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo)}</td>
+        <td>${normalizeStockNumber(item.minimumQuantity ?? item.estoqueMinimo)}</td>
         <td><span class="stock-status ${status.key}">${status.label}</span></td>
         <td class="actions-col">
           <div class="row-actions">
@@ -1018,7 +1113,7 @@
             <div class="row-actions-menu" data-stock-menu-id="${item.id}">
               <button type="button" data-action="stock-edit" data-id="${item.id}">Editar</button>
               <button type="button" data-action="stock-adjust" data-id="${item.id}">Ajustar estoque</button>
-              <button type="button" class="danger" data-action="stock-delete" data-id="${item.id}">Excluir</button>
+              <button type="button" class="danger" data-action="stock-delete" data-id="${item.id}">Desativar</button>
             </div>
           </div>
         </td>
@@ -1042,6 +1137,7 @@
 
   const configureEstoqueModule = () => {
     const busca = document.getElementById('estoque-busca');
+    const categoriaFiltro = document.getElementById('estoque-categoria-filtro');
     const btnCadastro = document.getElementById('btn-estoque-cadastrar');
     const btnCadastroEmpty = document.getElementById('btn-estoque-cadastrar-empty');
     const btnSalvar = document.getElementById('btn-salvar-estoque');
@@ -1054,6 +1150,16 @@
       estoqueBusca = busca.value || '';
       renderEstoque();
     });
+    categoriaFiltro?.addEventListener('change', () => {
+      estoqueCategoriaFilter = categoriaFiltro.value || 'all';
+      renderEstoque();
+    });
+    document.querySelectorAll('[data-stock-status-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        estoqueStatusFilter = button.getAttribute('data-stock-status-filter') || 'all';
+        renderEstoque();
+      });
+    });
     btnCadastro?.addEventListener('click', () => openEstoqueModal());
     btnCadastroEmpty?.addEventListener('click', () => openEstoqueModal());
     btnSalvar?.addEventListener('click', saveEstoqueProduto);
@@ -1064,7 +1170,7 @@
       if (event.target === modalBg) closeEstoqueModal();
     });
 
-    tabela?.addEventListener('click', (event) => {
+    tabela?.addEventListener('click', async (event) => {
       const btn = event.target.closest('[data-action]');
       if (!btn) return;
       const action = btn.getAttribute('data-action');
@@ -1086,21 +1192,45 @@
         return;
       }
       if (action === 'stock-adjust') {
-        const atual = normalizeStockNumber(item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo);
-        const novoValor = prompt('Informe o novo estoque atual:', String(atual));
+        const atual = normalizeStockNumber(item.currentQuantity ?? item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo);
+        const novoValor = prompt('Informe a quantidade atual:', String(atual));
         if (novoValor === null) return;
         const estoqueAtual = normalizeStockNumber(novoValor);
-        estoqueProdutos = estoqueProdutos.map((p) => (p.id === id ? { ...p, estoqueAtual } : p));
-        writeEstoqueStorage(estoqueProdutos);
-        renderEstoque();
+        try {
+          const updated = await stockApi?.adjustQuantity?.({
+            clinicId: String(usuarioLogado?.clinicId || '').trim(),
+            itemId: id,
+            currentQuantity: estoqueAtual,
+          });
+          const normalized = normalizeStockItem(updated || { ...item, currentQuantity: estoqueAtual, updatedAt: new Date().toISOString() });
+          estoqueProdutos = estoqueProdutos.map((p) => (p.id === id ? normalized : p));
+          writeEstoqueStorage(estoqueProdutos);
+          setStockSourceLabel(window.__stockSyncSource || 'backend');
+          renderEstoque();
+          setEstoqueFeedback('Quantidade atualizada.', 'success');
+        } catch (error) {
+          console.error('Falha ao ajustar estoque.', error);
+          setEstoqueFeedback(error?.message ? `Erro ao ajustar estoque: ${error.message}` : 'Erro ao ajustar estoque.', 'error');
+        }
         return;
       }
       if (action === 'stock-delete') {
-        const ok = confirm('Excluir este produto do estoque?');
+        const ok = confirm('Desativar este produto do estoque?');
         if (!ok) return;
-        estoqueProdutos = estoqueProdutos.filter((p) => p.id !== id);
-        writeEstoqueStorage(estoqueProdutos);
-        renderEstoque();
+        try {
+          await stockApi?.deactivate?.({
+            clinicId: String(usuarioLogado?.clinicId || '').trim(),
+            itemId: id,
+          });
+          estoqueProdutos = estoqueProdutos.filter((p) => p.id !== id);
+          writeEstoqueStorage(estoqueProdutos);
+          setStockSourceLabel(window.__stockSyncSource || 'backend');
+          renderEstoque();
+          setEstoqueFeedback('Produto desativado.', 'success');
+        } catch (error) {
+          console.error('Falha ao desativar estoque.', error);
+          setEstoqueFeedback(error?.message ? `Erro ao desativar estoque: ${error.message}` : 'Erro ao desativar estoque.', 'error');
+        }
       }
     });
 
@@ -1205,7 +1335,7 @@
         window.location.href = 'index.html';
         return false;
       }
-      loadEstoqueForCurrentClinic();
+      await loadEstoqueForCurrentClinic();
       return true;
     } catch (err) {
       console.warn('Falha ao obter usuario atual.', err);
@@ -2911,15 +3041,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
-
-
-
-
-
-
-
 
 
 

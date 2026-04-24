@@ -885,6 +885,147 @@
     }
   };
 
+  const getCurrentClinicId = () => cleanText(getStoredClinic()?.clinicId || getStoredClinic()?.id || getStoredUser()?.clinicId || '');
+  const getStockStorageKey = (clinicId = '') => {
+    const normalized = cleanText(clinicId || getCurrentClinicId());
+    return normalized ? `voithos_estoque_produtos_v1:${normalized}` : 'voithos_estoque_produtos_v1';
+  };
+  const getStockMigrationKey = (clinicId = '') => {
+    const normalized = cleanText(clinicId || getCurrentClinicId());
+    return normalized ? `voithos_estoque_stock_migrated_v1:${normalized}` : 'voithos_estoque_stock_migrated_v1';
+  };
+  const normalizeStockNumber = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < 0) return 0;
+    return Math.trunc(number);
+  };
+  const normalizeStockItem = (item = {}, clinicId = '') => {
+    const currentQuantity = normalizeStockNumber(item?.currentQuantity ?? item?.quantidadeAtual ?? item?.estoqueAtual ?? item?.quantidade ?? 0);
+    const minimumQuantity = normalizeStockNumber(item?.minimumQuantity ?? item?.estoqueMinimo ?? 0);
+    const normalizedClinicId = cleanText(item?.clinicId || clinicId || getCurrentClinicId());
+    const createdAt = cleanText(item?.createdAt || new Date().toISOString());
+    const updatedAt = cleanText(item?.updatedAt || createdAt);
+    return {
+      ...item,
+      id: cleanText(item?.id || createLocalId('stock')),
+      clinicId: normalizedClinicId,
+      name: cleanText(item?.name || item?.nome),
+      category: cleanText(item?.category || item?.categoria),
+      unit: cleanText(item?.unit || item?.unidade),
+      currentQuantity,
+      minimumQuantity,
+      notes: cleanText(item?.notes || item?.observacoes || ''),
+      active: item?.active !== false,
+      createdAt,
+      updatedAt,
+      estoqueAtual: currentQuantity,
+      estoqueMinimo: minimumQuantity,
+      quantidadeAtual: currentQuantity,
+      quantidade: currentQuantity,
+    };
+  };
+  const setStockSyncSource = (source = 'local') => {
+    try {
+      window.__stockSyncSource = source === 'backend' ? 'backend' : 'local';
+    } catch (_error) {
+      // Ignora quando window não permite escrita.
+    }
+    return source === 'backend' ? 'backend' : 'local';
+  };
+  const readLocalStockItems = (clinicId = '') => {
+    const key = getStockStorageKey(clinicId);
+    const legacyKey = 'voithos_estoque_produtos_v1';
+    try {
+      const raw = localStorage.getItem(key) || localStorage.getItem(legacyKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map((item) => normalizeStockItem(item, clinicId)) : [];
+    } catch (_error) {
+      return [];
+    }
+  };
+  const writeLocalStockItems = (clinicId = '', items = []) => {
+    const normalizedClinicId = cleanText(clinicId);
+    const key = getStockStorageKey(normalizedClinicId);
+    const normalized = (Array.isArray(items) ? items : [])
+      .map((item) => normalizeStockItem(item, normalizedClinicId))
+      .filter((item) => item.active !== false);
+    try {
+      localStorage.setItem(key, JSON.stringify(normalized));
+    } catch (_error) {
+      // localStorage indisponível - fallback mantido em memória apenas
+    }
+    return normalized;
+  };
+  const shouldFallbackStock = (error) => {
+    const status = Number(error?.status || 0);
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('failed to fetch')
+      || message.includes('networkerror')
+      || message.includes('base da api nao configurada')
+      || message.includes('base da api não configurada')
+      || status >= 500;
+  };
+  const migrateLocalStockIfNeeded = async (clinicId = '') => {
+    const normalizedClinicId = cleanText(clinicId || getCurrentClinicId());
+    if (!normalizedClinicId) return null;
+    const migrationKey = getStockMigrationKey(normalizedClinicId);
+    try {
+      if (localStorage.getItem(migrationKey) === 'done') return null;
+    } catch (_error) {
+      return null;
+    }
+
+    const localItems = readLocalStockItems(normalizedClinicId).filter((item) => item.active !== false);
+    if (!localItems.length) return null;
+
+    let remoteItems = [];
+    try {
+      remoteItems = await request('GET', `/stock/items?clinicId=${encodeURIComponent(normalizedClinicId)}`, null, { auth: true });
+    } catch (_error) {
+      return null;
+    }
+
+    if (Array.isArray(remoteItems) && remoteItems.length) {
+      try {
+        localStorage.setItem(migrationKey, 'done');
+      } catch (_error) {
+      }
+      writeLocalStockItems(normalizedClinicId, remoteItems);
+      return remoteItems;
+    }
+
+    const createdItems = [];
+    for (const item of localItems) {
+      try {
+        const created = await request('POST', '/stock/items', {
+          clinicId: normalizedClinicId,
+          name: item.name,
+          category: item.category,
+          unit: item.unit,
+          currentQuantity: item.currentQuantity,
+          minimumQuantity: item.minimumQuantity,
+          notes: item.notes || '',
+          active: item.active !== false,
+        }, { auth: true });
+        createdItems.push(normalizeStockItem(created, normalizedClinicId));
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+      }
+    }
+
+    if (createdItems.length) {
+      try {
+        localStorage.setItem(migrationKey, 'done');
+      } catch (_error) {
+      }
+      writeLocalStockItems(normalizedClinicId, createdItems);
+      return createdItems;
+    }
+
+    return null;
+  };
+
   const mapCentralRoleToTipo = (role) => {
     const normalizedRole = cleanText(role).toUpperCase();
     if (normalizedRole === 'ADMIN') return 'administrativo';
@@ -1031,6 +1172,9 @@
 
       if (!response.ok) {
         const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
+        const error = new Error(message);
+        error.status = response.status;
+        error.code = 'HTTP_ERROR';
         logWebAuthDiagnostic('request_failed', {
           endpoint: path,
           method,
@@ -1039,7 +1183,7 @@
           error: message,
           fallback: false,
         });
-        throw new Error(message);
+        throw error;
       }
 
       return payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
@@ -2228,6 +2372,160 @@
     },
   };
 
+  const resolveStockClinicId = (payload = {}) => cleanText(
+    payload?.clinicId
+    || getCurrentClinicId()
+  );
+
+  const stock = {
+    list: async (payload = {}) => {
+      const clinicId = resolveStockClinicId(payload);
+      if (!clinicId) throw new Error('clinicId is required.');
+      try {
+        const remote = await request('GET', `/stock/items?clinicId=${encodeURIComponent(clinicId)}${payload?.includeInactive === true ? '&includeInactive=true' : ''}`, null, { auth: true });
+      if (Array.isArray(remote) && remote.length) {
+          writeLocalStockItems(clinicId, remote);
+          setStockSyncSource('backend');
+          return remote.map((item) => normalizeStockItem(item, clinicId));
+        }
+        const migrated = await migrateLocalStockIfNeeded(clinicId);
+        if (Array.isArray(migrated) && migrated.length) {
+          setStockSyncSource('backend');
+          return migrated.map((item) => normalizeStockItem(item, clinicId));
+        }
+        const localItems = readLocalStockItems(clinicId);
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('backend');
+        return localItems;
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+        const localItems = readLocalStockItems(clinicId);
+        setStockSyncSource('local');
+        return localItems;
+      }
+    },
+    create: async (payload = {}) => {
+      const clinicId = resolveStockClinicId(payload);
+      if (!clinicId) throw new Error('clinicId is required.');
+      const body = {
+        clinicId,
+        name: cleanText(payload?.name || payload?.nome),
+        category: cleanText(payload?.category || payload?.categoria),
+        unit: cleanText(payload?.unit || payload?.unidade),
+        currentQuantity: payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual,
+        minimumQuantity: payload?.minimumQuantity ?? payload?.estoqueMinimo,
+        notes: cleanText(payload?.notes || payload?.observacoes || ''),
+        active: payload?.active !== false,
+      };
+      try {
+        const created = await request('POST', '/stock/items', body, { auth: true });
+        const normalized = normalizeStockItem(created, clinicId);
+        const localItems = readLocalStockItems(clinicId).filter((item) => item.id !== normalized.id);
+        localItems.unshift(normalized);
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('backend');
+        return normalized;
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+        const localItems = readLocalStockItems(clinicId);
+        const created = normalizeStockItem({
+          ...body,
+          id: createLocalId('stock'),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }, clinicId);
+        localItems.unshift(created);
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('local');
+        return created;
+      }
+    },
+    update: async (payload = {}) => {
+      const clinicId = resolveStockClinicId(payload);
+      const itemId = cleanText(payload?.itemId || payload?.id);
+      if (!clinicId) throw new Error('clinicId is required.');
+      if (!itemId) throw new Error('itemId is required.');
+      const body = {
+        clinicId,
+        name: cleanText(payload?.name || payload?.nome),
+        category: cleanText(payload?.category || payload?.categoria),
+        unit: cleanText(payload?.unit || payload?.unidade),
+        currentQuantity: payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual,
+        minimumQuantity: payload?.minimumQuantity ?? payload?.estoqueMinimo,
+        notes: cleanText(payload?.notes || payload?.observacoes || ''),
+        active: payload?.active !== undefined ? payload.active !== false : true,
+      };
+      try {
+        const updated = await request('PATCH', `/stock/items/${encodeURIComponent(itemId)}`, body, { auth: true });
+        const normalized = normalizeStockItem(updated, clinicId);
+        const localItems = readLocalStockItems(clinicId).map((item) => (item.id === normalized.id ? normalized : item));
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('backend');
+        return normalized;
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+        const localItems = readLocalStockItems(clinicId).map((item) => (
+          item.id === itemId
+            ? normalizeStockItem({ ...item, ...body, updatedAt: new Date().toISOString() }, clinicId)
+            : item
+        ));
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('local');
+        return localItems.find((item) => item.id === itemId) || null;
+      }
+    },
+    adjustQuantity: async (payload = {}) => {
+      const clinicId = resolveStockClinicId(payload);
+      const itemId = cleanText(payload?.itemId || payload?.id);
+      if (!clinicId) throw new Error('clinicId is required.');
+      if (!itemId) throw new Error('itemId is required.');
+      try {
+        const updated = await request('PATCH', `/stock/items/${encodeURIComponent(itemId)}/quantity`, {
+          clinicId,
+          currentQuantity: payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual,
+          notes: payload?.notes || payload?.observacoes || '',
+        }, { auth: true });
+        const normalized = normalizeStockItem(updated, clinicId);
+        const localItems = readLocalStockItems(clinicId).map((item) => (item.id === normalized.id ? normalized : item));
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('backend');
+        return normalized;
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+        const nextQuantity = normalizeStockNumber(payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual);
+        const localItems = readLocalStockItems(clinicId).map((item) => (
+          item.id === itemId
+            ? normalizeStockItem({ ...item, currentQuantity: nextQuantity, updatedAt: new Date().toISOString() }, clinicId)
+            : item
+        ));
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('local');
+        return localItems.find((item) => item.id === itemId) || null;
+      }
+    },
+    deactivate: async (payload = {}) => {
+      const clinicId = resolveStockClinicId(payload);
+      const itemId = cleanText(payload?.itemId || payload?.id);
+      if (!clinicId) throw new Error('clinicId is required.');
+      if (!itemId) throw new Error('itemId is required.');
+      try {
+        const updated = await request('DELETE', `/stock/items/${encodeURIComponent(itemId)}`, { clinicId }, { auth: true });
+        const normalized = normalizeStockItem(updated, clinicId);
+        const localItems = readLocalStockItems(clinicId).filter((item) => item.id !== normalized.id);
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('backend');
+        return normalized;
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+        const localItems = readLocalStockItems(clinicId).filter((item) => item.id !== itemId);
+        writeLocalStockItems(clinicId, localItems);
+        setStockSyncSource('local');
+        return { success: true };
+      }
+    },
+    delete: async (payload = {}) => stock.deactivate(payload),
+  };
+
   const plans = {
     list: async ({ patientId } = {}) => {
       const query = patientId ? `?patientId=${encodeURIComponent(cleanText(patientId))}` : '';
@@ -2728,6 +3026,7 @@
     documents,
     finance,
     laboratorio,
+    stock,
     plans,
     campanhas,
     campanhasGlobal,

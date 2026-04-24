@@ -1423,11 +1423,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return Array.isArray(list) ? list : null;
         };
         try {
-            const list = readStockList(clinicStorageKey) || readStockList(legacyStorageKey) || [];
+            const list = (readStockList(clinicStorageKey) || readStockList(legacyStorageKey) || [])
+                .filter((item) => item?.active !== false);
             if (!Array.isArray(list)) return { estoqueTotal: 0, estoqueCritico: 0 };
             const estoqueTotal = list.length;
             const estoqueCritico = list.filter((item) => {
-                const atual = Number(item?.estoqueAtual) || 0;
+                const atual = Number(item?.currentQuantity ?? item?.quantidadeAtual ?? item?.estoqueAtual ?? item?.quantidade ?? 0) || 0;
                 return atual <= 0;
             }).length;
             return { estoqueTotal, estoqueCritico };

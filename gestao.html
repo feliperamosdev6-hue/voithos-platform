@@ -582,11 +582,21 @@
           <div class="bloco-header">
             <div>
               <h2>Controle de estoque</h2>
+              <p class="estoque-source-label" id="estoque-source-label">Modo local</p>
             </div>
             <div class="bloco-tools estoque-tools">
               <input id="estoque-busca" type="text" placeholder="Buscar produto..." />
+              <select id="estoque-categoria-filtro" aria-label="Filtrar por categoria">
+                <option value="all">Todas</option>
+              </select>
               <button id="btn-estoque-cadastrar" class="btn-primario" type="button">+ Cadastrar produto</button>
             </div>
+          </div>
+
+          <div class="estoque-status-filters" role="group" aria-label="Filtros rápidos de estoque">
+            <button class="chip-btn active" type="button" data-stock-status-filter="all">Todos</button>
+            <button class="chip-btn" type="button" data-stock-status-filter="low">Baixo estoque</button>
+            <button class="chip-btn" type="button" data-stock-status-filter="critical">Crítico</button>
           </div>
 
           <section class="estoque-resumo-cards">
@@ -609,9 +619,9 @@
 
           <div id="estoque-empty-state" class="estoque-empty-state">
             <div class="estoque-empty-icon" aria-hidden="true">📦</div>
-            <h3>Sem estoque por aqui!</h3>
-            <p>Adicione produtos e deixe seu controle de estoque em dia.</p>
-            <button id="btn-estoque-cadastrar-empty" class="btn-primario" type="button">+ Cadastrar produto</button>
+            <h3>Cadastrar primeiro item</h3>
+            <p>Comece com os produtos mais usados e receba alerta quando o estoque estiver baixo.</p>
+            <button id="btn-estoque-cadastrar-empty" class="btn-primario" type="button">+ Cadastrar primeiro item</button>
           </div>
 
           <div id="estoque-table-wrap" class="hidden">
@@ -743,6 +753,9 @@
       <input id="input-estoque-atual" type="number" min="0" step="1" placeholder="Ex.: 24" />
       <small class="estoque-field-help">Use a quantidade hoje disponível. O mínimo é um alerta separado.</small>
 
+      <label for="input-estoque-notes">Observações</label>
+      <textarea id="input-estoque-notes" rows="3" placeholder="Ex.: validade, fornecedor, local de armazenamento"></textarea>
+
       <p id="estoque-form-feedback" class="estoque-form-feedback" role="status" aria-live="polite"></p>
 
       <div class="modal-actions">
@@ -759,7 +772,6 @@
     <script src="header.js"></script>
 </body>
 </html>
-
 
 
 

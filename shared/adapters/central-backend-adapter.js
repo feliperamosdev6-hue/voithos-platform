@@ -113,6 +113,8 @@ const createCentralBackendAdapter = (options = {}) => {
 
   let sessionToken = '';
   let tokenExpiresAt = 0;
+  let userSessionToken = '';
+  let userSessionExpiresAt = 0;
 
   const isEnabled = () => config.enabled === true;
 
@@ -162,6 +164,18 @@ const createCentralBackendAdapter = (options = {}) => {
   const getToken = async (forceRefresh = false) => {
     if (!forceRefresh && sessionToken && tokenExpiresAt > Date.now()) return sessionToken;
     return login();
+  };
+
+  const setUserSession = (token) => {
+    const normalized = String(token || '').trim();
+    userSessionToken = normalized;
+    userSessionExpiresAt = normalized ? Date.now() + (12 * 60 * 60 * 1000) : 0;
+    return normalized;
+  };
+
+  const getUserSessionToken = () => {
+    if (!userSessionToken || userSessionExpiresAt <= Date.now()) return '';
+    return userSessionToken;
   };
 
   const requestJson = async (pathname, requestOptions = {}, retry = true) => {
@@ -297,6 +311,7 @@ const createCentralBackendAdapter = (options = {}) => {
     });
     await ensureOk(response);
     const payload = await response.json();
+    if (payload?.data?.token) setUserSession(payload.data.token);
     return payload?.data || null;
   };
 
@@ -312,6 +327,7 @@ const createCentralBackendAdapter = (options = {}) => {
     await ensureOk(response);
     const payload = await response.json();
     const data = payload?.data || {};
+    if (data?.token) setUserSession(data.token);
     return {
       success: data?.verified === true || payload?.ok === true,
       token: data?.token || '',
@@ -331,6 +347,7 @@ const createCentralBackendAdapter = (options = {}) => {
     await ensureOk(response);
     const payload = await response.json();
     const data = payload?.data || {};
+    if (data?.token) setUserSession(data.token);
     return {
       success: data?.deliveryConfirmed === true || data?.resent === true || payload?.ok === true,
       resent: data?.resent === true,
@@ -376,6 +393,7 @@ const createCentralBackendAdapter = (options = {}) => {
     });
     await ensureOk(response);
     const payload = await response.json();
+    if (payload?.data?.token) setUserSession(payload.data.token);
     return payload?.data || null;
   };
 
@@ -1885,6 +1903,77 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || { success: true };
   };
 
+  const ensureUserSessionToken = () => {
+    const token = getUserSessionToken();
+    if (!token) {
+      throw new Error('Authenticated session token is required.');
+    }
+    return token;
+  };
+
+  const listStockItems = async ({ clinicId, includeInactive = false } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    const query = new URLSearchParams();
+    if (normalizedClinicId) query.set('clinicId', normalizedClinicId);
+    if (includeInactive === true) query.set('includeInactive', 'true');
+    const token = ensureUserSessionToken();
+    const payload = await requestJsonWithUserToken(`/stock/items${query.toString() ? `?${query.toString()}` : ''}`, token, {
+      method: 'GET',
+    });
+    return payload?.data || [];
+  };
+
+  const createStockItem = async ({ clinicId, item = {} } = {}) => {
+    const token = ensureUserSessionToken();
+    const payload = await requestJsonWithUserToken('/stock/items', token, {
+      method: 'POST',
+      body: JSON.stringify({
+        clinicId: String(clinicId || item?.clinicId || '').trim(),
+        ...item,
+      }),
+    });
+    return payload?.data || null;
+  };
+
+  const updateStockItem = async ({ clinicId, itemId, item = {} } = {}) => {
+    const normalizedItemId = String(itemId || item?.id || '').trim();
+    const token = ensureUserSessionToken();
+    const payload = await requestJsonWithUserToken(`/stock/items/${encodeURIComponent(normalizedItemId)}`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        clinicId: String(clinicId || item?.clinicId || '').trim(),
+        ...item,
+      }),
+    });
+    return payload?.data || null;
+  };
+
+  const adjustStockQuantity = async ({ clinicId, itemId, currentQuantity, notes = '' } = {}) => {
+    const normalizedItemId = String(itemId || '').trim();
+    const token = ensureUserSessionToken();
+    const payload = await requestJsonWithUserToken(`/stock/items/${encodeURIComponent(normalizedItemId)}/quantity`, token, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        clinicId: String(clinicId || '').trim(),
+        currentQuantity,
+        notes,
+      }),
+    });
+    return payload?.data || null;
+  };
+
+  const deactivateStockItem = async ({ clinicId, itemId } = {}) => {
+    const normalizedItemId = String(itemId || '').trim();
+    const token = ensureUserSessionToken();
+    const payload = await requestJsonWithUserToken(`/stock/items/${encodeURIComponent(normalizedItemId)}`, token, {
+      method: 'DELETE',
+      body: JSON.stringify({
+        clinicId: String(clinicId || '').trim(),
+      }),
+    });
+    return payload?.data || null;
+  };
+
   const getLaboratoryDashboardSummary = async ({ clinicId } = {}) => {
     const normalizedClinicId = String(clinicId || '').trim();
     const payload = await requestInternalJson(`/internal/laboratory/dashboard?clinicId=${encodeURIComponent(normalizedClinicId)}`);
@@ -2106,6 +2195,11 @@ const createCentralBackendAdapter = (options = {}) => {
     updateLaboratoryOrderItem,
     deleteLaboratoryOrderItem,
     getLaboratoryDashboardSummary,
+    listStockItems,
+    createStockItem,
+    updateStockItem,
+    adjustStockQuantity,
+    deactivateStockItem,
     listFaturamento,
     listPatientPlans,
     createPatientPlan,
