@@ -552,6 +552,47 @@ const isPlanFinancialAccount = (row = {}) => Boolean(
   || cleanText(row?.category).toLowerCase() === 'planos'
 );
 
+const isCanceledFinancialAccount = (row = {}) => cleanText(row?.status).toUpperCase() === 'CANCELED';
+
+const isProcedureFinancialAccount = (row = {}) => {
+  const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  return cleanText(row?.source || metadata?.origin).toLowerCase() === 'procedimento'
+    || cleanText(row?.category || metadata?.category).toLowerCase() === 'procedimentos'
+    || Boolean(cleanText(row?.patientProcedureId || metadata?.patientProcedureId || metadata?.procedureId));
+};
+
+const buildFinancialAccountDedupKey = (row = {}) => {
+  if (!isProcedureFinancialAccount(row)) return '';
+  const externalReference = cleanText(row?.externalReference);
+  if (externalReference) return `procedure:ref:${externalReference}`;
+  const procedureId = cleanText(row?.patientProcedureId);
+  if (procedureId) return `procedure:id:${procedureId}`;
+  return '';
+};
+
+const dedupeFinancialAccountRows = (rows = []) => {
+  const preferredByKey = new Map();
+
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const dedupKey = buildFinancialAccountDedupKey(row);
+    if (!dedupKey) return;
+    const current = preferredByKey.get(dedupKey);
+    if (!current) {
+      preferredByKey.set(dedupKey, row);
+      return;
+    }
+    if (isCanceledFinancialAccount(current) && !isCanceledFinancialAccount(row)) {
+      preferredByKey.set(dedupKey, row);
+    }
+  });
+
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const dedupKey = buildFinancialAccountDedupKey(row);
+    if (!dedupKey) return true;
+    return preferredByKey.get(dedupKey)?.id === row.id;
+  });
+};
+
 const cleanPlanLedgerTitle = (value) => cleanText(value).replace(/^plano:\s*/i, '').trim() || 'Plano odontologico';
 
 const buildPlanLedgerEntries = (accountRow = {}) => {
@@ -716,11 +757,12 @@ const loadFinancialAccountRows = async ({ clinicId, patientId } = {}) => {
   const rows = patientId
     ? financialRepository.listFinancialAccountsByPatient({ clinicId: normalizedClinicId, patientId: cleanText(patientId) })
     : financialRepository.listFinancialAccountsByClinic({ clinicId: normalizedClinicId });
-  return hydratePlanFinancialRows({
+  const hydratedRows = await hydratePlanFinancialRows({
     clinicId: normalizedClinicId,
     patientId: cleanText(patientId),
     rows: await rows,
   });
+  return dedupeFinancialAccountRows(hydratedRows);
 };
 
 const listFinancialAccountSnapshots = async ({ clinicId, patientId } = {}) => {

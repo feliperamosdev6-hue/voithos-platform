@@ -44,6 +44,10 @@ const financialRepository = {
 
   findFinancialAccountByExternalReference: async ({ clinicId, externalReference }) => prisma.financialAccount.findFirst({
     where: { clinicId, externalReference },
+    orderBy: [
+      { updatedAt: 'desc' },
+      { createdAt: 'desc' },
+    ],
     include: {
       installments: { orderBy: { sequence: 'asc' } },
       transactions: { orderBy: { createdAt: 'asc' } },
