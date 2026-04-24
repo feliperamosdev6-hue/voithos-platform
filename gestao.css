@@ -634,6 +634,127 @@ body {
   min-height: 88px;
 }
 
+.modal-movimento-estoque {
+  gap: 10px;
+}
+
+.movimento-item-resumo {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.movimento-item-resumo > div {
+  display: grid;
+  gap: 2px;
+}
+
+.movimento-resumo-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0;
+}
+
+.movimento-item-resumo strong {
+  font-size: 14px;
+  color: #0f172a;
+}
+
+.movimento-movimento-tipo-note {
+  color: #64748b;
+}
+
+.stock-move-preview,
+.estoque-movimento-preview {
+  margin: -2px 0 0;
+  min-height: 16px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.stock-move-preview.is-error,
+.estoque-movimento-preview.is-error {
+  color: #b91c1c;
+}
+
+.movimento-historico {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.movimento-historico-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.movimento-historico-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.movimento-historico-note {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.movimento-historico-empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.movimento-historico-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.movimento-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  display: grid;
+  gap: 6px;
+}
+
+.movimento-item-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.movimento-item-main strong {
+  font-size: 13px;
+}
+
+.movimento-item-qty {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.movimento-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  font-size: 11px;
+  color: #64748b;
+}
+
 .stock-status {
   display: inline-flex;
   align-items: center;
@@ -1422,5 +1543,4 @@ body {
 #tabela-lucratividade td {
   white-space: nowrap;
 }
-
 

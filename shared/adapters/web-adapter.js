@@ -894,6 +894,10 @@
     const normalized = cleanText(clinicId || getCurrentClinicId());
     return normalized ? `voithos_estoque_stock_migrated_v1:${normalized}` : 'voithos_estoque_stock_migrated_v1';
   };
+  const getStockMovementStorageKey = (clinicId = '') => {
+    const normalized = cleanText(clinicId || getCurrentClinicId());
+    return normalized ? `voithos_estoque_movimentos_v1:${normalized}` : 'voithos_estoque_movimentos_v1';
+  };
   const normalizeStockNumber = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number) || number < 0) return 0;
@@ -924,6 +928,38 @@
       quantidade: currentQuantity,
     };
   };
+  const normalizeStockMovement = (movement = {}, clinicId = '', stockItemId = '') => {
+    const quantityDelta = Number(movement?.quantityDelta || 0);
+    const quantityBefore = movement?.quantityBefore === undefined || movement?.quantityBefore === null
+      ? null
+      : normalizeStockNumber(movement.quantityBefore);
+    const quantityAfter = movement?.quantityAfter === undefined || movement?.quantityAfter === null
+      ? null
+      : normalizeStockNumber(movement.quantityAfter);
+    const normalizedClinicId = cleanText(movement?.clinicId || clinicId || getCurrentClinicId());
+    const normalizedItemId = cleanText(movement?.stockItemId || stockItemId || '');
+    const normalizedType = cleanText(movement?.type || '').toLowerCase();
+    const normalizedReason = cleanText(movement?.reason || movement?.notes || '');
+    const performedByUserId = cleanText(movement?.performedByUserId || movement?.performedBy || '');
+    const performedByUserName = cleanText(movement?.performedByUserName || movement?.performedByName || '');
+    const createdAt = cleanText(movement?.createdAt || new Date().toISOString());
+    return {
+      ...movement,
+      id: cleanText(movement?.id || createLocalId('stock-mov')),
+      clinicId: normalizedClinicId,
+      stockItemId: normalizedItemId,
+      type: normalizedType,
+      quantity: Math.abs(quantityDelta),
+      quantityDelta,
+      quantityBefore,
+      quantityAfter,
+      reason: normalizedReason,
+      notes: normalizedReason,
+      performedByUserId,
+      performedByUserName,
+      createdAt,
+    };
+  };
   const setStockSyncSource = (source = 'local') => {
     try {
       window.__stockSyncSource = source === 'backend' ? 'backend' : 'local';
@@ -944,6 +980,17 @@
       return [];
     }
   };
+  const readLocalStockMovements = (clinicId = '') => {
+    const key = getStockMovementStorageKey(clinicId);
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map((movement) => normalizeStockMovement(movement, clinicId)) : [];
+    } catch (_error) {
+      return [];
+    }
+  };
   const writeLocalStockItems = (clinicId = '', items = []) => {
     const normalizedClinicId = cleanText(clinicId);
     const key = getStockStorageKey(normalizedClinicId);
@@ -956,6 +1003,74 @@
       // localStorage indisponível - fallback mantido em memória apenas
     }
     return normalized;
+  };
+  const writeLocalStockMovements = (clinicId = '', items = []) => {
+    const normalizedClinicId = cleanText(clinicId);
+    const key = getStockMovementStorageKey(normalizedClinicId);
+    const normalized = (Array.isArray(items) ? items : [])
+      .map((item) => normalizeStockMovement(item, normalizedClinicId))
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    try {
+      localStorage.setItem(key, JSON.stringify(normalized));
+    } catch (_error) {
+      // localStorage indisponível - fallback mantido em memória apenas
+    }
+    return normalized;
+  };
+  const appendLocalStockMovement = (clinicId = '', movement = {}) => {
+    const normalizedClinicId = cleanText(clinicId);
+    const current = readLocalStockMovements(normalizedClinicId);
+    const next = [normalizeStockMovement(movement, normalizedClinicId, movement?.stockItemId), ...current]
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    return writeLocalStockMovements(normalizedClinicId, next);
+  };
+  const applyLocalStockMovement = (clinicId = '', payload = {}) => {
+    const normalizedClinicId = cleanText(clinicId);
+    const itemId = cleanText(payload?.itemId || payload?.stockItemId || payload?.id);
+    const type = normalizeStockMovement(payload?.movement || payload, normalizedClinicId, itemId).type || cleanText(payload?.type || '').toLowerCase();
+    const quantity = normalizeStockNumber(payload?.quantity ?? payload?.currentQuantity ?? payload?.quantidade);
+    const reason = cleanText(payload?.reason || payload?.notes || payload?.observacoes || (type === 'ajuste' ? 'Ajuste de estoque.' : ''));
+    const actor = {
+      userId: cleanText(getStoredUser()?.id || getStoredUser()?.userId || ''),
+      userName: cleanText(getStoredUser()?.nome || getStoredUser()?.fullName || ''),
+    };
+    const items = readLocalStockItems(normalizedClinicId);
+    const index = items.findIndex((item) => item.id === itemId);
+    if (index < 0) throw new Error('STOCK_ITEM_NOT_FOUND');
+    const currentItem = items[index];
+    const currentQuantity = normalizeStockNumber(currentItem.currentQuantity ?? currentItem.estoqueAtual ?? currentItem.quantidadeAtual ?? 0);
+    let nextQuantity = currentQuantity;
+    let delta = 0;
+    if (type === 'entrada') {
+      delta = quantity;
+      nextQuantity = currentQuantity + quantity;
+    } else if (type === 'baixa') {
+      delta = -quantity;
+      nextQuantity = currentQuantity - quantity;
+    } else {
+      nextQuantity = quantity;
+      delta = nextQuantity - currentQuantity;
+    }
+    if (nextQuantity < 0) throw new Error('STOCK_NEGATIVE_NOT_ALLOWED');
+    const updated = normalizeStockItem({ ...currentItem, currentQuantity: nextQuantity, updatedAt: new Date().toISOString() }, normalizedClinicId);
+    items[index] = updated;
+    writeLocalStockItems(normalizedClinicId, items);
+    const movement = normalizeStockMovement({
+      id: createLocalId('stock-mov'),
+      clinicId: normalizedClinicId,
+      stockItemId: itemId,
+      type,
+      quantityDelta: delta,
+      quantityBefore: currentQuantity,
+      quantityAfter: nextQuantity,
+      notes: reason,
+      performedByUserId: actor.userId || '',
+      performedByUserName: actor.userName || '',
+      createdAt: new Date().toISOString(),
+    }, normalizedClinicId, itemId);
+    appendLocalStockMovement(normalizedClinicId, movement);
+    setStockSyncSource('local');
+    return { item: updated, movement };
   };
   const shouldFallbackStock = (error) => {
     const status = Number(error?.status || 0);
@@ -1008,7 +1123,9 @@
           notes: item.notes || '',
           active: item.active !== false,
         }, { auth: true });
-        createdItems.push(normalizeStockItem(created, normalizedClinicId));
+        const normalizedCreated = normalizeStockItem(created?.item || created, normalizedClinicId);
+        createdItems.push(normalizedCreated);
+        if (created?.movement) appendLocalStockMovement(normalizedClinicId, created.movement);
       } catch (error) {
         if (!shouldFallbackStock(error)) throw error;
       }
@@ -2383,7 +2500,7 @@
       if (!clinicId) throw new Error('clinicId is required.');
       try {
         const remote = await request('GET', `/stock/items?clinicId=${encodeURIComponent(clinicId)}${payload?.includeInactive === true ? '&includeInactive=true' : ''}`, null, { auth: true });
-      if (Array.isArray(remote) && remote.length) {
+        if (Array.isArray(remote) && remote.length) {
           writeLocalStockItems(clinicId, remote);
           setStockSyncSource('backend');
           return remote.map((item) => normalizeStockItem(item, clinicId));
@@ -2419,25 +2536,42 @@
       };
       try {
         const created = await request('POST', '/stock/items', body, { auth: true });
-        const normalized = normalizeStockItem(created, clinicId);
+        const normalized = normalizeStockItem(created?.item || created, clinicId);
         const localItems = readLocalStockItems(clinicId).filter((item) => item.id !== normalized.id);
         localItems.unshift(normalized);
         writeLocalStockItems(clinicId, localItems);
+        if (created?.movement) appendLocalStockMovement(clinicId, created.movement);
         setStockSyncSource('backend');
         return normalized;
       } catch (error) {
         if (!shouldFallbackStock(error)) throw error;
-        const localItems = readLocalStockItems(clinicId);
-        const created = normalizeStockItem({
+        const itemId = createLocalId('stock');
+        const createdItem = normalizeStockItem({
           ...body,
-          id: createLocalId('stock'),
+          id: itemId,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }, clinicId);
-        localItems.unshift(created);
+        const localItems = readLocalStockItems(clinicId).filter((item) => item.id !== createdItem.id);
+        localItems.unshift(createdItem);
         writeLocalStockItems(clinicId, localItems);
+        if (Number(createdItem.currentQuantity || 0) > 0) {
+          appendLocalStockMovement(clinicId, normalizeStockMovement({
+            id: createLocalId('stock-mov'),
+            clinicId,
+            stockItemId: itemId,
+            type: 'entrada',
+            quantityDelta: Number(createdItem.currentQuantity || 0),
+            quantityBefore: 0,
+            quantityAfter: Number(createdItem.currentQuantity || 0),
+            notes: 'Estoque inicial.',
+            performedByUserId: cleanText(getStoredUser()?.id || getStoredUser()?.userId || ''),
+            performedByUserName: cleanText(getStoredUser()?.nome || getStoredUser()?.fullName || ''),
+            createdAt: new Date().toISOString(),
+          }, clinicId, itemId));
+        }
         setStockSyncSource('local');
-        return created;
+        return createdItem;
       }
     },
     update: async (payload = {}) => {
@@ -2457,52 +2591,111 @@
       };
       try {
         const updated = await request('PATCH', `/stock/items/${encodeURIComponent(itemId)}`, body, { auth: true });
-        const normalized = normalizeStockItem(updated, clinicId);
+        const normalized = normalizeStockItem(updated?.item || updated, clinicId);
         const localItems = readLocalStockItems(clinicId).map((item) => (item.id === normalized.id ? normalized : item));
         writeLocalStockItems(clinicId, localItems);
+        if (updated?.movement) appendLocalStockMovement(clinicId, updated.movement);
         setStockSyncSource('backend');
         return normalized;
       } catch (error) {
         if (!shouldFallbackStock(error)) throw error;
-        const localItems = readLocalStockItems(clinicId).map((item) => (
+        const existingItems = readLocalStockItems(clinicId);
+        const localItems = existingItems.map((item) => (
           item.id === itemId
             ? normalizeStockItem({ ...item, ...body, updatedAt: new Date().toISOString() }, clinicId)
             : item
         ));
+        const currentItem = existingItems.find((item) => item.id === itemId) || null;
+        const nextItem = localItems.find((item) => item.id === itemId) || null;
         writeLocalStockItems(clinicId, localItems);
+        if (nextItem && currentItem && Number(nextItem.currentQuantity || 0) !== Number(currentItem.currentQuantity || 0)) {
+          appendLocalStockMovement(clinicId, normalizeStockMovement({
+            id: createLocalId('stock-mov'),
+            clinicId,
+            stockItemId: itemId,
+            type: 'ajuste',
+            quantityDelta: Number(nextItem.currentQuantity || 0) - Number(currentItem.currentQuantity || 0),
+            quantityBefore: Number(currentItem.currentQuantity || 0),
+            quantityAfter: Number(nextItem.currentQuantity || 0),
+            notes: 'Atualização do cadastro.',
+            performedByUserId: cleanText(getStoredUser()?.id || getStoredUser()?.userId || ''),
+            performedByUserName: cleanText(getStoredUser()?.nome || getStoredUser()?.fullName || ''),
+            createdAt: new Date().toISOString(),
+          }, clinicId, itemId));
+        }
         setStockSyncSource('local');
-        return localItems.find((item) => item.id === itemId) || null;
+        return nextItem;
       }
     },
-    adjustQuantity: async (payload = {}) => {
+    listMovements: async (payload = {}) => {
       const clinicId = resolveStockClinicId(payload);
       const itemId = cleanText(payload?.itemId || payload?.id);
       if (!clinicId) throw new Error('clinicId is required.');
       if (!itemId) throw new Error('itemId is required.');
       try {
-        const updated = await request('PATCH', `/stock/items/${encodeURIComponent(itemId)}/quantity`, {
-          clinicId,
-          currentQuantity: payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual,
-          notes: payload?.notes || payload?.observacoes || '',
-        }, { auth: true });
-        const normalized = normalizeStockItem(updated, clinicId);
-        const localItems = readLocalStockItems(clinicId).map((item) => (item.id === normalized.id ? normalized : item));
-        writeLocalStockItems(clinicId, localItems);
+        const query = new URLSearchParams();
+        query.set('clinicId', clinicId);
+        if (payload?.limit !== undefined && payload?.limit !== null && payload?.limit !== '') {
+          query.set('limit', cleanText(payload.limit));
+        }
+        const remote = await request('GET', `/stock/items/${encodeURIComponent(itemId)}/movements?${query.toString()}`, null, { auth: true });
+        const movements = (Array.isArray(remote) ? remote : []).map((movement) => normalizeStockMovement(movement, clinicId, itemId));
+        if (movements.length) {
+          writeLocalStockMovements(clinicId, movements);
+          setStockSyncSource('backend');
+          return movements;
+        }
+        const localMovements = readLocalStockMovements(clinicId)
+          .filter((movement) => movement.stockItemId === itemId)
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
         setStockSyncSource('backend');
-        return normalized;
+        return localMovements;
       } catch (error) {
         if (!shouldFallbackStock(error)) throw error;
-        const nextQuantity = normalizeStockNumber(payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual);
-        const localItems = readLocalStockItems(clinicId).map((item) => (
-          item.id === itemId
-            ? normalizeStockItem({ ...item, currentQuantity: nextQuantity, updatedAt: new Date().toISOString() }, clinicId)
-            : item
-        ));
-        writeLocalStockItems(clinicId, localItems);
+        const localMovements = readLocalStockMovements(clinicId)
+          .filter((movement) => movement.stockItemId === itemId)
+          .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
         setStockSyncSource('local');
-        return localItems.find((item) => item.id === itemId) || null;
+        return localMovements;
       }
     },
+    createMovement: async (payload = {}) => {
+      const clinicId = resolveStockClinicId(payload);
+      const itemId = cleanText(payload?.itemId || payload?.id);
+      if (!clinicId) throw new Error('clinicId is required.');
+      if (!itemId) throw new Error('itemId is required.');
+      const body = {
+        clinicId,
+        type: cleanText(payload?.type || payload?.movementType || '').toLowerCase(),
+        quantity: payload?.quantity ?? payload?.currentQuantity ?? payload?.quantidade,
+        reason: cleanText(payload?.reason || payload?.notes || payload?.observacoes || ''),
+      };
+      try {
+        const result = await request('POST', `/stock/items/${encodeURIComponent(itemId)}/movements`, body, { auth: true });
+        const normalizedItem = normalizeStockItem(result?.item || result, clinicId);
+        const normalizedMovement = result?.movement ? normalizeStockMovement(result.movement, clinicId, itemId) : null;
+        const localItems = readLocalStockItems(clinicId).map((item) => (item.id === normalizedItem.id ? normalizedItem : item));
+        writeLocalStockItems(clinicId, localItems);
+        if (normalizedMovement) appendLocalStockMovement(clinicId, normalizedMovement);
+        setStockSyncSource('backend');
+        return { item: normalizedItem, movement: normalizedMovement };
+      } catch (error) {
+        if (!shouldFallbackStock(error)) throw error;
+        const fallback = applyLocalStockMovement(clinicId, {
+          itemId,
+          type: body.type,
+          quantity: body.quantity,
+          reason: body.reason,
+        });
+        return fallback;
+      }
+    },
+    adjustQuantity: async (payload = {}) => stock.createMovement({
+      ...payload,
+      type: 'ajuste',
+      quantity: payload?.currentQuantity ?? payload?.quantidadeAtual ?? payload?.estoqueAtual,
+      reason: payload?.notes || payload?.observacoes || 'Ajuste de estoque.',
+    }),
     deactivate: async (payload = {}) => {
       const clinicId = resolveStockClinicId(payload);
       const itemId = cleanText(payload?.itemId || payload?.id);
@@ -2510,7 +2703,7 @@
       if (!itemId) throw new Error('itemId is required.');
       try {
         const updated = await request('DELETE', `/stock/items/${encodeURIComponent(itemId)}`, { clinicId }, { auth: true });
-        const normalized = normalizeStockItem(updated, clinicId);
+        const normalized = normalizeStockItem(updated?.item || updated, clinicId);
         const localItems = readLocalStockItems(clinicId).filter((item) => item.id !== normalized.id);
         writeLocalStockItems(clinicId, localItems);
         setStockSyncSource('backend');

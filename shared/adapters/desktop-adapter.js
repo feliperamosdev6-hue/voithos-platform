@@ -340,6 +340,16 @@
       if (window.__webAdapter?.stock?.update) return window.__webAdapter.stock.update(payload);
       return unavailable('stock.update');
     },
+    listMovements: async (payload) => {
+      if (window.api?.stock?.listMovements) return window.api.stock.listMovements(payload);
+      if (window.__webAdapter?.stock?.listMovements) return window.__webAdapter.stock.listMovements(payload);
+      return unavailable('stock.listMovements');
+    },
+    createMovement: async (payload) => {
+      if (window.api?.stock?.createMovement) return window.api.stock.createMovement(payload);
+      if (window.__webAdapter?.stock?.createMovement) return window.__webAdapter.stock.createMovement(payload);
+      return unavailable('stock.createMovement');
+    },
     adjustQuantity: async (payload) => {
       if (window.api?.stock?.adjustQuantity) return window.api.stock.adjustQuantity(payload);
       if (window.__webAdapter?.stock?.adjustQuantity) return window.__webAdapter.stock.adjustQuantity(payload);

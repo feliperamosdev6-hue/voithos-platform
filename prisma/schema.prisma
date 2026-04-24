@@ -964,6 +964,8 @@ model StockMovement {
   quantityBefore  Int?
   quantityAfter   Int?
   notes          String?
+  performedByUserId   String?
+  performedByUserName  String?
   createdAt      DateTime   @default(now())
 
   @@index([clinicId, stockItemId, createdAt])

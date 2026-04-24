@@ -1948,19 +1948,41 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || null;
   };
 
-  const adjustStockQuantity = async ({ clinicId, itemId, currentQuantity, notes = '' } = {}) => {
+  const listStockMovements = async ({ clinicId, itemId, limit = 20 } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    const normalizedItemId = String(itemId || '').trim();
+    const query = new URLSearchParams();
+    if (normalizedClinicId) query.set('clinicId', normalizedClinicId);
+    if (limit !== undefined && limit !== null && limit !== '') query.set('limit', String(limit));
+    const token = ensureUserSessionToken();
+    const payload = await requestJsonWithUserToken(`/stock/items/${encodeURIComponent(normalizedItemId)}/movements${query.toString() ? `?${query.toString()}` : ''}`, token, {
+      method: 'GET',
+    });
+    return payload?.data || [];
+  };
+
+  const createStockMovement = async ({ clinicId, itemId, type, quantity, reason = '' } = {}) => {
     const normalizedItemId = String(itemId || '').trim();
     const token = ensureUserSessionToken();
-    const payload = await requestJsonWithUserToken(`/stock/items/${encodeURIComponent(normalizedItemId)}/quantity`, token, {
-      method: 'PATCH',
+    const payload = await requestJsonWithUserToken(`/stock/items/${encodeURIComponent(normalizedItemId)}/movements`, token, {
+      method: 'POST',
       body: JSON.stringify({
         clinicId: String(clinicId || '').trim(),
-        currentQuantity,
-        notes,
+        type,
+        quantity,
+        reason,
       }),
     });
     return payload?.data || null;
   };
+
+  const adjustStockQuantity = async ({ clinicId, itemId, currentQuantity, notes = '' } = {}) => createStockMovement({
+    clinicId,
+    itemId,
+    type: 'ajuste',
+    quantity: currentQuantity,
+    reason: notes,
+  });
 
   const deactivateStockItem = async ({ clinicId, itemId } = {}) => {
     const normalizedItemId = String(itemId || '').trim();
@@ -2196,8 +2218,10 @@ const createCentralBackendAdapter = (options = {}) => {
     deleteLaboratoryOrderItem,
     getLaboratoryDashboardSummary,
     listStockItems,
+    listStockMovements,
     createStockItem,
     updateStockItem,
+    createStockMovement,
     adjustStockQuantity,
     deactivateStockItem,
     listFaturamento,

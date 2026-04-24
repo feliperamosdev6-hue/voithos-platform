@@ -699,6 +699,11 @@
   let estoqueSaveInFlight = false;
   let estoqueLoadInFlight = false;
   let estoqueSource = 'local';
+  let estoqueMovimentoItemId = '';
+  let estoqueMovimentoSaveInFlight = false;
+  let estoqueMovimentoLoadInFlight = false;
+  let estoqueMovimentoHistorico = [];
+  let estoqueMovimentoTipo = 'ajuste';
   let activeRowMenu = null;
   const getEstoqueStorageKey = () => {
     const clinicId = String(usuarioLogado?.clinicId || '').trim();
@@ -827,6 +832,43 @@
       quantidadeAtual: currentQuantity,
       quantidade: currentQuantity,
     };
+  };
+
+  const normalizeStockMovement = (movement = {}) => ({
+    ...movement,
+    id: String(movement?.id || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`),
+    clinicId: String(movement?.clinicId || usuarioLogado?.clinicId || '').trim(),
+    stockItemId: String(movement?.stockItemId || '').trim(),
+    type: String(movement?.type || '').trim().toLowerCase(),
+    quantity: Math.abs(Number(movement?.quantity ?? movement?.quantityDelta ?? 0) || 0),
+    quantityDelta: Number(movement?.quantityDelta ?? 0) || 0,
+    quantityBefore: movement?.quantityBefore === undefined || movement?.quantityBefore === null
+      ? null
+      : normalizeStockNumber(movement?.quantityBefore),
+    quantityAfter: movement?.quantityAfter === undefined || movement?.quantityAfter === null
+      ? null
+      : normalizeStockNumber(movement?.quantityAfter),
+    reason: String(movement?.reason || movement?.notes || '').trim(),
+    notes: String(movement?.notes || movement?.reason || '').trim(),
+    performedByUserId: String(movement?.performedByUserId || '').trim(),
+    performedByUserName: String(movement?.performedByUserName || '').trim(),
+    createdAt: String(movement?.createdAt || new Date().toISOString()).trim(),
+  });
+
+  const formatStockMovementTypeLabel = (type) => {
+    const key = String(type || '').trim().toLowerCase();
+    if (key === 'entrada') return 'Entrada';
+    if (key === 'baixa') return 'Baixa';
+    if (key === 'ajuste') return 'Ajuste';
+    return key ? key.charAt(0).toUpperCase() + key.slice(1) : '-';
+  };
+
+  const formatStockMovementQuantityLabel = (movement = {}) => {
+    const delta = Number(movement?.quantityDelta || 0);
+    if (movement?.type === 'ajuste') {
+      return `${Number(movement?.quantityAfter ?? 0)}`;
+    }
+    return `${delta > 0 ? '+' : ''}${Math.abs(delta)}`;
   };
 
   const readEstoqueStorage = () => {
@@ -1045,6 +1087,231 @@
     }
   };
 
+  const setMovimentoFeedback = (message = '', type = '') => {
+    const feedback = document.getElementById('estoque-movimento-feedback');
+    if (!feedback) return;
+    feedback.textContent = message || '';
+    feedback.dataset.type = type || '';
+    feedback.classList.toggle('is-error', type === 'error');
+    feedback.classList.toggle('is-success', type === 'success');
+  };
+
+  const updateMovimentoPreview = () => {
+    const tipoEl = document.getElementById('input-estoque-movimento-tipo');
+    const quantidadeEl = document.getElementById('input-estoque-movimento-quantidade');
+    const previewEl = document.getElementById('estoque-movimento-preview');
+    const ajudaEl = document.getElementById('estoque-movimento-quantidade-help');
+    const item = estoqueProdutos.find((p) => p.id === estoqueMovimentoItemId);
+    if (!tipoEl || !quantidadeEl || !previewEl) return;
+
+    const tipo = String(tipoEl.value || 'ajuste').trim().toLowerCase();
+    const quantidade = normalizeStockNumber(quantidadeEl.value);
+    const atual = normalizeStockNumber(item?.currentQuantity ?? item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? 0);
+    let next = atual;
+    if (tipo === 'entrada') next = atual + quantidade;
+    else if (tipo === 'baixa') next = atual - quantidade;
+    else next = quantidade;
+
+    if (ajudaEl) {
+      ajudaEl.textContent = tipo === 'baixa'
+        ? 'Baixa reduz a quantidade atual.'
+        : (tipo === 'entrada'
+          ? 'Entrada soma ao estoque atual.'
+          : 'Ajuste define a quantidade final.');
+    }
+
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
+      previewEl.textContent = 'Informe uma quantidade válida.';
+      previewEl.classList.remove('is-error');
+      return;
+    }
+
+    if (next < 0) {
+      previewEl.textContent = `Quantidade final ficaria negativa (${next}).`;
+      previewEl.classList.add('is-error');
+      return;
+    }
+
+    const label = tipo === 'ajuste' ? 'Quantidade final' : 'Novo total';
+    previewEl.textContent = `${label}: ${next}`;
+    previewEl.classList.remove('is-error');
+  };
+
+  const renderMovimentoHistorico = () => {
+    const listEl = document.getElementById('estoque-movimento-historico');
+    const emptyEl = document.getElementById('estoque-movimento-historico-empty');
+    if (!listEl || !emptyEl) return;
+
+    const items = Array.isArray(estoqueMovimentoHistorico) ? estoqueMovimentoHistorico : [];
+    listEl.innerHTML = '';
+
+    if (!items.length) {
+      emptyEl.classList.remove('hidden');
+      return;
+    }
+
+    emptyEl.classList.add('hidden');
+    items.slice(0, 5).forEach((movement) => {
+      const li = document.createElement('li');
+      const when = movement.createdAt ? new Date(movement.createdAt) : null;
+      const whenLabel = when && !Number.isNaN(when.getTime())
+        ? when.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+        : '-';
+      const userLabel = movement.performedByUserName || movement.performedByUserId || 'Sistema';
+      li.className = `movimento-item movimento-${movement.type || 'ajuste'}`;
+      li.innerHTML = `
+        <div class="movimento-item-main">
+          <strong>${formatStockMovementTypeLabel(movement.type)}</strong>
+          <span class="movimento-item-qty">${formatStockMovementQuantityLabel(movement)}</span>
+        </div>
+        <div class="movimento-item-meta">
+          <span>${movement.reason || movement.notes || '-'}</span>
+          <span>${whenLabel}</span>
+          <span>${userLabel}</span>
+        </div>
+      `;
+      listEl.appendChild(li);
+    });
+  };
+
+  const loadMovimentoHistorico = async (itemId) => {
+    const clinicId = String(usuarioLogado?.clinicId || '').trim();
+    if (!itemId || estoqueMovimentoLoadInFlight) return;
+    estoqueMovimentoLoadInFlight = true;
+    try {
+      const remote = await stockApi?.listMovements?.({ clinicId, itemId, limit: 5 });
+      estoqueMovimentoHistorico = (Array.isArray(remote) ? remote : []).map((movement) => normalizeStockMovement(movement));
+      renderMovimentoHistorico();
+    } catch (error) {
+      console.warn('Falha ao carregar histórico do estoque.', error);
+      estoqueMovimentoHistorico = [];
+      setMovimentoFeedback(error?.message ? `Nao foi possivel carregar o historico: ${error.message}` : 'Nao foi possivel carregar o historico.', 'error');
+      renderMovimentoHistorico();
+    } finally {
+      estoqueMovimentoLoadInFlight = false;
+    }
+  };
+
+  const openMovimentoModal = async (item) => {
+    const bg = document.getElementById('modal-movimento-estoque-bg');
+    if (!bg || !item) return;
+    estoqueMovimentoItemId = item?.id || '';
+    estoqueMovimentoTipo = 'ajuste';
+    estoqueMovimentoHistorico = [];
+    const title = document.getElementById('titulo-modal-movimento-estoque');
+    const nomeEl = document.getElementById('movimento-estoque-item-nome');
+    const atualEl = document.getElementById('movimento-estoque-item-atual');
+    const minimoEl = document.getElementById('movimento-estoque-item-minimo');
+    const tipoEl = document.getElementById('input-estoque-movimento-tipo');
+    const quantidadeEl = document.getElementById('input-estoque-movimento-quantidade');
+    const motivoEl = document.getElementById('input-estoque-movimento-motivo');
+    const saveBtn = document.getElementById('btn-salvar-movimento-estoque');
+
+    if (title) title.textContent = item?.name || item?.nome || 'Movimentar estoque';
+    if (nomeEl) nomeEl.textContent = item?.name || item?.nome || '';
+    if (atualEl) atualEl.textContent = String(normalizeStockNumber(item?.currentQuantity ?? item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? 0));
+    if (minimoEl) minimoEl.textContent = String(normalizeStockNumber(item?.minimumQuantity ?? item?.estoqueMinimo));
+    if (tipoEl) tipoEl.value = 'ajuste';
+    if (quantidadeEl) quantidadeEl.value = '';
+    if (motivoEl) motivoEl.value = '';
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Salvar movimentação';
+    }
+    estoqueMovimentoSaveInFlight = false;
+    setMovimentoFeedback('', '');
+    bg.classList.remove('hidden');
+    updateMovimentoPreview();
+    await loadMovimentoHistorico(item.id);
+  };
+
+  const closeMovimentoModal = () => {
+    const bg = document.getElementById('modal-movimento-estoque-bg');
+    if (!bg) return;
+    bg.classList.add('hidden');
+    estoqueMovimentoItemId = '';
+    estoqueMovimentoSaveInFlight = false;
+    estoqueMovimentoHistorico = [];
+    setMovimentoFeedback('', '');
+    const saveBtn = document.getElementById('btn-salvar-movimento-estoque');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Salvar movimentação';
+    }
+  };
+
+  const saveMovimentoEstoque = async () => {
+    if (estoqueMovimentoSaveInFlight) return;
+    const item = estoqueProdutos.find((p) => p.id === estoqueMovimentoItemId);
+    if (!item) {
+      setMovimentoFeedback('Selecione um item válido.', 'error');
+      return;
+    }
+    const tipoEl = document.getElementById('input-estoque-movimento-tipo');
+    const quantidadeEl = document.getElementById('input-estoque-movimento-quantidade');
+    const motivoEl = document.getElementById('input-estoque-movimento-motivo');
+    const saveBtn = document.getElementById('btn-salvar-movimento-estoque');
+
+    const tipo = String(tipoEl?.value || 'ajuste').trim().toLowerCase();
+    const quantidade = normalizeStockNumber(quantidadeEl?.value);
+    const motivo = String(motivoEl?.value || '').trim();
+    const atual = normalizeStockNumber(item?.currentQuantity ?? item?.estoqueAtual ?? item?.quantidadeAtual ?? item?.quantidade ?? 0);
+
+    if (!['entrada', 'baixa', 'ajuste'].includes(tipo)) {
+      setMovimentoFeedback('Selecione um tipo de movimentação.', 'error');
+      return;
+    }
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
+      setMovimentoFeedback('Informe uma quantidade válida.', 'error');
+      quantidadeEl?.focus?.();
+      return;
+    }
+    if (!motivo) {
+      setMovimentoFeedback('Informe o motivo da movimentação.', 'error');
+      motivoEl?.focus?.();
+      return;
+    }
+
+    const nextQuantity = tipo === 'entrada' ? atual + quantidade : (tipo === 'baixa' ? atual - quantidade : quantidade);
+    if (nextQuantity < 0) {
+      setMovimentoFeedback('A baixa não pode deixar o estoque negativo.', 'error');
+      quantidadeEl?.focus?.();
+      return;
+    }
+
+    estoqueMovimentoSaveInFlight = true;
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Salvando...';
+    }
+
+    try {
+      const result = await stockApi?.createMovement?.({
+        clinicId: String(usuarioLogado?.clinicId || '').trim(),
+        itemId: item.id,
+        type: tipo,
+        quantity: tipo === 'ajuste' ? quantidade : quantidade,
+        reason: motivo,
+      });
+      const normalizedItem = normalizeStockItem(result?.item || result || { ...item, currentQuantity: nextQuantity, updatedAt: new Date().toISOString() });
+      estoqueProdutos = estoqueProdutos.map((currentItem) => (currentItem.id === normalizedItem.id ? normalizedItem : currentItem));
+      writeEstoqueStorage(estoqueProdutos);
+      setStockSourceLabel(window.__stockSyncSource || 'backend');
+      await loadMovimentoHistorico(item.id);
+      renderEstoque();
+      setMovimentoFeedback('Movimentação registrada com sucesso.', 'success');
+      setTimeout(() => closeMovimentoModal(), 300);
+    } catch (error) {
+      console.error('Falha ao registrar movimentação.', error);
+      setMovimentoFeedback(error?.message ? `Erro ao registrar movimentação: ${error.message}` : 'Erro ao registrar movimentação.', 'error');
+      estoqueMovimentoSaveInFlight = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Salvar movimentação';
+      }
+    }
+  };
+
   const renderEstoque = () => {
     const tableWrap = document.getElementById('estoque-table-wrap');
     const emptyState = document.getElementById('estoque-empty-state');
@@ -1112,7 +1379,7 @@
             <button class="btn-row-actions" type="button" data-action="stock-row-menu" data-id="${item.id}" aria-haspopup="menu" aria-expanded="false" aria-label="Abrir ações">&#8942;</button>
             <div class="row-actions-menu" data-stock-menu-id="${item.id}">
               <button type="button" data-action="stock-edit" data-id="${item.id}">Editar</button>
-              <button type="button" data-action="stock-adjust" data-id="${item.id}">Ajustar estoque</button>
+              <button type="button" data-action="stock-move" data-id="${item.id}">Movimentar</button>
               <button type="button" class="danger" data-action="stock-delete" data-id="${item.id}">Desativar</button>
             </div>
           </div>
@@ -1144,6 +1411,13 @@
     const btnCancelar = document.getElementById('btn-cancelar-estoque');
     const btnFechar = document.getElementById('btn-fechar-modal-estoque');
     const modalBg = document.getElementById('modal-estoque-bg');
+    const modalMovimentoBg = document.getElementById('modal-movimento-estoque-bg');
+    const btnSalvarMovimento = document.getElementById('btn-salvar-movimento-estoque');
+    const btnCancelarMovimento = document.getElementById('btn-cancelar-movimento-estoque');
+    const btnFecharMovimento = document.getElementById('btn-fechar-modal-movimento-estoque');
+    const tipoMovimento = document.getElementById('input-estoque-movimento-tipo');
+    const quantidadeMovimento = document.getElementById('input-estoque-movimento-quantidade');
+    const motivoMovimento = document.getElementById('input-estoque-movimento-motivo');
     const tabela = document.getElementById('tabela-estoque');
 
     busca?.addEventListener('input', () => {
@@ -1165,9 +1439,21 @@
     btnSalvar?.addEventListener('click', saveEstoqueProduto);
     btnCancelar?.addEventListener('click', closeEstoqueModal);
     btnFechar?.addEventListener('click', closeEstoqueModal);
+    btnSalvarMovimento?.addEventListener('click', saveMovimentoEstoque);
+    btnCancelarMovimento?.addEventListener('click', closeMovimentoModal);
+    btnFecharMovimento?.addEventListener('click', closeMovimentoModal);
+    tipoMovimento?.addEventListener('change', () => {
+      estoqueMovimentoTipo = tipoMovimento.value || 'ajuste';
+      updateMovimentoPreview();
+    });
+    quantidadeMovimento?.addEventListener('input', updateMovimentoPreview);
+    motivoMovimento?.addEventListener('input', updateMovimentoPreview);
 
     modalBg?.addEventListener('click', (event) => {
       if (event.target === modalBg) closeEstoqueModal();
+    });
+    modalMovimentoBg?.addEventListener('click', (event) => {
+      if (event.target === modalMovimentoBg) closeMovimentoModal();
     });
 
     tabela?.addEventListener('click', async (event) => {
@@ -1191,27 +1477,8 @@
         openEstoqueModal(item);
         return;
       }
-      if (action === 'stock-adjust') {
-        const atual = normalizeStockNumber(item.currentQuantity ?? item.estoqueAtual ?? item.quantidadeAtual ?? item.quantidade ?? item.estoqueMinimo);
-        const novoValor = prompt('Informe a quantidade atual:', String(atual));
-        if (novoValor === null) return;
-        const estoqueAtual = normalizeStockNumber(novoValor);
-        try {
-          const updated = await stockApi?.adjustQuantity?.({
-            clinicId: String(usuarioLogado?.clinicId || '').trim(),
-            itemId: id,
-            currentQuantity: estoqueAtual,
-          });
-          const normalized = normalizeStockItem(updated || { ...item, currentQuantity: estoqueAtual, updatedAt: new Date().toISOString() });
-          estoqueProdutos = estoqueProdutos.map((p) => (p.id === id ? normalized : p));
-          writeEstoqueStorage(estoqueProdutos);
-          setStockSourceLabel(window.__stockSyncSource || 'backend');
-          renderEstoque();
-          setEstoqueFeedback('Quantidade atualizada.', 'success');
-        } catch (error) {
-          console.error('Falha ao ajustar estoque.', error);
-          setEstoqueFeedback(error?.message ? `Erro ao ajustar estoque: ${error.message}` : 'Erro ao ajustar estoque.', 'error');
-        }
+      if (action === 'stock-move') {
+        await openMovimentoModal(item);
         return;
       }
       if (action === 'stock-delete') {
@@ -3041,12 +3308,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
-
-
-
-
 
 
 

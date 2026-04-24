@@ -765,6 +765,61 @@
     </div>
   </div>
 
+  <div id="modal-movimento-estoque-bg" class="modal-bg hidden">
+    <div class="modal-lancamento modal-estoque modal-movimento-estoque">
+      <div class="modal-estoque-header">
+        <h2 id="titulo-modal-movimento-estoque">Movimentar estoque</h2>
+        <button id="btn-fechar-modal-movimento-estoque" class="modal-close-btn" type="button" aria-label="Fechar">×</button>
+      </div>
+
+      <section class="movimento-item-resumo">
+        <div>
+          <span class="movimento-resumo-label">Item</span>
+          <strong id="movimento-estoque-item-nome">-</strong>
+        </div>
+        <div>
+          <span class="movimento-resumo-label">Atual</span>
+          <strong id="movimento-estoque-item-atual">0</strong>
+        </div>
+        <div>
+          <span class="movimento-resumo-label">Mínimo</span>
+          <strong id="movimento-estoque-item-minimo">0</strong>
+        </div>
+      </section>
+
+      <label for="input-estoque-movimento-tipo">Tipo de movimentação</label>
+      <select id="input-estoque-movimento-tipo">
+        <option value="entrada">Entrada</option>
+        <option value="baixa">Baixa</option>
+        <option value="ajuste" selected>Ajuste</option>
+      </select>
+
+      <label for="input-estoque-movimento-quantidade">Quantidade</label>
+      <input id="input-estoque-movimento-quantidade" type="number" min="0" step="1" placeholder="Ex.: 10" />
+      <small id="estoque-movimento-quantidade-help" class="estoque-field-help">Ajuste define a quantidade final.</small>
+      <p id="estoque-movimento-preview" class="estoque-movimento-preview"></p>
+
+      <label for="input-estoque-movimento-motivo">Motivo</label>
+      <textarea id="input-estoque-movimento-motivo" rows="3" placeholder="Ex.: reposição, perda, conferência de inventário"></textarea>
+
+      <p id="estoque-movimento-feedback" class="estoque-form-feedback" role="status" aria-live="polite"></p>
+
+      <section class="movimento-historico">
+        <div class="movimento-historico-header">
+          <h3>Últimas movimentações</h3>
+          <span class="movimento-historico-note">Entrada, baixa e ajuste</span>
+        </div>
+        <p id="estoque-movimento-historico-empty" class="movimento-historico-empty">Nenhuma movimentação registrada ainda.</p>
+        <ul id="estoque-movimento-historico" class="movimento-historico-list"></ul>
+      </section>
+
+      <div class="modal-actions">
+        <button id="btn-cancelar-movimento-estoque" class="btn-secundario" type="button">Cancelar</button>
+        <button id="btn-salvar-movimento-estoque" class="btn-primario" type="button">Salvar movimentação</button>
+      </div>
+    </div>
+  </div>
+
   <script src="shared/adapters/desktop-adapter.js"></script>
   <script src="shared/adapters/web-adapter.js"></script>
   <script src="shared/app-api.js"></script>
@@ -772,7 +827,6 @@
     <script src="header.js"></script>
 </body>
 </html>
-
 
 
 
