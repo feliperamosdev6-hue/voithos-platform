@@ -159,6 +159,8 @@ const registerNotificationsHandlers = ({
       return await centralBackendAdapter.listNotificationEventsWithToken(token, {
         type: payload?.type,
         limit: payload?.limit || 20,
+        markViewed: payload?.markViewed === true,
+        olderThanHours: payload?.olderThanHours || 24,
       });
     } catch (error) {
       const code = String(error?.code || '').trim().toUpperCase();

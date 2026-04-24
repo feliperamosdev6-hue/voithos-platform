@@ -22,6 +22,8 @@ const listNotificationEvents = async (req, res, next) => {
       limit: req.query.limit,
       dateFrom: req.query.dateFrom ? new Date(String(req.query.dateFrom).trim()) : undefined,
       dateTo: req.query.dateTo ? new Date(String(req.query.dateTo).trim()) : undefined,
+      markViewed: String(req.query.markViewed || '').trim().toLowerCase() === 'true',
+      olderThanHours: req.query.olderThanHours,
     });
     return res.status(200).json({
       ok: true,

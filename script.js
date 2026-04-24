@@ -165,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const markNotificationsViewed = () => {
         notifViewed = true;
+        syncViewedNotificationsMap(notifItems);
         setNotificationBadge(0);
         if (notifSub) notifSub.textContent = 'Voce tem 0 notificacoes novas';
     };
@@ -180,6 +181,115 @@ document.addEventListener('DOMContentLoaded', () => {
             storage.setItem(key, JSON.stringify(value));
         } catch (_) {}
     };
+
+    const NOTIFICATION_VIEWED_TTL_MS = 24 * 60 * 60 * 1000;
+
+    const getViewedNotificationsStorageKey = () => getClinicStorageKey('voithos-notification-viewed');
+
+    const readViewedNotificationsMap = () => {
+        try {
+            const raw = localStorage.getItem(getViewedNotificationsStorageKey());
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        } catch (_) {
+            return {};
+        }
+    };
+
+    const writeViewedNotificationsMap = (map) => {
+        try {
+            localStorage.setItem(getViewedNotificationsStorageKey(), JSON.stringify(map || {}));
+        } catch (_) {}
+    };
+
+    const pruneViewedNotificationsMap = (map = {}) => {
+        const now = Date.now();
+        const cleaned = {};
+        Object.entries(map || {}).forEach(([key, value]) => {
+            const viewedAt = Number(value) || 0;
+            if (!key || !viewedAt) return;
+            if ((now - viewedAt) <= NOTIFICATION_VIEWED_TTL_MS) {
+                cleaned[key] = viewedAt;
+            }
+        });
+        return cleaned;
+    };
+
+    const getNotificationTimestamp = (notification = {}) => {
+        const meta = notification?.meta || {};
+        const centralStamp = String(notification?.createdAt || meta?.createdAt || '').trim();
+        if (centralStamp) {
+            const parsed = new Date(centralStamp);
+            if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+        }
+
+        const kind = String(meta?.kind || '').trim().toLowerCase();
+        const destination = String(meta?.destination || '').trim().toLowerCase();
+        const dateRef = String(meta?.data || notification?.data || '').trim();
+        const dueDate = String(meta?.dueDate || '').trim();
+        const hourRef = String(meta?.horaInicio || notification?.horaInicio || '').trim();
+
+        if ((destination === 'agenda' || kind === 'appointment') && dateRef) {
+            const parsed = new Date(`${dateRef}T${hourRef || '00:00'}:00`);
+            if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+        }
+
+        if ((destination === 'financeiro' || destination === 'planos' || kind === 'financial') && dueDate) {
+            const parsed = new Date(`${dueDate}T23:59:59`);
+            if (!Number.isNaN(parsed.getTime())) return parsed.getTime();
+        }
+
+        return Date.now();
+    };
+
+    const buildNotificationFingerprint = (notification = {}) => {
+        const meta = notification?.meta || {};
+        const type = String(notification?.type || '').trim().toLowerCase();
+        const title = String(notification?.title || '').trim().toLowerCase();
+        const tag = String(notification?.tag || '').trim().toLowerCase();
+        const appointmentId = String(meta?.appointmentId || notification?.appointmentId || '').trim();
+        const patientId = String(meta?.patientId || notification?.patientId || '').trim();
+        const planId = String(meta?.planId || notification?.planId || '').trim();
+        const accountId = String(meta?.accountId || notification?.accountId || '').trim();
+        const status = String(meta?.status || notification?.status || '').trim().toLowerCase();
+        const createdAt = String(notification?.createdAt || meta?.createdAt || '').trim();
+        const description = String(notification?.description || '').trim().toLowerCase();
+        const readAt = String(meta?.readAt || notification?.readAt || '').trim();
+
+        if (readAt) return `read:${readAt}`;
+        if (notification?.id) return `id:${notification.id}`;
+        if (type === 'agenda' || String(meta?.destination || '').trim().toLowerCase() === 'agenda') {
+            return ['agenda', appointmentId, patientId, status, String(meta?.data || ''), String(meta?.horaInicio || '')].join('|');
+        }
+        if (type === 'financeiro' || String(meta?.destination || '').trim().toLowerCase() === 'financeiro' || String(meta?.destination || '').trim().toLowerCase() === 'planos') {
+            return ['finance', planId, accountId, patientId, status, String(meta?.dueDate || ''), tag].join('|');
+        }
+        return ['general', type, title, tag, createdAt, description, appointmentId, patientId, planId, accountId].join('|');
+    };
+
+    const syncViewedNotificationsMap = (items = []) => {
+        const current = pruneViewedNotificationsMap(readViewedNotificationsMap());
+        const now = Date.now();
+        (Array.isArray(items) ? items : []).forEach((item) => {
+            const fingerprint = buildNotificationFingerprint(item);
+            if (!fingerprint) return;
+            current[fingerprint] = now;
+        });
+        writeViewedNotificationsMap(current);
+    };
+
+    const isNotificationRead = (notification = {}) => {
+        const meta = notification?.meta || {};
+        if (String(meta?.readAt || notification?.readAt || '').trim()) return true;
+        const fingerprint = buildNotificationFingerprint(notification);
+        if (!fingerprint) return false;
+        const viewedMap = pruneViewedNotificationsMap(readViewedNotificationsMap());
+        const viewedAt = Number(viewedMap[fingerprint] || 0);
+        return viewedAt > 0 && (Date.now() - viewedAt) <= NOTIFICATION_VIEWED_TTL_MS;
+    };
+
+    const countUnreadNotifications = (items = []) => (Array.isArray(items) ? items : []).reduce((total, item) => total + (isNotificationRead(item) ? 0 : 1), 0);
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
         '&': '&amp;',
@@ -309,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
             notifPanel.removeAttribute('hidden');
             notifToggle.setAttribute('aria-expanded', 'true');
             markNotificationsViewed();
+            void loadCentralNotificationEvents({ markViewed: true });
         } else {
             closeNotif();
         }
@@ -953,6 +1064,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     planId,
                     accountId,
                     status: String(payload?.nextStatus || payload?.status || '').trim(),
+                    readAt: String(payload?.readAt || event?.readAt || '').trim(),
                 },
             };
         });
@@ -962,15 +1074,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const agendaItems = buildAgendaNotifications(agendaCache);
         const financeItems = buildFinanceNotifications(financeRemindersCache);
         notifItems = [...centralNotifItems, ...agendaItems, ...financeItems];
-        setNotificationBadge(notifViewed ? 0 : notifItems.length);
+        const unreadCount = countUnreadNotifications(notifItems);
+        setNotificationBadge(unreadCount);
         if (notifSub) {
-            const visibleCount = notifViewed ? 0 : notifItems.length;
-            notifSub.textContent = `Voce tem ${visibleCount} notificacoes novas`;
+            notifSub.textContent = `Voce tem ${unreadCount} notificacoes novas`;
         }
         renderNotifications();
     };
 
-    const loadCentralNotificationEvents = async () => {
+    const loadCentralNotificationEvents = async ({ markViewed = false } = {}) => {
         if (typeof notificationsApi.listEvents !== 'function') {
             centralNotifItems = [];
             refreshNotifications();
@@ -978,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const events = await notificationsApi.listEvents({ limit: 12 });
+            const events = await notificationsApi.listEvents({ limit: 12, markViewed });
             centralNotifItems = buildCentralNotifications(events);
         } catch (err) {
             console.warn('[HOME] nao foi possivel carregar eventos centrais de notificacao', err);

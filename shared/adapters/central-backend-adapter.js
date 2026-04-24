@@ -527,6 +527,8 @@ const createCentralBackendAdapter = (options = {}) => {
     if (options?.dateFrom) params.set('dateFrom', String(options.dateFrom).trim());
     if (options?.dateTo) params.set('dateTo', String(options.dateTo).trim());
     if (options?.limit) params.set('limit', String(options.limit).trim());
+    if (options?.markViewed) params.set('markViewed', 'true');
+    if (options?.olderThanHours) params.set('olderThanHours', String(options.olderThanHours).trim());
     const query = params.toString();
     const payload = await requestJsonWithUserToken(`/notifications${query ? `?${query}` : ''}`, userToken, {
       method: 'GET',
@@ -547,6 +549,8 @@ const createCentralBackendAdapter = (options = {}) => {
     if (options?.dateFrom) params.set('dateFrom', String(options.dateFrom).trim());
     if (options?.dateTo) params.set('dateTo', String(options.dateTo).trim());
     if (options?.limit) params.set('limit', String(options.limit).trim());
+    if (options?.markViewed) params.set('markViewed', 'true');
+    if (options?.olderThanHours) params.set('olderThanHours', String(options.olderThanHours).trim());
     const query = params.toString();
     const payload = await requestInternalJson(`/internal/notifications${query ? `?${query}` : ''}`);
     return payload?.data || [];
