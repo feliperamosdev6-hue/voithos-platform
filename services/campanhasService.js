@@ -195,6 +195,48 @@ const createCampanhasService = ({
     });
   };
 
+  const purgeLocalCampaignArtifacts = async ({ clinicId, campaignIds = [] } = {}) => {
+    const normalizedClinicId = normalizeClinicId(clinicId || getCurrentClinicId());
+    const normalizedCampaignIds = Array.from(new Set(
+      (Array.isArray(campaignIds) ? campaignIds : [])
+        .map((value) => String(value || '').trim())
+        .filter(Boolean),
+    ));
+    if (!normalizedCampaignIds.length) return { logsRemoved: 0, batchesRemoved: 0 };
+
+    const [logs, batchesState] = await Promise.all([
+      readCampaignLogs(),
+      readCampaignBatchesPayload(),
+    ]);
+
+    const logsBefore = logs.length;
+    const nextLogs = logs.filter((item) => !(
+      normalizeClinicId(item?.clinicId) === normalizedClinicId
+      && normalizedCampaignIds.includes(String(item?.campaignId || '').trim())
+    ));
+    if (nextLogs.length !== logsBefore) {
+      await writeCampaignLogs(nextLogs);
+    }
+
+    const batchesBefore = batchesState.batches.length + batchesState.recipients.length;
+    const nextBatches = batchesState.batches.filter((item) => !(
+      normalizeClinicId(item?.clinicId) === normalizedClinicId
+      && normalizedCampaignIds.includes(String(item?.campaignId || '').trim())
+    ));
+    const nextRecipients = batchesState.recipients.filter((item) => !(
+      normalizeClinicId(item?.clinicId) === normalizedClinicId
+      && normalizedCampaignIds.includes(String(item?.campaignId || '').trim())
+    ));
+    if (nextBatches.length !== batchesState.batches.length || nextRecipients.length !== batchesState.recipients.length) {
+      await writeCampaignBatchesPayload({ batches: nextBatches, recipients: nextRecipients });
+    }
+
+    return {
+      logsRemoved: logsBefore - nextLogs.length,
+      batchesRemoved: batchesBefore - (nextBatches.length + nextRecipients.length),
+    };
+  };
+
   const isValidPeriodo = (value) => {
     if (!value) return true;
     return /^\d{4}-\d{2}$/.test(String(value));
@@ -280,6 +322,12 @@ const createCampanhasService = ({
           const effective = shouldSeedCentral
             ? (await centralBackendAdapter.replaceClinicCampaignsWithToken(userToken, localCampaigns)).map((camp) => normalizeCampaign(camp, { origem: 'clinica', clinicId }))
             : normalizedRemote;
+          const removedCampaignIds = localCampaigns
+            .map((camp) => String(camp?.id || '').trim())
+            .filter((id) => id && !effective.some((current) => String(current?.id || '').trim() === id));
+          if (removedCampaignIds.length) {
+            await purgeLocalCampaignArtifacts({ clinicId, campaignIds: removedCampaignIds }).catch(() => null);
+          }
           await writeAllLocalCampaigns(effective).catch(() => null);
           return effective;
         } catch (_) {
@@ -1186,6 +1234,7 @@ const createCampanhasService = ({
         try {
           await centralBackendAdapter.deleteClinicCampaignWithToken(userToken, id);
           await removeLocalCampaign(id).catch(() => null);
+          await purgeLocalCampaignArtifacts({ clinicId, campaignIds: [id] }).catch(() => null);
           return { success: true };
         } catch (_) {
           // fallback local
@@ -1195,6 +1244,7 @@ const createCampanhasService = ({
 
     list.splice(idx, 1);
     await writeAllLocalCampaigns(list);
+    await purgeLocalCampaignArtifacts({ clinicId, campaignIds: [id] }).catch(() => null);
     return { success: true };
   };
 

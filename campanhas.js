@@ -209,6 +209,27 @@ const createCard = (camp, campaignResult = null) => {
     btnDisparar.setAttribute('data-action', 'send-whatsapp');
     btnDisparar.setAttribute('data-id', camp.id || '');
     actions.appendChild(btnDisparar);
+    if (canManage && !camp.somenteLeitura) {
+      const btnExcluir = document.createElement('button');
+      btnExcluir.className = 'btn-small danger';
+      btnExcluir.type = 'button';
+      btnExcluir.textContent = 'Excluir';
+      btnExcluir.setAttribute('data-action', 'delete');
+      btnExcluir.setAttribute('data-id', camp.id || '');
+      actions.appendChild(btnExcluir);
+    }
+    card.appendChild(actions);
+  }
+  if (canManage && !camp.somenteLeitura && !card.querySelector('.campanha-actions')) {
+    const actions = document.createElement('div');
+    actions.className = 'campanha-actions';
+    const btnExcluir = document.createElement('button');
+    btnExcluir.className = 'btn-small danger';
+    btnExcluir.type = 'button';
+    btnExcluir.textContent = 'Excluir';
+    btnExcluir.setAttribute('data-action', 'delete');
+    btnExcluir.setAttribute('data-id', camp.id || '');
+    actions.appendChild(btnExcluir);
     card.appendChild(actions);
   }
   return card;

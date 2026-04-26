@@ -59,6 +59,77 @@ const campaignRepository = {
     },
   }),
 
+  purgeCampaignData: async ({ clinicId, campaignId }) => prisma.$transaction(async (tx) => {
+    const normalizedClinicId = toRequiredString(clinicId, 'clinicId');
+    const normalizedCampaignId = toRequiredString(campaignId, 'campaignId');
+
+    await tx.campaignDispatch.deleteMany({
+      where: {
+        clinicId: normalizedClinicId,
+        campaignId: normalizedCampaignId,
+      },
+    });
+
+    await tx.campaignBatch.deleteMany({
+      where: {
+        clinicId: normalizedClinicId,
+        campaignId: normalizedCampaignId,
+      },
+    });
+
+    await tx.campaignAudienceSnapshot.deleteMany({
+      where: {
+        clinicId: normalizedClinicId,
+        campaignId: normalizedCampaignId,
+      },
+    });
+
+    return {
+      success: true,
+    };
+  }),
+
+  archiveCampaignWithData: async ({ clinicId, campaignId }) => prisma.$transaction(async (tx) => {
+    const normalizedClinicId = toRequiredString(clinicId, 'clinicId');
+    const normalizedCampaignId = toRequiredString(campaignId, 'campaignId');
+
+    await tx.campaign.updateMany({
+      where: {
+        clinicId: normalizedClinicId,
+        id: normalizedCampaignId,
+        deletedAt: null,
+      },
+      data: {
+        deletedAt: new Date(),
+        updatedAt: new Date(),
+        status: 'INACTIVE',
+      },
+    });
+
+    await tx.campaignDispatch.deleteMany({
+      where: {
+        clinicId: normalizedClinicId,
+        campaignId: normalizedCampaignId,
+      },
+    });
+
+    await tx.campaignBatch.deleteMany({
+      where: {
+        clinicId: normalizedClinicId,
+        campaignId: normalizedCampaignId,
+      },
+    });
+
+    await tx.campaignAudienceSnapshot.deleteMany({
+      where: {
+        clinicId: normalizedClinicId,
+        campaignId: normalizedCampaignId,
+      },
+    });
+
+    return { success: true };
+  }),
+
   findLatestReusableBatch: async ({ clinicId, campaignId, maxAgeMinutes = 15 }) => {
     const threshold = new Date(Date.now() - (Math.max(1, Number(maxAgeMinutes) || 15) * 60 * 1000));
     return prisma.campaignBatch.findFirst({

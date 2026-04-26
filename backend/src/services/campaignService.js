@@ -444,7 +444,7 @@ campaignService.replaceCampaigns = async ({ clinicId, campaigns = [], actorName 
   const incomingIds = new Set(incoming.map((item) => item.id));
   for (const current of existing) {
     if (!incomingIds.has(cleanText(current.id))) {
-      await campaignRepository.softDeleteCampaign({
+      await campaignRepository.archiveCampaignWithData({
         clinicId: normalizedClinicId,
         campaignId: current.id,
       });
@@ -549,7 +549,7 @@ campaignService.deleteCampaign = async ({ clinicId, campaignId }) => {
   });
   if (!existing) throw new AppError(404, 'CAMPAIGN_NOT_FOUND', 'Campaign not found.');
 
-  await campaignRepository.softDeleteCampaign({
+  await campaignRepository.archiveCampaignWithData({
     clinicId: normalizedClinicId,
     campaignId: normalizedCampaignId,
   });
