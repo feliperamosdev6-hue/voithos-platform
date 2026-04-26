@@ -533,70 +533,7 @@ const createCampanhasService = ({
   };
 
   const createCampaignSendBatch = async (payload = {}) => {
-    const clinicId = getCurrentClinicId();
-    const campaignId = String(payload?.campaignId || '').trim();
-    if (!campaignId) throw new Error('campaignId obrigatorio.');
-    const selectedPatientIds = Array.isArray(payload?.selectedPatientIds) ? payload.selectedPatientIds : [];
-
-    if (canUseCentralCampaignOperations()) {
-      const userToken = await getUserToken();
-      if (userToken) {
-        try {
-          const remote = await centralBackendAdapter.createCampaignBatchWithToken(userToken, campaignId, {
-            force: payload?.force === true,
-            selectedPatientIds,
-            templateId: payload?.templateId || '',
-          });
-          console.info('[CAMPANHAS]', JSON.stringify({
-            action: 'campaign_batch_created',
-            clinicId,
-            campaignId,
-            batchId: String(remote?.batchId || remote?.sendBatchId || '').trim(),
-            audienceSize: Number(remote?.audienceCount || 0),
-            campaign_source: 'central',
-          }));
-          return remote;
-        } catch (error) {
-          console.warn('[CAMPANHAS] central batch create failed', error?.message || error);
-          console.info('[CAMPANHAS]', JSON.stringify({
-            action: 'campaign_batch_created',
-            clinicId,
-            campaignId,
-            campaign_source: 'central',
-            campaign_fallback_to_local: true,
-            reason: error?.message || String(error || ''),
-          }));
-        }
-      }
-    }
-
-    const sendBatchId = String(payload?.sendBatchId || generateSendBatchId()).trim();
-    const segmentKey = String(payload?.segmentKey || 'all_active').trim().toLowerCase();
-    const audienceCount = Math.max(0, Number(payload?.audienceCount) || 0);
-    const createdAt = payload?.createdAt || nowIso();
-    const state = await readCampaignBatchesPayload();
-    state.batches.push({
-      sendBatchId,
-      clinicId,
-      campaignId,
-      createdAt,
-      segmentKey,
-      audienceCount,
-      sentCount: 0,
-      failedCount: 0,
-      updatedAt: createdAt,
-    });
-    await writeCampaignBatchesPayload(state);
-    return {
-      sendBatchId,
-      clinicId,
-      campaignId,
-      createdAt,
-      segmentKey,
-      audienceCount,
-      sentCount: 0,
-      failedCount: 0,
-    };
+    throw new Error('Disparo em massa de campanhas foi desativado. Use Oportunidades para contato manual.');
   };
 
   const recordCampaignDeliveryLog = async (payload = {}) => {

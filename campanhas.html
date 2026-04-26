@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Campanhas</title>
+  <title>Oportunidades</title>
   <link rel="stylesheet" href="campanhas.css">
     <link rel="stylesheet" href="header.css">
 </head>
@@ -87,13 +87,13 @@
   <header class="page-header">
     <div class="header-left">
       <div class="title-group">
-        <h1>Campanhas</h1>
-        <p class="subtitle">Campanhas da clinica</p>
+        <h1>Oportunidades</h1>
+        <p class="subtitle">Pacientes sugeridos para contato manual</p>
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn ghost" id="btn-globais">Atualizar globais</button>
-      <button class="btn primary" id="btn-nova-campanha">+ Nova campanha</button>
+      <button class="btn ghost" id="btn-globais" hidden>Atualizar globais</button>
+      <button class="btn primary" id="btn-nova-campanha" hidden>+ Nova campanha</button>
     </div>
   </header>
 
@@ -101,21 +101,21 @@
     <section class="campaign-health-panel" id="campaign-health-panel">
       <div class="health-header">
         <div>
-          <p class="muted">Operacao</p>
-          <h2>Saude de Campanhas</h2>
+          <p class="muted">Relacionamento</p>
+          <h2>Oportunidades de contato</h2>
         </div>
-        <button type="button" class="btn ghost" id="btn-logs-hoje">Ver logs de hoje</button>
+        <button type="button" class="btn ghost" id="btn-logs-hoje" hidden>Ver logs de hoje</button>
       </div>
       <div class="health-grid">
-        <article class="health-card"><span>Enviadas hoje</span><strong id="kpi-sent-today">--</strong></article>
-        <article class="health-card"><span>Falhas hoje</span><strong id="kpi-failed-today">--</strong></article>
-        <article class="health-card"><span>Taxa de entrega</span><strong id="kpi-delivery-rate">--</strong></article>
-        <article class="health-card"><span>Ultimo envio</span><strong id="kpi-last-send">--</strong></article>
-        <article class="health-card"><span>Proximo envio elegivel</span><strong id="kpi-next-send">--</strong></article>
+        <article class="health-card"><span>Pacientes sugeridos</span><strong id="kpi-sent-today">--</strong></article>
+        <article class="health-card"><span>Pendencias de contato</span><strong id="kpi-failed-today">--</strong></article>
+        <article class="health-card"><span>Prioridade alta</span><strong id="kpi-delivery-rate">--</strong></article>
+        <article class="health-card"><span>Com WhatsApp</span><strong id="kpi-last-send">--</strong></article>
+        <article class="health-card"><span>Contato manual</span><strong id="kpi-next-send">--</strong></article>
       </div>
     </section>
 
-    <section class="templates-panel" id="templates-panel">
+    <section class="templates-panel" id="templates-panel" hidden>
       <article class="monthly-template-card" id="monthly-template-card">
         <p class="muted">Campanha do mes</p>
         <h3 id="monthly-template-title">Carregando...</h3>
@@ -125,7 +125,7 @@
         <section class="strategy-card" aria-label="Estrategia Voithos">
           <p class="muted">Estrategia Voithos</p>
           <h4>Estrategia da semana</h4>
-          <p class="strategy-subtitle">Como aumentar pacientes usando campanhas simples.</p>
+          <p class="strategy-subtitle">Como organizar contatos manuais com seguranca.</p>
           <p class="strategy-description">Assista esse video rapido com uma dica pratica para melhorar os resultados das campanhas da sua clinica.</p>
           <button type="button" class="btn ghost strategy-btn" id="btn-open-strategy-video">Assistir video</button>
         </section>
@@ -134,7 +134,7 @@
         <div class="quick-templates-head">
           <div>
             <p class="muted">Biblioteca Anual Voithos</p>
-            <h3>12 campanhas estrategicas</h3>
+            <h3>12 oportunidades estrategicas</h3>
           </div>
         </div>
         <div class="quick-templates-grid" id="quick-templates-grid">
@@ -147,11 +147,11 @@
       <div class="list-header">
         <div>
           <p class="muted">Visao geral</p>
-          <h2>Campanhas ativas</h2>
+          <h2>Pacientes sugeridos</h2>
         </div>
       </div>
       <div id="campanhas-list" class="campanhas-list">
-        <div class="empty-state">Nenhuma campanha criada</div>
+        <div class="empty-state">Carregando oportunidades...</div>
       </div>
     </section>
   </main>
@@ -160,14 +160,14 @@
     <div class="modal">
       <div class="modal-header">
         <div>
-          <p class="muted">Campanhas globais</p>
+          <p class="muted">Oportunidades globais</p>
           <h3>Atualizar lista global</h3>
         </div>
         <button class="icon-button" id="close-globais-modal" aria-label="Fechar modal">&times;</button>
       </div>
       <form id="campanhas-globais-form">
         <label class="form-field full">
-          <span>JSON das campanhas globais</span>
+          <span>JSON das oportunidades globais</span>
           <textarea id="campanhas-globais-json" rows="10" placeholder="Cole aqui uma lista JSON de campanhas"></textarea>
         </label>
         <div class="modal-actions">
@@ -417,7 +417,7 @@
       <div class="modal-actions template-flow-actions">
         <button type="button" class="btn ghost" id="template-flow-cancel">Cancelar</button>
         <button type="button" class="btn ghost" id="template-flow-schedule" disabled>Agendar em breve</button>
-        <button type="button" class="btn primary" id="template-flow-send">Enviar agora</button>
+        <button type="button" class="btn primary" id="template-flow-send" disabled>Envio desativado</button>
       </div>
     </div>
   </div>
@@ -427,15 +427,15 @@
       <div class="modal-header">
         <div>
           <p class="muted">Confirmacao final</p>
-          <h3 id="template-send-confirm-title">Revisar envio da campanha</h3>
+          <h3 id="template-send-confirm-title">Revisar contato manual</h3>
         </div>
         <button class="icon-button" id="close-template-send-confirm-modal" aria-label="Fechar confirmacao de envio">&times;</button>
       </div>
       <div class="template-send-confirm-body">
-        <p class="template-preview-copy" id="template-send-confirm-copy">Confira quem vai receber agora antes de enviar.</p>
+        <p class="template-preview-copy" id="template-send-confirm-copy">Confira os pacientes sugeridos antes de abrir contato manual.</p>
         <div class="template-send-confirm-stats">
           <article class="template-stat">
-            <span>Enviados agora</span>
+            <span>Selecionados</span>
             <strong id="template-send-confirm-selected">0</strong>
           </article>
           <article class="template-stat">
@@ -449,7 +449,7 @@
         </div>
         <div class="template-send-confirm-grid">
           <section class="template-send-confirm-card">
-            <p class="muted">Pacientes que vao receber</p>
+            <p class="muted">Pacientes sugeridos</p>
             <div class="template-review-list" id="template-send-confirm-list"></div>
           </section>
           <section class="template-send-confirm-card">
@@ -464,7 +464,7 @@
       </div>
       <div class="modal-actions template-flow-actions">
         <button type="button" class="btn ghost" id="template-send-confirm-cancel">Voltar</button>
-        <button type="button" class="btn primary" id="template-send-confirm-submit">Confirmar envio</button>
+        <button type="button" class="btn primary" id="template-send-confirm-submit" disabled>Envio desativado</button>
       </div>
     </div>
   </div>
@@ -473,13 +473,13 @@
     <div class="modal template-send-result-modal">
       <div class="modal-header">
         <div>
-          <p class="muted">Resultado do envio</p>
-          <h3 id="template-send-result-title">Campanha enviada</h3>
+          <p class="muted">Resultado</p>
+          <h3 id="template-send-result-title">Contato manual</h3>
         </div>
         <button class="icon-button" id="close-template-send-result-modal" aria-label="Fechar resultado do envio">&times;</button>
       </div>
       <div class="template-send-confirm-body">
-        <p class="template-preview-copy" id="template-send-result-copy">Resumo do envio realizado para a clinica atual.</p>
+        <p class="template-preview-copy" id="template-send-result-copy">Resumo de contatos manuais da clinica atual.</p>
         <div class="template-send-confirm-stats">
           <article class="template-stat">
             <span>Sucesso</span>
@@ -496,7 +496,7 @@
         </div>
         <div class="template-send-confirm-grid">
           <section class="template-send-confirm-card">
-            <p class="muted">Pacientes que receberam</p>
+            <p class="muted">Pacientes contatados manualmente</p>
             <div class="template-review-list" id="template-send-result-sent-list"></div>
           </section>
           <section class="template-send-confirm-card">
@@ -541,9 +541,5 @@
   <script src="header.js"></script>
 </body>
 </html>
-
-
-
-
 
 

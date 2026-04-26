@@ -750,6 +750,12 @@ campaignService.createBatch = async ({
   selectedPatientIds = [],
   templateId = '',
 } = {}) => {
+  throw new AppError(
+    410,
+    'CAMPAIGN_BULK_SEND_DISABLED',
+    'Disparo em massa de campanhas foi desativado. Use Oportunidades para contato manual.',
+  );
+
   const normalizedClinicId = cleanText(clinicId);
   const normalizedCampaignId = cleanText(campaignId);
   if (!normalizedClinicId || !normalizedCampaignId) {

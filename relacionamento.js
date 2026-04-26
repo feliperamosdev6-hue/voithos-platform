@@ -291,7 +291,7 @@ const renderSummary = () => {
   const birthdays = Array.isArray(state.birthdays) ? state.birthdays : [];
   const birthdayPending = birthdays.filter((item) => item?.birthdaySentYear !== true).length;
   const birthdaySent = birthdays.filter((item) => item?.birthdaySentYear === true).length;
-  const campaignDashboard = state.campaignsDashboard || {};
+  const opportunityDashboard = state.campaignsDashboard || {};
   const plansDashboard = state.plansDashboard || {};
   const faltas = state.agendamentos.filter((item) => item.status === 'nao_compareceu');
   const desmarcados = state.agendamentos.filter((item) => item.desmarcado);
@@ -302,8 +302,8 @@ const renderSummary = () => {
     ? `${birthdayPending} pendentes • ${birthdaySent} enviados no ano`
     : 'Nenhum aniversariante na data atual';
 
-  if (campaignsSentCount) campaignsSentCount.textContent = String(num(campaignDashboard.sentToday, 0));
-  if (campaignsMeta) campaignsMeta.textContent = `${num(campaignDashboard.failedToday, 0)} falhas • entrega ${campaignDashboard.deliveryRateToday == null ? '--' : `${Math.round(num(campaignDashboard.deliveryRateToday, 0) * 100)}%`}`;
+  if (campaignsSentCount) campaignsSentCount.textContent = String(num(opportunityDashboard.total, 0));
+  if (campaignsMeta) campaignsMeta.textContent = `${num(opportunityDashboard.highPriority, 0)} prioridade alta • contato manual`;
 
   if (plansOverdueCount) plansOverdueCount.textContent = String(state.planAttentionItems.filter((item) => item.eventType === 'PLAN_INSTALLMENT_OVERDUE').length);
   if (plansMeta) plansMeta.textContent = `${state.planAttentionItems.length} parcelas com acao • aberto ${formatCurrencyBr(plansDashboard.totalOpenAmount || 0)}`;
@@ -329,13 +329,11 @@ const renderBirthdays = () => {
 
 const renderCampaigns = () => {
   const dashboard = state.campaignsDashboard || {};
-  if (campaignsKpiSent) campaignsKpiSent.textContent = String(num(dashboard.sentToday, 0));
-  if (campaignsKpiFailed) campaignsKpiFailed.textContent = String(num(dashboard.failedToday, 0));
-  if (campaignsKpiRate) campaignsKpiRate.textContent = dashboard.deliveryRateToday == null ? '--' : `${Math.round(num(dashboard.deliveryRateToday, 0) * 100)}%`;
-  if (campaignsKpiLastSend) campaignsKpiLastSend.textContent = dashboard.lastSendAt ? formatDateTimeBr(dashboard.lastSendAt) : '--';
-  if (campaignsSummary) campaignsSummary.textContent = dashboard.nextEligibleSend?.inicio
-    ? `Proximo elegivel: ${dashboard.nextEligibleSend.nome || 'Campanha'} • ${formatDateTimeBr(dashboard.nextEligibleSend.inicio)}`
-    : 'Historico central de disparos do dia atual.';
+  if (campaignsKpiSent) campaignsKpiSent.textContent = String(num(dashboard.total, 0));
+  if (campaignsKpiFailed) campaignsKpiFailed.textContent = String(num(dashboard.pending, 0));
+  if (campaignsKpiRate) campaignsKpiRate.textContent = String(num(dashboard.highPriority, 0));
+  if (campaignsKpiLastSend) campaignsKpiLastSend.textContent = 'Manual';
+  if (campaignsSummary) campaignsSummary.textContent = 'Sugestoes de contato sem envio automatico.';
 
   if (!campaignsLogsBody) return;
   const items = Array.isArray(state.campaignLogs) ? state.campaignLogs : [];
@@ -343,13 +341,13 @@ const renderCampaigns = () => {
     ? items.map((item) => `
       <tr>
         <td>${formatDateTimeBr(item.createdAt)}</td>
-        <td>${item.campaignName || '--'}</td>
+        <td>${item.source || '--'}</td>
         <td>${item.patientName || '--'}</td>
         <td><span class="status-pill ${getDispatchStatusClass(item.status)}">${clean(item.status) || '--'}</span></td>
         <td>${clean(item.errorMessage) || '--'}</td>
       </tr>
     `).join('')
-    : '<tr><td colspan="5" class="logs-empty">Sem disparos registrados hoje.</td></tr>';
+    : '<tr><td colspan="5" class="logs-empty">Abra Oportunidades para ver pacientes sugeridos.</td></tr>';
 };
 
 const renderPlans = () => {
@@ -451,14 +449,32 @@ const loadBirthdays = async () => {
 };
 
 const loadCampaigns = async () => {
-  const today = state.todayIso;
   try {
-    const [dashboard, logs] = await Promise.all([
-      campaignsApi.dashboard?.(),
-      campaignsApi.logsList?.({ dateFrom: today, dateTo: today, page: 1, limit: 12 }),
-    ]);
-    state.campaignsDashboard = dashboard || {};
-    state.campaignLogs = Array.isArray(logs?.items) ? logs.items : [];
+    const highPrioritySegments = ['plan_overdue', 'financial_pending', 'missed_followup'];
+    const mediumPrioritySegments = ['inactive_180', 'inactive_90', 'never_cleaning'];
+    const responses = await Promise.all([...highPrioritySegments, ...mediumPrioritySegments].map(async (segmentKey) => {
+      try {
+        const data = await campaignsApi.resolveAudience?.({ segmentKey });
+        const ids = Array.isArray(data?.members)
+          ? data.members.map((item) => clean(item?.patientId)).filter(Boolean)
+          : (Array.isArray(data?.patientIds) ? data.patientIds.map(clean).filter(Boolean) : []);
+        return { segmentKey, ids };
+      } catch (_error) {
+        return { segmentKey, ids: [] };
+      }
+    }));
+    const unique = new Set();
+    let highPriority = 0;
+    responses.forEach(({ segmentKey, ids }) => {
+      ids.forEach((id) => unique.add(id));
+      if (highPrioritySegments.includes(segmentKey)) highPriority += ids.length;
+    });
+    state.campaignsDashboard = {
+      total: unique.size,
+      pending: unique.size,
+      highPriority,
+    };
+    state.campaignLogs = [];
   } catch (_error) {
     state.campaignsDashboard = {};
     state.campaignLogs = [];

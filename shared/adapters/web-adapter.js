@@ -2788,16 +2788,7 @@
     remove: async (id) => request('DELETE', `/campaigns/${encodeURIComponent(cleanText(id))}`, null, { auth: true }),
     dashboard: async () => request('GET', '/campaigns/dashboard', null, { auth: true }),
     templates: async () => request('GET', '/campaigns/templates', null, { auth: true }),
-    createSendBatch: async (payload = {}) => request(
-      'POST',
-      `/campaigns/${encodeURIComponent(cleanText(payload?.campaignId))}/batches`,
-      {
-        force: payload?.force === true,
-        selectedPatientIds: Array.isArray(payload?.selectedPatientIds) ? payload.selectedPatientIds : [],
-        templateId: payload?.templateId || '',
-      },
-      { auth: true },
-    ),
+    createSendBatch: async () => notImplemented('campanhas.createSendBatch.disabled'),
     logDelivery: async (payload = {}) => request(
       'PATCH',
       `/campaigns/dispatches/${encodeURIComponent(cleanText(payload?.dispatchId))}`,

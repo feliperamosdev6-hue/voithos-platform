@@ -58,16 +58,6 @@ const registerWhatsappHandlers = ({
     });
   });
 
-  ipcMain.handle('whatsapp-send-campaign', async (_event, payload = {}) => {
-    requireAccess({ roles: whatsappRoles, perms: ['agenda.edit'] });
-    const clinicId = resolveClinicId();
-    return sendWeeklyCampaignMessage({
-      clinicId,
-      patient: payload.patient || {},
-      campaign: payload.campaign || {},
-    });
-  });
-
   ipcMain.handle('whatsapp-logs-list', async (_event, payload = {}) => {
     requireAccess({ roles: whatsappRoles, perms: ['agenda.view'] });
     const clinicId = resolveClinicId();

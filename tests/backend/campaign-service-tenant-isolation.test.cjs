@@ -162,3 +162,36 @@ test('campaignService.deleteCampaign arquiva e remove dados apenas da clinica au
   ]);
   assert.deepEqual(result, { success: true });
 });
+
+test('campaignService.createBatch rejeita disparo em massa de campanha', async (t) => {
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/campaignService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/campaignRepository.js')]: { campaignRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/financialRepository.js')]: { financialRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: { patientClinicalRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/services/messagingDispatchService.js')]: { messagingDispatchService: {} },
+      [path.resolve(__dirname, '../../backend/src/services/campaignAudienceResolver.js')]: { resolveAudiencePreviewData: () => ({}) },
+      [path.resolve(__dirname, '../../shared/campaign-template-catalog.js')]: {
+        listCampaignTemplatesCatalog: () => ({ annualTemplates: [] }),
+        getCampaignTemplateById: () => null,
+      },
+    }
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    () => serviceModule.campaignService.createBatch({
+      clinicId: 'clinic-auth',
+      campaignId: 'camp-1',
+    }),
+    (error) => {
+      assert.equal(error?.code, 'CAMPAIGN_BULK_SEND_DISABLED');
+      assert.equal(error?.statusCode, 410);
+      return true;
+    }
+  );
+});

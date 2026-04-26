@@ -152,7 +152,7 @@ contextBridge.exposeInMainWorld('api', {
     sendText: (payload) => ipcRenderer.invoke('whatsapp-send-text', payload),
     sendAppointmentConfirmation: (payload) => ipcRenderer.invoke('whatsapp-send-appointment-confirmation', payload),
     sendAppointmentReminder: (payload) => ipcRenderer.invoke('whatsapp-send-appointment-reminder', payload),
-    sendCampaign: (payload) => ipcRenderer.invoke('whatsapp-send-campaign', payload),
+    sendCampaign: () => Promise.reject(new Error('Disparo de campanha pelo WhatsApp foi desativado.')),
     logsList: (payload) => ipcRenderer.invoke('whatsapp-logs-list', payload),
   },
 

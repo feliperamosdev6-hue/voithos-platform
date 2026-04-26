@@ -47,6 +47,15 @@ const SEGMENT_LABELS = {
   plan_overdue: 'Pacientes com plano em atraso',
 };
 
+const OPPORTUNITY_SEGMENTS = [
+  { key: 'plan_overdue', source: 'plano', priority: 'alta', title: 'Plano ou parcela em atraso' },
+  { key: 'financial_pending', source: 'financeiro', priority: 'alta', title: 'Cobranca vencida' },
+  { key: 'missed_followup', source: 'agenda', priority: 'alta', title: 'Faltou e nao reagendou' },
+  { key: 'inactive_180', source: 'agenda', priority: 'media', title: 'Sem retorno ha 180 dias' },
+  { key: 'inactive_90', source: 'agenda', priority: 'media', title: 'Sem retorno ha 90 dias' },
+  { key: 'never_cleaning', source: 'prontuario', priority: 'media', title: 'Sem limpeza registrada' },
+];
+
 const TEMPLATE_FLOW_FILTERS = [
   { key: 'all', label: 'Todos' },
   { key: 'selected', label: 'Selecionados' },
@@ -199,27 +208,6 @@ const createCard = (camp, campaignResult = null) => {
   card.appendChild(info);
   card.appendChild(meta);
 
-  if (canOperateCampaigns && String(camp.canal || '').toLowerCase().includes('whatsapp')) {
-    const actions = document.createElement('div');
-    actions.className = 'campanha-actions';
-    const btnDisparar = document.createElement('button');
-    btnDisparar.className = 'btn-secondary';
-    btnDisparar.type = 'button';
-    btnDisparar.textContent = 'Disparar WhatsApp';
-    btnDisparar.setAttribute('data-action', 'send-whatsapp');
-    btnDisparar.setAttribute('data-id', camp.id || '');
-    actions.appendChild(btnDisparar);
-    if (canManage && !camp.somenteLeitura) {
-      const btnExcluir = document.createElement('button');
-      btnExcluir.className = 'btn-small danger';
-      btnExcluir.type = 'button';
-      btnExcluir.textContent = 'Excluir';
-      btnExcluir.setAttribute('data-action', 'delete');
-      btnExcluir.setAttribute('data-id', camp.id || '');
-      actions.appendChild(btnExcluir);
-    }
-    card.appendChild(actions);
-  }
   if (canManage && !camp.somenteLeitura && !card.querySelector('.campanha-actions')) {
     const actions = document.createElement('div');
     actions.className = 'campanha-actions';
@@ -358,6 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let templatesData = { monthly: null, annualTemplates: [] };
   let campaignResults = new Map();
   let campaignPatients = [];
+  let contactOpportunities = [];
   let selectedCampaignPatientIds = new Set();
   let editingCampaignId = null;
   let templateFlowState = {
@@ -408,23 +397,14 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const updateHealthPanel = async () => {
-    if (!campanhasApi.dashboard) return;
-    try {
-      const dashboard = await campanhasApi.dashboard();
-      if (kpiSentToday) kpiSentToday.textContent = String(dashboard?.sentToday ?? 0);
-      if (kpiFailedToday) kpiFailedToday.textContent = String(dashboard?.failedToday ?? 0);
-      if (kpiDeliveryRate) kpiDeliveryRate.textContent = formatPercent(dashboard?.deliveryRateToday);
-      if (kpiLastSend) kpiLastSend.textContent = formatDateTimeBr(dashboard?.lastSendAt);
-      if (kpiNextSend) {
-        if (dashboard?.nextEligibleSend?.inicio) {
-          kpiNextSend.textContent = `${dashboard.nextEligibleSend.nome || 'Campanha'} - ${formatDateTimeBr(dashboard.nextEligibleSend.inicio)}`;
-        } else {
-          kpiNextSend.textContent = 'Sem campanhas agendadas';
-        }
-      }
-    } catch (err) {
-      console.warn('Erro ao atualizar painel de saude de campanhas', err);
-    }
+    const total = contactOpportunities.length;
+    const high = contactOpportunities.filter((item) => item.priority === 'alta').length;
+    const withWhatsapp = contactOpportunities.filter((item) => item.whatsappPhone).length;
+    if (kpiSentToday) kpiSentToday.textContent = String(total);
+    if (kpiFailedToday) kpiFailedToday.textContent = String(total);
+    if (kpiDeliveryRate) kpiDeliveryRate.textContent = String(high);
+    if (kpiLastSend) kpiLastSend.textContent = String(withWhatsapp);
+    if (kpiNextSend) kpiNextSend.textContent = 'Sem envio automatico';
   };
 
   const loadCampaignResults = async () => {
@@ -464,6 +444,115 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Erro ao carregar pacientes para campanhas', err);
       campaignPatients = [];
     }
+  };
+
+  const getPatientPhone = (patient = {}) => String(
+    patient?.telefone || patient?.phone || patient?.celular || patient?.whatsapp || '',
+  ).trim();
+
+  const normalizeWhatsAppPhone = (value) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('55')) return digits;
+    if (digits.length >= 10 && digits.length <= 11) return `55${digits}`;
+    return digits;
+  };
+
+  const getOpportunityPriorityValue = (priority) => {
+    const normalized = String(priority || '').trim().toLowerCase();
+    if (normalized === 'alta') return 3;
+    if (normalized === 'media') return 2;
+    return 1;
+  };
+
+  const buildOpportunityMessage = (opportunity = {}) => {
+    const name = opportunity.patientName || 'paciente';
+    const reason = opportunity.reason || opportunity.title || 'oportunidade de contato';
+    return `Ola, ${name}. Aqui e da clinica. Identificamos uma pendencia: ${reason}. Posso te ajudar com isso?`;
+  };
+
+  const createOpportunityFromMember = ({ member = {}, segment = {}, patient = null } = {}) => {
+    const patientId = String(member?.patientId || patient?.id || patient?.patientId || patient?.prontuario || '').trim();
+    if (!patientId) return null;
+    const phone = String(member?.phone || getPatientPhone(patient)).trim();
+    const reason = String(member?.suggestionReasonLabel || segment.title || SEGMENT_LABELS[segment.key] || 'Contato sugerido').trim();
+    const detail = String(member?.suggestionExplanation || member?.reasonLabel || '').trim();
+    return {
+      id: `${segment.key}:${patientId}`,
+      patientId,
+      patientName: String(member?.patientName || getCampaignPatientLabel(patient) || 'Paciente').trim(),
+      phone,
+      whatsappPhone: normalizeWhatsAppPhone(phone),
+      title: segment.title,
+      reason,
+      detail,
+      source: segment.source,
+      priority: segment.priority,
+      segmentKey: segment.key,
+      included: member?.included !== false,
+    };
+  };
+
+  const buildCampaignPatientLookup = () => {
+    const map = new Map();
+    campaignPatients.forEach((patient) => {
+      [
+        patient?.id,
+        patient?.patientId,
+        patient?.prontuario,
+        patient?._id,
+        patient?.pacienteId,
+      ]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .forEach((key) => {
+          if (!map.has(key)) map.set(key, patient);
+        });
+    });
+    return map;
+  };
+
+  const resolveOpportunitySegment = async (segment) => {
+    if (!campanhasApi.resolveAudience) return [];
+    try {
+      const payload = await campanhasApi.resolveAudience({
+        segmentKey: segment.key,
+        filters: segment.key === 'appointment_window' ? { dateFrom: getTodayValues().date } : {},
+      });
+      if (payload?.unavailable) return [];
+      const patientMap = buildCampaignPatientLookup();
+      const members = Array.isArray(payload?.members)
+        ? payload.members
+        : (Array.isArray(payload?.patientIds) ? payload.patientIds.map((patientId) => ({ patientId })) : []);
+      return members
+        .map((member) => createOpportunityFromMember({
+          member,
+          segment,
+          patient: patientMap.get(String(member?.patientId || '').trim()) || null,
+        }))
+        .filter(Boolean);
+    } catch (err) {
+      console.warn('Erro ao resolver oportunidades de contato', segment.key, err);
+      return [];
+    }
+  };
+
+  const loadContactOpportunities = async () => {
+    const groups = await Promise.all(OPPORTUNITY_SEGMENTS.map(resolveOpportunitySegment));
+    const unique = new Map();
+    groups.flat().forEach((item) => {
+      const current = unique.get(item.patientId);
+      if (!current || getOpportunityPriorityValue(item.priority) > getOpportunityPriorityValue(current.priority)) {
+        unique.set(item.patientId, item);
+      }
+    });
+    contactOpportunities = Array.from(unique.values())
+      .sort((left, right) => {
+        const priorityDiff = getOpportunityPriorityValue(right.priority) - getOpportunityPriorityValue(left.priority);
+        if (priorityDiff) return priorityDiff;
+        return left.patientName.localeCompare(right.patientName, 'pt-BR');
+      });
+    return contactOpportunities;
   };
 
   const getSelectedCampaignPatients = () => campaignPatients
@@ -1082,9 +1171,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const payload = templateFlowState.confirmPayload;
     if (!payload) return;
 
-    if (templateSendConfirmTitle) templateSendConfirmTitle.textContent = `Confirmar envio: ${getTemplateTitle(payload.template)}`;
+    if (templateSendConfirmTitle) templateSendConfirmTitle.textContent = `Contato manual: ${getTemplateTitle(payload.template)}`;
     if (templateSendConfirmCopy) {
-      templateSendConfirmCopy.textContent = `${payload.selectedEligibleMembers.length} pacientes da clinica atual receberao a campanha agora.`;
+      templateSendConfirmCopy.textContent = `${payload.selectedEligibleMembers.length} pacientes da clinica atual foram sugeridos para contato manual.`;
     }
     if (templateSendConfirmSelected) templateSendConfirmSelected.textContent = String(payload.selectedEligibleMembers.length);
     if (templateSendConfirmBlocked) templateSendConfirmBlocked.textContent = String(payload.blockedMembers.length);
@@ -1099,7 +1188,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span>${escapeHtml(member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente elegivel')}</span>
           </article>
         `).join('')}
-        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes serao enviados alem dos exibidos.</p>` : ''}
+        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes sugeridos alem dos exibidos.</p>` : ''}
       `;
     }
     if (templateSendConfirmBlockedList) {
@@ -1107,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
         templateSendConfirmBlockedList.innerHTML = '<p class="template-review-ok">Nenhum bloqueio real detectado nesta audiencia.</p>';
       } else {
         templateSendConfirmBlockedList.innerHTML = `
-          <p class="template-review-blocked-title">${payload.blockedMembers.length} pacientes ficaram fora do envio por bloqueio real.</p>
+          <p class="template-review-blocked-title">${payload.blockedMembers.length} pacientes ficaram fora da sugestao por bloqueio real.</p>
           <div class="template-review-blocked-list">
             ${payload.blockedReasons.slice(0, 4).map(([reason, count]) => `<span class="template-badge danger">${escapeHtml(`${count} • ${reason}`)}</span>`).join('')}
           </div>
@@ -1116,10 +1205,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (templateSendConfirmPreview) templateSendConfirmPreview.textContent = payload.previewText;
     if (templateSendConfirmSubmitBtn) {
-      templateSendConfirmSubmitBtn.disabled = templateFlowState.sending;
-      templateSendConfirmSubmitBtn.textContent = templateFlowState.sending
-        ? 'Enviando...'
-        : `Confirmar envio (${payload.selectedEligibleMembers.length})`;
+      templateSendConfirmSubmitBtn.disabled = true;
+      templateSendConfirmSubmitBtn.textContent = 'Envio desativado';
     }
   };
 
@@ -1405,10 +1492,8 @@ document.addEventListener('DOMContentLoaded', () => {
       templateFlowMessagePreview.textContent = buildTemplatePreviewText(template, audience);
     }
     if (templateFlowSendBtn) {
-      templateFlowSendBtn.disabled = templateFlowState.loading || templateFlowState.sending || selectedCount === 0 || messageDiagnostics.isEmpty;
-      templateFlowSendBtn.textContent = templateFlowState.sending
-        ? 'Enviando...'
-        : (selectedCount > 0 ? `Enviar agora (${selectedCount})` : 'Enviar agora');
+      templateFlowSendBtn.disabled = true;
+      templateFlowSendBtn.textContent = 'Envio desativado';
     }
     if (templateFlowSelectVisibleBtn) templateFlowSelectVisibleBtn.disabled = templateFlowState.loading || getVisibleEligibleTemplateMembers().length === 0;
     if (templateFlowSelectAllBtn) templateFlowSelectAllBtn.disabled = templateFlowState.loading || !audience?.includedCount;
@@ -1699,27 +1784,42 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const reloadCampaignsData = async () => {
-    campanhas = await loadCampaigns();
-    await loadCampaignResults();
+    await loadCampaignPatients();
+    await loadContactOpportunities();
     render();
     await updateHealthPanel();
   };
 
   const render = () => {
     listEl.innerHTML = '';
-    const visibleCampaigns = (currentUser?.tipo === 'dentista')
-      ? campanhas.filter((c) => (c.status || 'ativa') === 'ativa')
-      : campanhas;
-
-    if (!visibleCampaigns.length) {
+    if (!contactOpportunities.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'Nenhuma campanha criada';
+      empty.textContent = 'Nenhuma oportunidade de contato encontrada agora.';
       listEl.appendChild(empty);
       return;
     }
-    visibleCampaigns.forEach((camp) => {
-      listEl.appendChild(createCard(camp, campaignResults.get(camp.id) || null));
+    contactOpportunities.forEach((opportunity) => {
+      const card = document.createElement('article');
+      card.className = `opportunity-card priority-${opportunity.priority}`;
+      card.dataset.id = opportunity.id;
+      card.innerHTML = `
+        <div class="opportunity-main">
+          <div class="opportunity-title-row">
+            <h4>${escapeHtml(opportunity.patientName)}</h4>
+            <span class="opportunity-priority">${escapeHtml(opportunity.priority)}</span>
+          </div>
+          <p>${escapeHtml(opportunity.reason)}</p>
+          <div class="opportunity-meta">
+            <span>Origem: ${escapeHtml(opportunity.source)}</span>
+            <span>${escapeHtml(opportunity.detail || 'Contato manual sugerido')}</span>
+          </div>
+        </div>
+        <div class="opportunity-actions">
+          <button type="button" class="btn primary" data-action="contact-opportunity" data-id="${escapeHtml(opportunity.id)}">Entrar em contato</button>
+        </div>
+      `;
+      listEl.appendChild(card);
     });
   };
 
@@ -1885,6 +1985,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const toDigits = (value) => String(value || '').replace(/\D/g, '');
 
   const executeBatchDispatch = async ({ camp, batch, dispatchMetadata = null } = {}) => {
+    throw new Error('Disparo em massa de campanhas foi desativado.');
     let dispatches = Array.isArray(batch?.dispatches) ? batch.dispatches : [];
     let blocked = dispatches.filter((item) => String(item?.status || '').trim().toUpperCase() === 'BLOCKED').length;
     const blockedItems = dispatches
@@ -1958,40 +2059,13 @@ document.addEventListener('DOMContentLoaded', () => {
     for (const item of elegiveis) {
       const patientId = item?.patientId || '';
       try {
-        if (typeof whatsappApi.sendCampaign === 'function') {
-          const dispatchResult = await whatsappApi.sendCampaign({
-            patient: {
-              id: patientId,
-              prontuario: patientId,
-              nome: item?.patientName || '',
-              telefone: item?.phone || '',
-              whatsapp: item?.phone || '',
-            },
-            campaign: {
-              id: camp.id || '',
-              campaignId: camp.id || '',
-              nome: camp.nome || '',
-              descricao: camp.descricao || '',
-              message: item?.body || buildCampaignMessage(camp, { nome: item?.patientName || '' }),
-            },
-          });
+        if (false) {
+          const dispatchResult = await Promise.reject(new Error('Disparo de campanha desativado.'));
           if (!dispatchResult?.success) {
             throw new Error(dispatchResult?.error || 'Falha no envio do WhatsApp');
           }
         } else {
-          await clinicApi.queueWhatsApp({
-            phone: item.phone,
-            message: buildCampaignMessage(camp, item),
-            type: 'campaign',
-            meta: {
-              campaignId: camp.id || '',
-              campaignName: camp.nome || '',
-              patientId,
-            },
-            throttleMs: 1000,
-            maxAttempts: 2,
-            retryDelayMs: 1500,
-          });
+          await Promise.reject(new Error('Disparo de campanha desativado.'));
         }
         await campanhasApi.logDelivery?.({
           dispatchId: item?.dispatchId || '',
@@ -2033,16 +2107,16 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const dispatchCampaignWhatsApp = async (camp) => {
-    const canSendCampaign = typeof whatsappApi.sendCampaign === 'function' || typeof clinicApi.queueWhatsApp === 'function';
+    alert('Disparo em massa de campanhas foi desativado. Use Entrar em contato nas oportunidades.');
+    return;
+    const canSendCampaign = false;
     if (!camp || !canSendCampaign) {
       alert('Envio de WhatsApp indisponivel.');
       return;
     }
     let batch = null;
     try {
-      batch = await campanhasApi.createSendBatch?.({
-        campaignId: camp.id || '',
-      });
+      batch = null;
     } catch (err) {
       console.error('Falha ao criar lote central da campanha', err);
       alert(err?.message || 'Nao foi possivel criar o lote da campanha.');
@@ -2070,7 +2144,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const performTemplateSendNow = async (payload) => {
-    const canSendCampaign = typeof whatsappApi.sendCampaign === 'function' || typeof clinicApi.queueWhatsApp === 'function';
+    alert('Disparo em massa de campanhas foi desativado. Use Entrar em contato nas oportunidades.');
+    return;
+    const canSendCampaign = false;
     if (!canSendCampaign) {
       alert('Envio de WhatsApp indisponivel.');
       return;
@@ -2103,12 +2179,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const campaign = normalizeCampaign(created);
       createdCampaignId = campaign.id || '';
-      const batch = await campanhasApi.createSendBatch({
-        campaignId: campaign.id,
-        force: true,
-        selectedPatientIds: selectedEligibleMembers.map((member) => String(member?.patientId || '').trim()),
-        templateId,
-      });
+      const batch = null;
       const summary = await executeBatchDispatch({
         camp: campaign,
         batch,
@@ -2165,6 +2236,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const handleTemplateSendNow = async () => {
+    alert('Disparo em massa de campanhas foi desativado. Use Entrar em contato nas oportunidades.');
+    return;
     if (templateFlowState.loading || templateFlowState.sending) return;
     const payload = buildTemplateSendConfirmationPayload();
     if (payload?.error) {
@@ -2178,28 +2251,22 @@ document.addEventListener('DOMContentLoaded', () => {
     currentUser = await ensureUser();
     canManage = CAMPAIGN_MANAGE_ROLES.has(String(currentUser?.tipo || '').trim().toLowerCase());
     canOperateCampaigns = CAMPAIGN_OPERATE_ROLES.has(String(currentUser?.tipo || '').trim().toLowerCase());
-    if (!canManage && openBtn) {
+    if (openBtn) {
       openBtn.style.display = 'none';
     }
-    if (!canManage && openGlobalsBtn) {
+    if (openGlobalsBtn) {
       openGlobalsBtn.style.display = 'none';
     }
-    if (!canOperateCampaigns && activateMonthlyTemplateBtn) {
+    if (activateMonthlyTemplateBtn) {
       activateMonthlyTemplateBtn.style.display = 'none';
     }
+    if (templatesPanel) templatesPanel.hidden = true;
     await loadCampaignPatients();
-    campanhas = await loadCampaigns();
-    await loadCampaignResults();
-    await loadTemplates();
+    await loadContactOpportunities();
     setupPublicoField();
     renderTemplateFlow();
     render();
     await updateHealthPanel();
-    await refreshSegmentPreview();
-    if (editId) {
-      const camp = campanhas.find((c) => String(c.id) === String(editId));
-      if (camp) openModalWith(camp);
-    }
   };
   const handleGlobalsSubmit = async (ev) => {
     ev.preventDefault();
@@ -2247,21 +2314,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const action = actionButton.dataset.action;
       const id = actionButton.dataset.id || '';
       if (!action || !id) return;
+      if (action === 'contact-opportunity') {
+        const opportunity = contactOpportunities.find((item) => item.id === id);
+        if (!opportunity) return;
+        const message = buildOpportunityMessage(opportunity);
+        if (opportunity.whatsappPhone) {
+          window.open(`https://wa.me/${encodeURIComponent(opportunity.whatsappPhone)}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+          return;
+        }
+        const patientUrl = opportunity.patientId
+          ? `editar-paciente.html?id=${encodeURIComponent(opportunity.patientId)}`
+          : 'arquivos.html';
+        window.location.href = patientUrl;
+        return;
+      }
       const camp = campanhas.find((c) => c.id === id);
       if (!camp) return;
       if (action === 'edit') {
         if (!canManage || camp.somenteLeitura) return;
         openModalWith(camp);
-        return;
-      }
-      if (action === 'send-whatsapp') {
-        if (!canOperateCampaigns || camp.somenteLeitura) return;
-        try {
-          await dispatchCampaignWhatsApp(camp);
-        } catch (err) {
-          console.error('Erro ao disparar campanha', err);
-          alert(err?.message || 'Nao foi possivel disparar a campanha.');
-        }
         return;
       }
       if (!canManage || camp.somenteLeitura) return;

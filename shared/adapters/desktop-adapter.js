@@ -436,8 +436,7 @@
       return unavailable('campanhas.templates');
     },
     createSendBatch: async (payload) => {
-      if (window.api?.campanhas?.createSendBatch) return window.api.campanhas.createSendBatch(payload);
-      return unavailable('campanhas.createSendBatch');
+      return unavailable('campanhas.createSendBatch.disabled');
     },
     logDelivery: async (payload) => {
       if (window.api?.campanhas?.logDelivery) return window.api.campanhas.logDelivery(payload);
@@ -529,8 +528,7 @@
       return unavailable('whatsapp.sendAppointmentReminder');
     },
     sendCampaign: async (payload) => {
-      if (window.api?.whatsapp?.sendCampaign) return window.api.whatsapp.sendCampaign(payload);
-      return unavailable('whatsapp.sendCampaign');
+      return unavailable('whatsapp.sendCampaign.disabled');
     },
     logsList: async (payload) => {
       if (window.api?.whatsapp?.logsList) return window.api.whatsapp.logsList(payload);

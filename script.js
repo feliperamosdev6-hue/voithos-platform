@@ -1659,62 +1659,48 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateHomeCampaignsPanel = async () => {
-        if (!campanhasApi.dashboard) {
+        if (!campanhasApi.resolveAudience) {
             setMetricValue(homeCampanhasHoje, '0', true);
-            setMetricValue(homeCampanhasResposta, '--', true);
-            setMetricValue(homeCampanhasProximo, '--', true);
+            setMetricValue(homeCampanhasResposta, '0', true);
+            setMetricValue(homeCampanhasProximo, '0', true);
             return;
         }
         try {
-            const dash = await campanhasApi.dashboard();
-            const sentToday = Number(dash?.sentToday) || 0;
-            const failedToday = Number(dash?.failedToday) || 0;
-            const responseRate = dash?.responseRate;
-            const deliveryRateToday = dash?.deliveryRateToday;
-            const nextEligible = dash?.nextEligibleSend || null;
-            const nextDate = normalizeDateLocal(nextEligible?.inicio || '');
-            const nextDateObj = nextDate ? new Date(`${nextDate}T00:00:00`) : null;
-
-            setMetricValue(homeCampanhasHoje, String(sentToday), sentToday === 0);
-            if (homeCampanhasHoje) {
-                const deliveryPct = deliveryRateToday === null || deliveryRateToday === undefined
-                    ? '--'
-                    : `${Math.max(0, Math.min(100, Math.round(Number(deliveryRateToday) * 100)))}%`;
-                homeCampanhasHoje.setAttribute('title', `Falhas hoje: ${failedToday} | Taxa de entrega: ${deliveryPct}`);
-            }
-            if (responseRate === null || responseRate === undefined || Number.isNaN(Number(responseRate))) {
-                setMetricValue(homeCampanhasResposta, '--', true);
-                if (homeCampanhasResposta) {
-                    homeCampanhasResposta.setAttribute('title', 'Disponivel quando WhatsApp estiver integrado com respostas');
-                    homeCampanhasResposta.setAttribute('aria-label', 'Disponivel quando WhatsApp estiver integrado com respostas');
+            const highPrioritySegments = ['plan_overdue', 'financial_pending', 'missed_followup'];
+            const mediumPrioritySegments = ['inactive_180', 'inactive_90', 'never_cleaning'];
+            const responses = await Promise.all([...highPrioritySegments, ...mediumPrioritySegments].map(async (segmentKey) => {
+                try {
+                    return { segmentKey, data: await campanhasApi.resolveAudience({ segmentKey }) };
+                } catch (_) {
+                    return { segmentKey, data: null };
                 }
-            } else {
-                const pct = Math.max(0, Math.min(100, Math.round(Number(responseRate) * 100)));
-                setMetricValue(homeCampanhasResposta, `${pct}%`, false);
-                homeCampanhasResposta?.removeAttribute('title');
-                homeCampanhasResposta?.removeAttribute('aria-label');
-            }
-            const nextLabel = nextDateObj ? formatDateShort(nextDateObj) : 'Sem campanhas agendadas';
-            setMetricValue(homeCampanhasProximo, nextLabel, !nextDateObj);
-            if (homeCampanhasProximo) {
-                const deliveryPct = deliveryRateToday === null || deliveryRateToday === undefined
-                    ? '--'
-                    : `${Math.max(0, Math.min(100, Math.round(Number(deliveryRateToday) * 100)))}%`;
-                homeCampanhasProximo.setAttribute('title', `Taxa de entrega hoje: ${deliveryPct}`);
-            }
+            }));
+            const patientIds = new Set();
+            let highPriority = 0;
+            responses.forEach(({ segmentKey, data }) => {
+                const ids = Array.isArray(data?.members)
+                    ? data.members.map((item) => String(item?.patientId || '').trim()).filter(Boolean)
+                    : (Array.isArray(data?.patientIds) ? data.patientIds.map((id) => String(id || '').trim()).filter(Boolean) : []);
+                ids.forEach((id) => patientIds.add(id));
+                if (highPrioritySegments.includes(segmentKey)) highPriority += ids.length;
+            });
+            const total = patientIds.size;
+            setMetricValue(homeCampanhasHoje, String(total), total === 0);
+            setMetricValue(homeCampanhasResposta, String(total), total === 0);
+            setMetricValue(homeCampanhasProximo, String(highPriority), highPriority === 0);
             try {
                 console.info('[HOME] management_widget_loaded', JSON.stringify({
                     widget: 'home-campanhas',
-                    management_widget_source: 'campaigns-dashboard',
-                    management_widget_metric: 'enviadas_hoje|taxa_resposta|proximo_envio',
-                    management_widget_zero_reason: (sentToday || nextDateObj || (responseRate !== null && responseRate !== undefined)) ? '' : 'no_data',
+                    management_widget_source: 'contact-opportunities',
+                    management_widget_metric: 'pacientes_sugeridos|pendencias_contato|prioridade_alta',
+                    management_widget_zero_reason: total ? '' : 'no_data',
                 }));
             } catch (_) {}
         } catch (err) {
-            console.warn('[HOME] nao foi possivel carregar campanhas', err);
+            console.warn('[HOME] nao foi possivel carregar oportunidades', err);
             setMetricValue(homeCampanhasHoje, '0', true);
-            setMetricValue(homeCampanhasResposta, '--', true);
-            setMetricValue(homeCampanhasProximo, '--', true);
+            setMetricValue(homeCampanhasResposta, '0', true);
+            setMetricValue(homeCampanhasProximo, '0', true);
         }
     };
 
