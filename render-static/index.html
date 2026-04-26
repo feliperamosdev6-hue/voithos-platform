@@ -1,0 +1,512 @@
+﻿<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>voithos</title>
+
+    <!-- 1. Conecta o arquivo CSS ao HTML -->
+    <link rel="stylesheet" href="style.css">
+    <style>
+         .header-container h1 .brand-button {
+            appearance: none;
+            background: transparent;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .header-container h1 .brand-button:focus-visible {
+            outline: 2px solid rgba(15, 23, 42, 0.35);
+            outline-offset: 4px;
+            border-radius: 10px;
+        }
+
+        .header-container h1 .brand-logo {
+            display: block;
+            width: 170px;
+            height: 32px;
+            object-fit: cover;
+            object-position: center;
+            filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.18));
+        }
+    </style>
+
+    <!-- 2. Adiciona as fontes do Google Fonts usadas no CSS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2&#9662;family=Poppins:wght@600;700&family=Roboto&display=swap" rel="stylesheet">
+  <script src="./runtime-config.js"></script>
+</head>
+<body>
+    <script src="shared/adapters/desktop-adapter.js"></script>
+    <script src="shared/adapters/web-adapter.js"></script>
+    <script src="shared/app-api.js"></script>
+    <script>
+        (async () => {
+            try {
+                const authApi = window.appApi?.auth || window.auth;
+                const user = await authApi?.currentUser?.();
+                if (!user) {
+                    window.location.href = 'login.html';
+                }
+            } catch (error) {
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+
+    <!-- 3. Estrutura do cabeçalho corrigida com as classes do CSS -->
+        <header class="header-container">
+        <h1><button type="button" class="brand-button" aria-label="Atualizar inicio" onclick="window.location.reload();"><img src="assets/logo-voithos.svg" alt="Voithos" class="brand-logo"></button></h1>
+        <nav class="main-nav">
+            <ul>
+                <li><a href="cadastro-paciente.html">Novo cadastro</a></li>
+                <li><a href="contratos.html">Contratos</a></li>
+            </ul>
+        </nav>
+        <div class="header-actions">
+            <div class="attn-menu" id="attn-menu">
+                <button class="attn-toggle" id="attn-toggle" type="button" aria-expanded="false" aria-controls="attn-dropdown">
+                    Atendimento
+                    <span class="attn-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="attn-dropdown" id="attn-dropdown" role="menu">
+                    <a class="attn-item" href="anamnese.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Anamnese
+                    </a>
+                    <a class="attn-item" href="receita.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Receituario
+                    </a>
+                    <a class="attn-item" href="servicos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Servicos
+                    </a>
+                    <a class="attn-item" href="agendamentos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Agenda
+                    </a>
+                    <a class="attn-item" href="arquivos.html" role="menuitem">
+                        <span class="attn-icon" aria-hidden="true"></span>
+                        Pacientes
+                    </a>
+                </div>
+            </div>
+                        <div class="gestao-menu" id="gestao-menu">
+                <button class="gestao-toggle" id="gestao-toggle" type="button" aria-expanded="false" aria-controls="gestao-dropdown">
+                    Gestao
+                    <span class="gestao-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="gestao-dropdown" id="gestao-dropdown" role="menu">
+                    <a class="gestao-item" href="gestao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Gestao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="comunicacao.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Comunicacao</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a>
+                    <a class="gestao-item" href="relacionamento.html" role="menuitem">
+                        <span class="gestao-icon" aria-hidden="true"></span>
+                        <span class="gestao-text">Relacionamento</span>
+                        <span class="gestao-item-caret" aria-hidden="true">&#9656;</span>
+                    </a></div>
+            </div><div class="user-menu" id="user-menu">
+                <button class="user-menu-toggle" id="user-menu-toggle" type="button">
+                    <span class="user-avatar" aria-hidden="true">&#128100;</span>
+                    <span class="user-label">
+                        <span class="user-name" id="user-name">Usuario</span>
+                        <span class="user-role-badge" id="user-role">(tipo)</span>
+                    </span>
+                    <span class="user-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="user-menu-dropdown" id="user-menu-dropdown">
+                    <button class="user-menu-item" data-action="manage" type="button">Gerenciar usuarios</button>
+                    <button class="user-menu-item" data-action="change-password" type="button">Alterar senha</button>
+                    <button class="user-menu-item" data-action="logout" type="button">Sair</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="notifications-bar">
+        <button class="notif-button" id="notif-toggle" type="button" aria-expanded="false" aria-controls="notif-panel">
+            <span class="notif-icon" aria-hidden="true">&#128276;</span>
+            <span class="notif-badge" id="notif-count">0</span>
+        </button>
+        <div class="notif-panel" id="notif-panel" role="dialog" aria-label="Notificacoes" hidden>
+            <div class="notif-header">
+                <div>
+                    <h3>Notificacoes</h3>
+                    <p class="notif-sub" id="notif-sub">Voce tem 0 notificacoes novas</p>
+                </div>
+                <button class="notif-close" id="notif-close" type="button" aria-label="Fechar">&times;</button>
+            </div>
+            <div class="notif-tabs" role="tablist">
+                <button class="notif-tab active" type="button" data-tab="geral" role="tab">Geral</button>
+                <button class="notif-tab" type="button" data-tab="agenda" role="tab">Agenda</button>
+                <button class="notif-tab" type="button" data-tab="financeiro" role="tab">Financeiro</button>
+            </div>
+            <div class="notif-body" id="notif-body">
+                <div class="notif-empty">
+                    <div class="notif-empty-icon" aria-hidden="true">&#128269;</div>
+                    <h4>Voce nao tem notificacoes</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Adiciona a seção principal para os cards -->
+    <main class="home-main">
+        <div class="routine-toolbar" id="routine-toolbar">
+            <button class="actions-toggle only-plus" id="actions-toggle" type="button" aria-label="Acoes" aria-expanded="false" aria-controls="actions-menu">
+                <span class="actions-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="actions-menu" id="actions-menu" role="menu">
+                <a class="actions-item" href="agendamentos.html?novo=1" role="menuitem">
+                    <span class="actions-item-icon" aria-hidden="true">+</span>
+                    <span>Novo agendamento</span>
+                </a>
+                <a class="actions-item" href="cadastro-paciente.html" role="menuitem">
+                    <span class="actions-item-icon" aria-hidden="true">@</span>
+                    <span>Novo paciente</span>
+                </a>
+                <a class="actions-item" href="atestado.html" role="menuitem">
+                    <span class="actions-item-icon" aria-hidden="true">#</span>
+                    <span>Novo atestado</span>
+                </a>
+                <a class="actions-item" href="receita.html" role="menuitem">
+                    <span class="actions-item-icon" aria-hidden="true">%</span>
+                    <span>Nova receita</span>
+                </a>
+            </div>
+        </div>
+        <div class="home-layout">
+            <div class="card-container">
+            <a href="servicos.html" class="card-link">
+                <article class="card card-panel card--servicos" id="card-servicos">
+                    <div class="card-panel-head">
+                        <div class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M6 4h12a2 2 0 0 1 2 2v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a2 2 0 0 1 2-2Zm2 4h8v2H8V8Zm0 4h8v2H8v-2Z" fill="currentColor"/>
+                                <path d="M7 20v-3h10v3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Serviços</h2>
+                            <p class="card-sub">Procedimentos e atendimentos</p>
+                        </div>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <span>Procedimentos ativos</span>
+                            <strong id="home-servicos-total">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Ultimo atendimento</span>
+                            <strong id="home-servicos-ultimo">--</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Em andamento</span>
+                            <strong id="home-servicos-andamento">0</strong>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <span class="card-note">Atualizado agora</span>
+                        <span class="card-action">Abrir</span>
+                    </div>
+                </article>
+            </a>
+
+            <a href="arquivos.html" class="card-link">
+                <article class="card card-panel card--prontuario" id="card-prontuario">
+                    <div class="card-panel-head">
+                        <div class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M6 3h9l3 3v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M14 3v4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M8 11h8M8 15h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Prontuário eletrônico</h2>
+                            <p class="card-sub">Pacientes e registros</p>
+                        </div>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <span>Pacientes ativos</span>
+                            <strong id="home-prontuario-pacientes">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Ultimo atendimento</span>
+                            <strong id="home-prontuario-ultimo">--</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Atestados hoje</span>
+                            <strong id="home-prontuario-atestados">0</strong>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <span class="card-note" id="home-prontuario-updated">Atualizando...</span>
+                        <span class="card-action">Abrir</span>
+                    </div>
+                </article>
+            </a>
+
+            <div class="card-link">
+                <article class="card card-panel card--financeiro" id="card-gestao-controle" role="link" tabindex="0" aria-label="Abrir gestao">
+                    <div class="card-panel-head">
+                        <div class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M4 18V6m0 12h16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M8 14l3-3 3 2 4-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Gestão</h2>
+                            <p class="card-sub">Financeiro e operacional</p>
+                            <div class="home-gestao-tabs" role="tablist" aria-label="Visão do card gestão">
+                                <button class="home-gestao-tab" type="button" data-gestao-view="financeiro" role="tab" aria-selected="false">Financeiro</button>
+                                <button class="home-gestao-tab active" type="button" data-gestao-view="operacional" role="tab" aria-selected="true">Operacional</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <span id="home-gestao-metric-1-label">Itens em estoque</span>
+                            <strong id="home-finance-receita">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span id="home-gestao-metric-2-label">Estoque critico</span>
+                            <strong id="home-finance-pendentes">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span id="home-gestao-metric-3-label">Lab pendente</span>
+                            <strong id="home-finance-inadimplencia">0</strong>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <span class="card-note" id="home-gestao-card-note">Operacional</span>
+                        <span class="card-action">Abrir</span>
+                    </div>
+                </article>
+            </div>
+
+            <a href="agendamentos.html" class="card-link">
+                <article class="card card-panel card--agenda" id="card-agenda">
+                    <div class="card-panel-head">
+                        <div class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M7 3v3M17 3v3M4 8h16M6 11h4m-4 4h4m4-4h4m-4 4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <rect x="4" y="5" width="16" height="16" rx="3" ry="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Agenda</h2>
+                            <p class="card-sub">Seu dia hoje</p>
+                        </div>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <span>Proxima consulta</span>
+                            <strong id="home-agenda-proxima">--:--</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Confirmacoes</span>
+                            <strong id="home-agenda-confirmacoes">0%</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Alertas pendentes</span>
+                            <strong id="home-agenda-alertas">0</strong>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <span class="card-note">Atualizado agora</span>
+                        <span class="card-action">Abrir</span>
+                    </div>
+                </article>
+            </a>
+
+            <a href="planos.html" class="card-link">
+                <article class="card card-panel card--planos" id="card-planos">
+                    <div class="card-panel-head">
+                        <div class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M4 7h16v10H4z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M6 9h6m-6 4h4m8-6v2m0 4v2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Planos odontológicos</h2>
+                            <p class="card-sub">Carteira ativa</p>
+                        </div>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <span>Planos ativos</span>
+                            <strong id="home-planos-ativos">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Pendente total</span>
+                            <strong id="home-planos-vencendo">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Planos liberados</span>
+                            <strong id="home-planos-liberados">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Recebido no mes</span>
+                            <strong id="home-planos-recebido-mes">R$ 0,00</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Inadimplencia</span>
+                            <strong id="home-planos-inadimplencia">0</strong>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <span class="card-note" id="home-planos-note">Este mes</span>
+                        <span class="card-action">Ver planos</span>
+                    </div>
+                </article>
+            </a>
+
+            <a href="campanhas.html" class="card-link">
+                <article class="card card-panel card--campanhas" id="card-campanhas">
+                    <div class="card-panel-head">
+                        <div class="card-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                <path d="M4 10h10l6-4v12l-6-4H4z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                                <path d="M6 14v4m3-8v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="card-title">Campanhas</h2>
+                            <p class="card-sub">Comunicação ativa</p>
+                        </div>
+                    </div>
+                    <div class="card-metrics">
+                        <div class="card-metric">
+                            <span>Pacientes sugeridos</span>
+                            <strong id="home-campanhas-hoje">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Campanhas ativas</span>
+                            <strong id="home-campanhas-resposta">0</strong>
+                        </div>
+                        <div class="card-metric">
+                            <span>Contatos pendentes</span>
+                            <strong id="home-campanhas-proximo">--</strong>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <span class="card-note">Revisao manual</span>
+                        <span class="card-action">Abrir campanhas</span>
+                    </div>
+                </article>
+            </a>
+            </div>
+            <aside class="home-side">
+                <section class="agenda-mini" id="agenda-mini">
+                    <div class="agenda-mini-header">
+                        <div>
+                            <h3>Seu dia hoje</h3>
+                            <p class="agenda-mini-sub" id="agenda-mini-updated">Atualizando...</p>
+                        </div>
+                        <button class="agenda-mini-refresh" id="agenda-mini-refresh" type="button" aria-label="Atualizar">&#8635;</button>
+                    </div>
+                    <div class="agenda-mini-list" id="agenda-mini-list">
+                        <div class="agenda-mini-empty">Carregando agenda...</div>
+                    </div>
+                    <a class="agenda-mini-footer" href="agendamentos.html">Abrir agenda completa</a>
+                </section>
+
+                <section class="finance-mini" id="finance-mini">
+                    <div class="finance-mini-header">
+                        <div>
+                            <h3>Controle financeiro</h3>
+                            <p class="finance-mini-sub" id="finance-mini-sub">Hoje</p>
+                        </div>
+                        <div class="finance-mini-actions">
+                            <button class="finance-mini-refresh" id="finance-mini-refresh" type="button" aria-label="Atualizar">&#8635;</button>
+                            <button class="finance-mini-toggle" id="finance-visibility" type="button" aria-label="Mostrar ou ocultar valores">Ver</button>
+                            <a class="finance-mini-link" href="gestao.html">Ver tudo</a>
+                        </div>
+                    </div>
+                    <div class="finance-mini-filters">
+                        <button class="finance-filter active" type="button" data-finance-period="dia">Hoje</button>
+                        <button class="finance-filter" type="button" data-finance-period="semana">Semana</button>
+                        <button class="finance-filter" type="button" data-finance-period="mes">Mes</button>
+                    </div>
+                    <div class="finance-mini-body">
+                        <div class="finance-mini-chart" id="finance-chart" role="img" aria-label="Faturamento do dia"></div>
+                        <div class="finance-mini-summary">
+                            <div class="finance-mini-value">
+                                <span>Faturamento</span>
+                                <strong data-sensitive id="finance-receita">R$ 0,00</strong>
+                            </div>
+                            <div class="finance-mini-value">
+                                <span>Despesas</span>
+                                <strong data-sensitive id="finance-despesa">R$ 0,00</strong>
+                            </div>
+                            <div class="finance-mini-value total">
+                                <span>Saldo</span>
+                                <strong data-sensitive id="finance-saldo">R$ 0,00</strong>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="finance-mini-footer">
+                        <a class="finance-mini-action" href="gestao.html">Adicionar lancamento</a>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </main>
+
+    <!-- Seção Sobre Nós -->
+    <section id="sobre" class="about-section">
+        <div class="about-content">
+            <h2>Sobre a voithos</h2>
+            
+            
+        </div>
+    </section>
+
+    <!-- 5. Adiciona o rodapé com a classe correta -->
+    <footer class="footer-container" id="contato">
+        
+        <ul>
+            <li><a href="#">Termos de Serviço</a></li>
+            <li><a href="#">Política de Privacidade</a></li>
+        </ul>
+    </footer>
+
+    <!-- 6. Conecta o arquivo JavaScript ao HTML -->
+    <script src="script.js"></script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
