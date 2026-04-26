@@ -1722,10 +1722,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const renderTemplates = () => {
     if (!templatesPanel) return;
+    templatesPanel.hidden = false;
     const monthly = templatesData.monthly || null;
-    if (monthlyTemplateTitle) monthlyTemplateTitle.textContent = getTemplateTitle(monthly) || 'Template mensal indisponivel';
+    if (monthlyTemplateTitle) monthlyTemplateTitle.textContent = getTemplateTitle(monthly) || 'Campanha do mes';
     if (monthlyTemplateDesc) monthlyTemplateDesc.textContent = getTemplateDescription(monthly) || 'Sem template mensal no momento.';
-    if (monthlyTemplateCta) monthlyTemplateCta.textContent = monthly?.cta ? `Sugestao: ${monthly.cta}` : '';
+    if (monthlyTemplateCta) monthlyTemplateCta.textContent = monthly?.cta ? `Sugestao: ${monthly.cta}` : 'Pacientes elegiveis em revisao';
     if (monthlyTemplateCard) {
       monthlyTemplateCard.style.borderColor = monthly?.cor || '';
       monthlyTemplateCard.style.boxShadow = monthly?.cor ? `0 10px 24px ${monthly.cor}22` : '';
@@ -1741,10 +1742,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     quickTemplatesGrid.innerHTML = templates.map((template, idx) => `
       <article class="quick-template-item" style="--tpl-accent:${template.color || template.cor || '#2a9d8f'}">
-        <h4>${escapeHtml(getTemplateTitle(template) || 'Template')}</h4>
+        <div class="quick-template-top">
+          <h4>${escapeHtml(getTemplateTitle(template) || 'Template')}</h4>
+          <span class="priority-pill priority-${escapeHtml(String(getTemplatePriority(template)).toLowerCase())}">${escapeHtml(getTemplatePriority(template))}</span>
+        </div>
         <p>${escapeHtml(getTemplateDescription(template) || 'Sem descricao')}</p>
-        <small>${escapeHtml(template.category || '')} | Impacto ${escapeHtml(getTemplateImpact(template))}</small>
-        <button type="button" class="btn ghost" data-action="use-template" data-template-index="${idx}" ${canOperateCampaigns ? '' : 'disabled'}>Usar template</button>
+        <small>${escapeHtml(template.category || '')} • ${escapeHtml((templateAudienceCache.get(String(template.id || '').trim())?.eligibleCount ?? '--'))} pacientes elegiveis</small>
+        <button type="button" class="btn ghost" data-action="use-template" data-template-index="${idx}" ${canOperateCampaigns ? '' : 'disabled'}>Ver pacientes</button>
       </article>
     `).join('');
   };
@@ -2258,11 +2262,12 @@ document.addEventListener('DOMContentLoaded', () => {
       openGlobalsBtn.style.display = 'none';
     }
     if (activateMonthlyTemplateBtn) {
-      activateMonthlyTemplateBtn.style.display = 'none';
+      activateMonthlyTemplateBtn.style.display = canOperateCampaigns ? '' : 'none';
     }
-    if (templatesPanel) templatesPanel.hidden = true;
+    if (templatesPanel) templatesPanel.hidden = false;
     await loadCampaignPatients();
     await loadContactOpportunities();
+    await loadTemplates();
     setupPublicoField();
     renderTemplateFlow();
     render();
