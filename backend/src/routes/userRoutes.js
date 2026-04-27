@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const {
   listUsers,
   createUser,
@@ -10,7 +11,7 @@ const {
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 router.get('/', listUsers);
 router.post('/', createUser);
 router.patch('/:id', updateUser);

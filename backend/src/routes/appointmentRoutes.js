@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const { validate } = require('../middlewares/validate');
 const {
   createAppointment,
@@ -77,7 +78,7 @@ const validateUpdateAttendance = validate((req) => {
   return issues;
 });
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 
 router.get('/', listAppointments);
 router.get('/:id', getAppointmentById);

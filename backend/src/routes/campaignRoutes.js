@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const {
   listTemplates,
   listCampaigns,
@@ -18,7 +19,7 @@ const {
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 router.get('/templates', listTemplates);
 router.get('/', listCampaigns);
 router.put('/', replaceCampaigns);

@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const {
   listAccounts,
   createAccount,
@@ -24,7 +25,7 @@ const {
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 router.get('/accounts', listAccounts);
 router.post('/accounts', createAccount);
 router.get('/accounts/:accountId', getAccount);

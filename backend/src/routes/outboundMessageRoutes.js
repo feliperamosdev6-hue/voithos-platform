@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const {
   getOutboundMessageById,
   listOutboundMessages,
@@ -7,7 +8,7 @@ const {
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 
 router.get('/', listOutboundMessages);
 router.get('/:id', getOutboundMessageById);

@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const { authenticateOptional } = require('../middlewares/authenticateOptional');
 const {
   listClinics,
@@ -49,7 +50,7 @@ const importUpload = multer({
 });
 
 router.get('/', authenticateOptional, listClinics);
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 router.post('/bootstrap', createClinicBootstrap);
 router.get('/me/operational-settings', getMyOperationalSettings);
 router.patch('/me/operational-settings', updateMyOperationalSettings);

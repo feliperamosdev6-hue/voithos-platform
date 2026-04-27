@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const { validate } = require('../middlewares/validate');
 const {
   createPatient,
@@ -19,7 +20,7 @@ const validateCreatePatient = validate((req) => {
   return issues;
 });
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 
 router.get('/', listPatients);
 router.get('/:id', getPatientById);

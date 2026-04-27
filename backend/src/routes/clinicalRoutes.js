@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
+const { checkSubscription } = require('../middlewares/checkSubscription');
 const {
   getPatientClinicalRecord,
   listPatientProcedures,
@@ -17,7 +18,7 @@ const {
 
 const router = express.Router();
 
-router.use(authenticate);
+router.use(authenticate, checkSubscription);
 router.get('/patients/:patientId/clinical-record', getPatientClinicalRecord);
 router.get('/patients/:patientId/procedures', listPatientProcedures);
 router.post('/patients/:patientId/procedures', upsertPatientProcedure);
