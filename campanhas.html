@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oportunidades</title>
+  <title>Campanhas</title>
   <link rel="stylesheet" href="campanhas.css">
     <link rel="stylesheet" href="header.css">
 </head>
@@ -87,8 +87,8 @@
   <header class="page-header">
     <div class="header-left">
       <div class="title-group">
-        <h1>Oportunidades</h1>
-        <p class="subtitle">Pacientes sugeridos para contato manual</p>
+        <h1>Campanhas</h1>
+        <p class="subtitle">Escolha uma campanha, revise a mensagem e fale com cada paciente manualmente.</p>
       </div>
     </div>
     <div class="header-actions">
@@ -101,17 +101,17 @@
     <section class="campaign-health-panel" id="campaign-health-panel">
       <div class="health-header">
         <div>
-          <p class="muted">Relacionamento</p>
-          <h2>Oportunidades de contato</h2>
+          <p class="muted">Campanhas Voithos</p>
+          <h2>Escolha a melhor campanha para sua clinica</h2>
         </div>
         <button type="button" class="btn ghost" id="btn-logs-hoje" hidden>Ver logs de hoje</button>
       </div>
       <div class="health-grid">
         <article class="health-card"><span>Pacientes sugeridos</span><strong id="kpi-sent-today">--</strong></article>
-        <article class="health-card"><span>Pendencias de contato</span><strong id="kpi-failed-today">--</strong></article>
-        <article class="health-card"><span>Prioridade alta</span><strong id="kpi-delivery-rate">--</strong></article>
+        <article class="health-card"><span>Campanhas ativas</span><strong id="kpi-failed-today">--</strong></article>
+        <article class="health-card"><span>Templates visiveis</span><strong id="kpi-delivery-rate">--</strong></article>
         <article class="health-card"><span>Com WhatsApp</span><strong id="kpi-last-send">--</strong></article>
-        <article class="health-card"><span>Contato manual</span><strong id="kpi-next-send">--</strong></article>
+        <article class="health-card"><span>Contato</span><strong id="kpi-next-send">--</strong></article>
       </div>
     </section>
 
@@ -126,7 +126,7 @@
           <p class="muted">Estrategia Voithos</p>
           <h4>Estrategia da semana</h4>
           <p class="strategy-subtitle">Como organizar contatos manuais com seguranca.</p>
-          <p class="strategy-description">Assista esse video rapido com uma dica pratica para revisar pacientes sugeridos sem disparo automatico.</p>
+          <p class="strategy-description">Assista esse video rapido com uma dica pratica para escolher a campanha certa e abordar paciente por paciente.</p>
           <button type="button" class="btn ghost strategy-btn" id="btn-open-strategy-video">Assistir video</button>
         </section>
       </article>
@@ -138,7 +138,7 @@
           </div>
         </div>
         <div class="quick-templates-grid" id="quick-templates-grid">
-          <div class="empty-state">Carregando templates...</div>
+          <div class="empty-state">Carregando campanhas...</div>
         </div>
       </article>
     </section>
@@ -146,12 +146,12 @@
     <section class="card-list">
       <div class="list-header">
         <div>
-          <p class="muted">Visao geral</p>
-          <h2>Pacientes sugeridos</h2>
+          <p class="muted">Campanhas da clinica</p>
+          <h2>Campanhas em andamento</h2>
         </div>
       </div>
       <div id="campanhas-list" class="campanhas-list">
-        <div class="empty-state">Carregando oportunidades...</div>
+        <div class="empty-state">Carregando campanhas...</div>
       </div>
     </section>
   </main>
@@ -306,14 +306,14 @@
     <div class="modal template-flow-modal">
       <div class="modal-header">
         <div>
-          <p class="muted" id="template-flow-category">Campanha assistida</p>
+          <p class="muted" id="template-flow-category">Campanha estrategica</p>
           <h3 id="template-flow-title">Template</h3>
         </div>
         <button class="icon-button" id="close-template-flow-modal" aria-label="Fechar fluxo de template">&times;</button>
       </div>
       <div class="template-flow-body">
         <section class="template-flow-summary">
-          <p class="template-flow-description" id="template-flow-description">Escolha um template para carregar a audiencia sugerida.</p>
+          <p class="template-flow-description" id="template-flow-description">Revise a mensagem sugerida e os pacientes elegiveis da sua clinica.</p>
           <div class="template-flow-stats">
             <article class="template-stat">
               <span>Audiencia sugerida</span>
@@ -339,8 +339,8 @@
             </label>
             <label class="form-field full">
               <span class="field-label">
-                <span>Mensagem base</span>
-                <span class="optional">Pode ajustar antes do envio</span>
+                <span>Mensagem sugerida</span>
+                <span class="optional">Edite, copie e use manualmente</span>
               </span>
               <textarea id="template-flow-message" rows="5" placeholder="Mensagem base do template"></textarea>
               <div class="template-message-tools" id="template-flow-message-tools">
@@ -352,14 +352,14 @@
           </div>
           <div class="template-flow-toolbar">
             <div class="template-flow-search">
-              <label class="template-flow-search-label" for="template-flow-search">Buscar e selecionar pacientes sugeridos</label>
+              <label class="template-flow-search-label" for="template-flow-search">Buscar pacientes sugeridos</label>
               <div class="template-flow-search-control" id="template-flow-search-wrap">
                 <input type="search" id="template-flow-search" placeholder="Clique para ver e selecionar pacientes da clinica">
                 <div class="template-search-picker" id="template-flow-search-picker" hidden>
                   <div class="empty-state">Carregando pacientes sugeridos...</div>
                 </div>
               </div>
-              <p class="template-flow-search-helper">Clique no campo para abrir a lista sugerida do prontuario da clinica e marque paciente por paciente.</p>
+              <p class="template-flow-search-helper">Filtre a lista para revisar com rapidez quem faz sentido abordar agora.</p>
             </div>
             <button type="button" class="btn ghost" id="template-flow-select-visible">Selecionar visiveis</button>
             <button type="button" class="btn ghost" id="template-flow-select-all">Selecionar elegiveis</button>
@@ -401,23 +401,23 @@
               <p class="template-preview-copy" id="template-flow-message-guidance">Ajuste a copy para ficar clara e pessoal.</p>
             </article>
             <article class="template-preview-card">
-              <p class="muted">Revisao antes do envio</p>
-              <h4 id="template-flow-review-title">Quem vai receber agora</h4>
+              <p class="muted">Resumo da revisao</p>
+              <h4 id="template-flow-review-title">Pacientes sugeridos agora</h4>
               <p class="template-preview-copy" id="template-flow-review-count">Nenhum paciente selecionado.</p>
               <div class="template-review-list" id="template-flow-review-list"></div>
               <div class="template-review-blocked" id="template-flow-blocked-summary"></div>
             </article>
             <article class="template-preview-card">
-              <p class="muted">Agendamento</p>
-              <p class="template-preview-copy">O fluxo seguro liberado nesta etapa e o envio imediato. O agendamento fica visivel como proxima evolucao, sem criar automacao pesada agora.</p>
+              <p class="muted">Como usar</p>
+              <p class="template-preview-copy">Escolha a campanha, ajuste a mensagem e use os botoes do paciente para abrir o WhatsApp, copiar a mensagem ou abrir o prontuario.</p>
             </article>
           </aside>
         </section>
       </div>
       <div class="modal-actions template-flow-actions">
-        <button type="button" class="btn ghost" id="template-flow-cancel">Cancelar</button>
-        <button type="button" class="btn ghost" id="template-flow-schedule" disabled>Agendar em breve</button>
-        <button type="button" class="btn primary" id="template-flow-send" disabled>Envio desativado</button>
+        <button type="button" class="btn ghost" id="template-flow-cancel">Fechar</button>
+        <button type="button" class="btn ghost" id="template-flow-schedule" hidden>Agendar em breve</button>
+        <button type="button" class="btn primary" id="template-flow-send">Copiar mensagem base</button>
       </div>
     </div>
   </div>
@@ -541,4 +541,3 @@
   <script src="header.js"></script>
 </body>
 </html>
-

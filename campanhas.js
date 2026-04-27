@@ -22,9 +22,11 @@ const normalizeCampaign = (camp = {}) => ({
 });
 
 const emitCampaignsUpdated = (source = 'campanhas') => {
+  const clinicId = String(window.__VOITHOS_ACTIVE_CLINIC_ID__ || '').trim();
+  const storageKey = clinicId ? `voithos-campaigns-updated:${clinicId}` : 'voithos-campaigns-updated';
   try {
     window.dispatchEvent(new CustomEvent('campaigns-updated', { detail: { source } }));
-    localStorage.setItem('voithos-campaigns-updated', JSON.stringify({ at: Date.now(), source }));
+    localStorage.setItem(storageKey, JSON.stringify({ at: Date.now(), source, clinicId }));
   } catch (_) {
   }
 };
@@ -160,34 +162,42 @@ const getTodayValues = () => {
   };
 };
 
-const createCard = (camp, campaignResult = null) => {
+const getPriorityRank = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'high' || normalized === 'alta') return 3;
+  if (normalized === 'medium' || normalized === 'media') return 2;
+  return 1;
+};
+
+const createCard = (camp, audienceStats = null) => {
   const card = document.createElement('div');
   card.className = 'campanha-card campanha-clickable';
   if (camp.id) card.dataset.id = camp.id;
 
   const info = document.createElement('div');
   info.className = 'campanha-info';
-  const inicio = camp.inicio || '--';
-  const fim = camp.fim || '--';
-  const canal = camp.canal || 'Nao definido';
-
-  const periodoLabel = formatPeriodo(camp.periodo);
+  const metadataTemplate = camp?.metadata?.template || {};
+  const priority = String(metadataTemplate.priority || camp.templatePriority || 'MEDIUM').trim().toUpperCase();
+  const objective = String(
+    metadataTemplate.objective
+    || camp.templateObjective
+    || camp.descricao
+    || 'Campanha sugerida para contato manual.'
+  ).trim();
+  const eligibleLabel = audienceStats
+    ? `${Number(audienceStats.eligibleCount || 0)} pacientes elegiveis`
+    : 'Pacientes elegiveis em revisao';
 
   info.innerHTML = `
-    <h4>${camp.nome || 'Campanha'}</h4>
-    <p>${camp.descricao || 'Sem descricao'}</p>
-    <div class="campanha-extra">
-      <span><strong>Periodo:</strong> ${periodoLabel}</span>
-      <span><strong>Comeca:</strong> ${inicio}</span>
-      <span><strong>Termina:</strong> ${fim}</span>
-      <span><strong>Canal:</strong> ${canal}</span>
-      <span><strong>Segmento:</strong> ${SEGMENT_LABELS[camp.segmentKey] || SEGMENT_LABELS.all_active}</span>
+    <div class="campanha-title-row">
+      <h4>${camp.nome || 'Campanha'}</h4>
+      <span class="priority-pill priority-${escapeHtml(String(priority).toLowerCase())}">${escapeHtml(priority)}</span>
     </div>
-    <div class="campaign-result">
-      <span><strong>Ultimo disparo:</strong> ${campaignResult?.lastDispatch ? `${formatDateTimeBr(campaignResult.lastDispatch.createdAt)} | Audiencia ${campaignResult.lastDispatch.audienceCount ?? 0} | SENT ${campaignResult.lastDispatch.sentCount ?? 0} | FAILED ${campaignResult.lastDispatch.failedCount ?? 0}` : '--'}</span>
-      <span><strong>Agendamentos apos campanha (7 dias):</strong> ${campaignResult?.conversions7d ?? 0}</span>
-      <span><strong>Receita estimada (7 dias):</strong> ${campaignResult?.revenue7d != null ? formatCurrencyBr(campaignResult.revenue7d) : '--'}</span>
-      <span><strong>Total de conversoes no mes:</strong> ${campaignResult?.monthlyConversions7d ?? 0}</span>
+    <p>${escapeHtml(objective)}</p>
+    <div class="campanha-extra">
+      <span><strong>Segmento:</strong> ${SEGMENT_LABELS[camp.segmentKey] || SEGMENT_LABELS.all_active}</span>
+      <span><strong>Status:</strong> ${camp.status || 'ativa'}</span>
+      <span><strong>Sugeridos:</strong> ${eligibleLabel}</span>
     </div>
   `;
 
@@ -204,6 +214,14 @@ const createCard = (camp, campaignResult = null) => {
 
   meta.appendChild(tagPeriodo);
   meta.appendChild(tagPublico);
+
+  const viewButton = document.createElement('button');
+  viewButton.className = 'btn-small ghost';
+  viewButton.type = 'button';
+  viewButton.textContent = 'Ver pacientes';
+  viewButton.setAttribute('data-action', 'view-patients');
+  viewButton.setAttribute('data-id', camp.id || '');
+  meta.appendChild(viewButton);
 
   card.appendChild(info);
   card.appendChild(meta);
@@ -346,6 +364,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let templatesData = { monthly: null, annualTemplates: [] };
   let campaignResults = new Map();
   let campaignPatients = [];
+  let campaignPatientLookup = new Map();
+  let templateAudienceCache = new Map();
+  let campaignAudienceCache = new Map();
   let contactOpportunities = [];
   let selectedCampaignPatientIds = new Set();
   let editingCampaignId = null;
@@ -368,6 +389,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let templateSendResultState = {
     open: false,
     payload: null,
+  };
+
+  const getClinicStorageKey = (baseKey) => {
+    const clinicId = String(currentUser?.clinicId || '').trim();
+    return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
   };
 
   const ensureUser = async () => {
@@ -397,14 +423,23 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const updateHealthPanel = async () => {
-    const total = contactOpportunities.length;
-    const high = contactOpportunities.filter((item) => item.priority === 'alta').length;
-    const withWhatsapp = contactOpportunities.filter((item) => item.whatsappPhone).length;
-    if (kpiSentToday) kpiSentToday.textContent = String(total);
-    if (kpiFailedToday) kpiFailedToday.textContent = String(total);
-    if (kpiDeliveryRate) kpiDeliveryRate.textContent = String(high);
-    if (kpiLastSend) kpiLastSend.textContent = String(withWhatsapp);
-    if (kpiNextSend) kpiNextSend.textContent = 'Sem envio automatico';
+    const uniqueSuggestedPatients = new Set();
+    let withWhatsapp = 0;
+    templateAudienceCache.forEach((stats) => {
+      (Array.isArray(stats?.patientIds) ? stats.patientIds : []).forEach((patientId) => {
+        if (patientId) uniqueSuggestedPatients.add(String(patientId).trim());
+      });
+      withWhatsapp += Number(stats?.withPhoneCount || 0);
+    });
+    const activeCampaigns = campanhas.filter((camp) => {
+      const status = String(camp?.status || 'ativa').trim().toLowerCase();
+      return !['concluida', 'inativa'].includes(status);
+    }).length;
+    if (kpiSentToday) kpiSentToday.textContent = String(uniqueSuggestedPatients.size || 0);
+    if (kpiFailedToday) kpiFailedToday.textContent = String(activeCampaigns || 0);
+    if (kpiDeliveryRate) kpiDeliveryRate.textContent = String(templatesData.annualTemplates.length || 0);
+    if (kpiLastSend) kpiLastSend.textContent = String(withWhatsapp || 0);
+    if (kpiNextSend) kpiNextSend.textContent = 'Paciente a paciente';
   };
 
   const loadCampaignResults = async () => {
@@ -424,6 +459,44 @@ document.addEventListener('DOMContentLoaded', () => {
     campaignResults = map;
   };
 
+  const loadCampaignAudienceStats = async () => {
+    campaignAudienceCache = new Map();
+    if (!campanhasApi.resolveAudience || !Array.isArray(campanhas) || !campanhas.length) return;
+    const statsEntries = await Promise.allSettled(campanhas.map(async (camp) => {
+      const campaignId = String(camp?.id || '').trim();
+      if (!campaignId) return null;
+      const audience = await campanhasApi.resolveAudience({
+        campaignId,
+        segmentKey: String(camp?.segmentKey || 'all_active').trim().toLowerCase(),
+        filters: camp?.audienceFilters || {},
+      });
+      if (!audience || audience.unavailable) {
+        return [campaignId, {
+          eligibleCount: 0,
+          totalCount: 0,
+          blockedCount: 0,
+          patientIds: [],
+          withPhoneCount: 0,
+        }];
+      }
+      const members = Array.isArray(audience?.members) ? audience.members : [];
+      const eligibleMembers = members.filter((member) => member?.included === true);
+      return [campaignId, {
+        eligibleCount: Number(audience?.includedCount || eligibleMembers.length || 0),
+        totalCount: Number(audience?.total || members.length || 0),
+        blockedCount: Number(audience?.blockedCount || 0),
+        patientIds: eligibleMembers.map((member) => String(member?.patientId || '').trim()).filter(Boolean),
+        withPhoneCount: eligibleMembers.filter((member) => String(member?.phone || '').trim()).length,
+      }];
+    }));
+    statsEntries.forEach((entry) => {
+      if (entry.status !== 'fulfilled' || !Array.isArray(entry.value)) return;
+      const [campaignId, stats] = entry.value;
+      if (!campaignId) return;
+      campaignAudienceCache.set(campaignId, stats || null);
+    });
+  };
+
   const getCampaignPatientId = (patient = {}) => String(patient?.id || patient?.patientId || patient?.prontuario || '').trim();
 
   const getCampaignPatientLabel = (patient = {}) => String(
@@ -433,6 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadCampaignPatients = async () => {
     if (!patientsApi.list) {
       campaignPatients = [];
+      campaignPatientLookup = new Map();
       return;
     }
     try {
@@ -440,9 +514,11 @@ document.addEventListener('DOMContentLoaded', () => {
       campaignPatients = (Array.isArray(list) ? list : [])
         .filter((patient) => getCampaignPatientId(patient))
         .sort((left, right) => getCampaignPatientLabel(left).localeCompare(getCampaignPatientLabel(right), 'pt-BR'));
+      campaignPatientLookup = buildCampaignPatientLookup();
     } catch (err) {
       console.warn('Erro ao carregar pacientes para campanhas', err);
       campaignPatients = [];
+      campaignPatientLookup = new Map();
     }
   };
 
@@ -520,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
         filters: segment.key === 'appointment_window' ? { dateFrom: getTodayValues().date } : {},
       });
       if (payload?.unavailable) return [];
-      const patientMap = buildCampaignPatientLookup();
+      const patientMap = campaignPatientLookup;
       const members = Array.isArray(payload?.members)
         ? payload.members
         : (Array.isArray(payload?.patientIds) ? payload.patientIds.map((patientId) => ({ patientId })) : []);
@@ -717,6 +793,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getTemplateTitle = (template = {}) => template.title || template.nome || 'Template';
   const getTemplateDescription = (template = {}) => template.description || template.descricao || '';
+  const getTemplateObjective = (template = {}) => template.objective || template.templateObjective || template.descricao || '';
   const getTemplateBaseMessage = (template = {}) => template.messageTemplate || template.baseMessage || template.messages?.standard || '';
   const getTemplatePriority = (template = {}) => template.priority || '--';
   const getTemplateImpact = (template = {}) => template.impact || template.estimatedConversionImpact || '--';
@@ -729,6 +806,118 @@ document.addEventListener('DOMContentLoaded', () => {
     currentUser?.clinic?.razaoSocial,
     'Voithos',
   ].map((value) => String(value || '').trim()).find(Boolean) || 'Voithos';
+
+  const getCampaignTemplateModel = (camp = {}) => {
+    const metadataTemplate = camp?.metadata?.template || {};
+    return {
+      id: metadataTemplate.id || camp.templateId || camp.id || '',
+      title: metadataTemplate.title || camp.nome || 'Campanha',
+      description: metadataTemplate.description || camp.descricao || '',
+      objective: metadataTemplate.objective || camp.templateObjective || camp.descricao || '',
+      category: metadataTemplate.category || camp.templateCategory || 'RELATIONSHIP',
+      priority: metadataTemplate.priority || camp.templatePriority || 'MEDIUM',
+      impact: metadataTemplate.impact || camp.templateImpact || 'MEDIUM',
+      color: metadataTemplate.color || camp.cor || '#2a9d8f',
+      segmentType: metadataTemplate.segmentType || camp.segmentKey || 'all_active',
+      segmentSuggestion: metadataTemplate.segmentSuggestion || '',
+      internalCta: metadataTemplate.internalCta || '',
+      messageTemplate: metadataTemplate.messageTemplate || camp.messageTemplate || camp.descricao || '',
+      nome: metadataTemplate.title || camp.nome || 'Campanha',
+      descricao: metadataTemplate.description || camp.descricao || '',
+      cor: metadataTemplate.color || camp.cor || '#2a9d8f',
+      segmentKey: metadataTemplate.segmentType || camp.segmentKey || 'all_active',
+    };
+  };
+
+  const getCampaignSuggestedMessage = (camp = {}) => String(
+    camp?.metadata?.template?.messageTemplate
+    || camp?.messageTemplate
+    || camp?.descricao
+    || getTemplateBaseMessage(getCampaignTemplateModel(camp))
+    || ''
+  ).trim();
+
+  const normalizePhone = (value) => String(value || '').replace(/\D/g, '');
+  const buildWaLink = (phone, message = '') => {
+    const digits = normalizePhone(phone);
+    if (!digits) return '';
+    const text = String(message || '').trim();
+    return `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ''}`;
+  };
+
+  const buildTemplateMessageForMember = (template = {}, member = {}, draftOverride = '') => {
+    const draft = String(draftOverride || templateFlowMessage?.value || getTemplateBaseMessage(template) || '').trim();
+    return draft
+      .replace(/\{NOME_PACIENTE\}/g, member?.patientName || 'Paciente')
+      .replace(/\{NOME_CLINICA\}/g, getCurrentClinicDisplayName())
+      .trim();
+  };
+
+  const copyTextToClipboard = async (value) => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (_) {
+      const fallback = document.createElement('textarea');
+      fallback.value = text;
+      document.body.appendChild(fallback);
+      fallback.select();
+      document.execCommand('copy');
+      fallback.remove();
+      return true;
+    }
+  };
+
+  const getTemplateAudienceMemberById = (patientId) => {
+    const normalizedId = String(patientId || '').trim();
+    if (!normalizedId) return null;
+    const members = Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [];
+    return members.find((member) => getTemplateMemberId(member) === normalizedId) || null;
+  };
+
+  const openManualPatientProntuario = (member = {}) => {
+    const patientId = String(member?.patientId || '').trim();
+    const storedPatient = patientId ? campaignPatientLookup.get(patientId) || null : null;
+    const patient = storedPatient || {
+      id: patientId,
+      patientId,
+      prontuario: patientId,
+      nome: member?.patientName || '',
+      telefone: member?.phone || '',
+      clinicId: currentUser?.clinicId || '',
+    };
+    localStorage.setItem(getClinicStorageKey('prontuarioPatient'), JSON.stringify(patient));
+    window.location.href = 'prontuario.html';
+  };
+
+  const handleTemplatePatientAction = async (action, patientId) => {
+    const member = getTemplateAudienceMemberById(patientId);
+    if (!member) return;
+    const message = buildTemplateMessageForMember(templateFlowState.template || {}, member);
+    if (action === 'whatsapp') {
+      const url = buildWaLink(member?.phone, message);
+      if (!url) {
+        alert('Paciente sem telefone valido para WhatsApp.');
+        return;
+      }
+      if (appApi?.openExternalUrl) {
+        await appApi.openExternalUrl(url);
+        return;
+      }
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    if (action === 'copy') {
+      await copyTextToClipboard(message);
+      alert('Mensagem copiada para este paciente.');
+      return;
+    }
+    if (action === 'prontuario') {
+      openManualPatientProntuario(member);
+    }
+  };
 
   const getTemplatePreviewMember = (audience = null) => {
     const selectedMembers = getSelectedTemplateMembers();
@@ -1043,22 +1232,22 @@ document.addEventListener('DOMContentLoaded', () => {
       .filter((member) => isTemplateMemberBlocked(member));
 
     if (templateFlowState.loading) {
-      templateFlowReviewTitle.textContent = 'Quem vai receber agora';
+      templateFlowReviewTitle.textContent = 'Pacientes sugeridos agora';
       templateFlowReviewCount.textContent = 'Carregando revisao final...';
       templateFlowReviewList.innerHTML = '';
       templateFlowBlockedSummary.innerHTML = '';
       return;
     }
 
-    templateFlowReviewTitle.textContent = selectedMembers.length ? 'Quem vai receber agora' : 'Revise a audiencia final';
+    templateFlowReviewTitle.textContent = selectedMembers.length ? 'Pacientes sugeridos agora' : 'Revise a audiencia final';
 
     if (!selectedMembers.length) {
-      templateFlowReviewCount.textContent = 'Nenhum paciente selecionado para envio.';
-      templateFlowReviewList.innerHTML = '<p class="template-review-empty">Selecione pelo menos um paciente elegivel para preparar a campanha.</p>';
+      templateFlowReviewCount.textContent = 'Nenhum paciente elegivel nesta revisao.';
+      templateFlowReviewList.innerHTML = '<p class="template-review-empty">Use a busca e os filtros para revisar quem faz sentido abordar nesta campanha.</p>';
     } else {
       const displayedMembers = selectedMembers.slice(0, 6);
       const hiddenCount = selectedMembers.length - displayedMembers.length;
-      templateFlowReviewCount.textContent = `${selectedMembers.length} pacientes vao receber esta campanha agora.`;
+      templateFlowReviewCount.textContent = `${selectedMembers.length} pacientes sugeridos para contato manual.`;
       templateFlowReviewList.innerHTML = `
         ${displayedMembers.map((member) => `
           <article class="template-review-item">
@@ -1500,14 +1689,181 @@ document.addEventListener('DOMContentLoaded', () => {
     if (templateFlowClearBtn) templateFlowClearBtn.disabled = templateFlowState.loading || selectedCount === 0;
   };
 
+  const renderTemplateAudienceCards = () => {
+    if (!templateFlowAudienceList || !templateFlowListMeta) return;
+    if (templateFlowState.loading) {
+      templateFlowAudienceList.innerHTML = '<div class="empty-state">Carregando audiencia sugerida...</div>';
+      templateFlowListMeta.textContent = 'Carregando audiencia sugerida...';
+      return;
+    }
+    const audience = templateFlowState.audience;
+    const members = getVisibleTemplateMembers();
+    const selectedCount = templateFlowState.selectedPatientIds.size;
+    templateFlowListMeta.textContent = `${members.length} pacientes visiveis | ${selectedCount} selecionados`;
+    if (!audience || !Array.isArray(audience.members) || !audience.members.length) {
+      templateFlowAudienceList.innerHTML = '<div class="empty-state">Nenhum paciente sugerido para este template.</div>';
+      return;
+    }
+    if (!members.length) {
+      templateFlowAudienceList.innerHTML = '<div class="empty-state">Nenhum paciente encontrado com esse filtro.</div>';
+      return;
+    }
+    templateFlowAudienceList.innerHTML = members.map((member) => {
+      const patientId = getTemplateMemberId(member);
+      const selected = templateFlowState.selectedPatientIds.has(patientId);
+      const blocked = isTemplateMemberBlocked(member);
+      const issueGuidance = blocked ? getTemplateIssueGuidance({
+        reasonCode: member?.reasonCode,
+        reasonLabel: member?.reasonLabel,
+        status: member?.status,
+      }) : null;
+      const badges = Array.isArray(member?.badges) ? member.badges : [];
+      const lastAttendance = member?.lastAttendanceAt ? `Ultimo atendimento: ${formatDateTimeBr(member.lastAttendanceAt)}` : 'Sem atendimento registrado';
+      const dentist = member?.responsibleDentistName ? `Dentista: ${member.responsibleDentistName}` : 'Dentista: --';
+      const phoneLabel = blocked
+        ? (member?.reasonLabel || 'Bloqueado para envio')
+        : (member?.phone ? `WhatsApp: ${member.phone}` : 'Sem telefone valido');
+      const personalizedMessage = buildTemplateMessageForMember(templateFlowState.template || {}, member);
+      return `
+        <article
+          class="template-member ${selected ? 'is-selected' : ''} ${blocked ? 'is-blocked' : ''}"
+          data-template-member-id="${escapeHtml(patientId)}"
+          data-template-member-blocked="${blocked ? 'true' : 'false'}">
+          <div class="template-member-top">
+            <div class="template-member-heading">
+              <strong>${escapeHtml(member?.patientName || 'Paciente')}</strong>
+              <span class="template-member-reason">${escapeHtml(member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido')}</span>
+              <div class="template-member-meta">
+                <span>${escapeHtml(lastAttendance)}</span>
+                <span>${escapeHtml(dentist)}</span>
+                <span>${escapeHtml(phoneLabel)}</span>
+              </div>
+            </div>
+            <div class="template-member-status">
+              <strong>${blocked ? 'Bloqueado' : 'Elegivel'}</strong>
+              <span>${escapeHtml(member?.suggestionExplanation || 'Paciente elegivel para contato manual.')}</span>
+            </div>
+          </div>
+          <div class="template-member-badges">
+            ${badges.map((badge) => `<span class="template-badge ${escapeHtml((badge?.tone || 'neutral').toLowerCase())}">${escapeHtml(badge?.label || badge?.code || '')}</span>`).join('')}
+          </div>
+          ${blocked ? `
+            <div class="template-member-block-reason">
+              <span>${escapeHtml(member?.reasonLabel || 'Paciente bloqueado pelas regras de elegibilidade.')}</span>
+              <small class="template-member-block-help">${escapeHtml(`${issueGuidance?.action || 'Revisar'}: ${issueGuidance?.detail || 'Verifique o cadastro do paciente.'}`)}</small>
+            </div>
+          ` : ''}
+          <div class="template-member-actions">
+            <button type="button" class="btn-small ghost" data-template-patient-action="whatsapp" data-template-patient-id="${escapeHtml(patientId)}" ${member?.phone ? '' : 'disabled'}>Abrir WhatsApp</button>
+            <button type="button" class="btn-small ghost" data-template-patient-action="copy" data-template-patient-id="${escapeHtml(patientId)}">Copiar mensagem</button>
+            <button type="button" class="btn-small ghost" data-template-patient-action="prontuario" data-template-patient-id="${escapeHtml(patientId)}">Abrir prontuario</button>
+          </div>
+          <pre class="template-member-message">${escapeHtml(personalizedMessage || 'Mensagem indisponivel para este paciente.')}</pre>
+        </article>
+      `;
+    }).join('');
+  };
+
+  const renderTemplateSummaryPanel = () => {
+    const template = templateFlowState.template || {};
+    const audience = templateFlowState.audience;
+    const selectedCount = templateFlowState.selectedPatientIds.size;
+    const messageDiagnostics = analyzeTemplateMessageDraft(templateFlowMessage?.value || getTemplateBaseMessage(template) || '');
+    if (templateFlowCategory) templateFlowCategory.textContent = `${template.category || 'Campanha'} | Impacto ${getTemplateImpact(template)}`;
+    if (templateFlowTitle) templateFlowTitle.textContent = getTemplateTitle(template);
+    if (templateFlowDescription) templateFlowDescription.textContent = getTemplateDescription(template) || 'Campanha estrategica com contato manual por paciente.';
+    if (templateFlowTotal) templateFlowTotal.textContent = String(audience?.total || 0);
+    if (templateFlowEligible) templateFlowEligible.textContent = String(audience?.includedCount || 0);
+    if (templateFlowBlocked) templateFlowBlocked.textContent = String(audience?.blockedCount || 0);
+    if (templateFlowSelected) templateFlowSelected.textContent = String(selectedCount);
+    if (templateFlowObjective) templateFlowObjective.textContent = getTemplateObjective(template) || 'Objetivo do template';
+    if (templateFlowSegment) templateFlowSegment.textContent = `Segmento sugerido: ${SEGMENT_LABELS[getTemplateSegmentKey(template)] || 'Pacientes da clinica'}`;
+    if (templateFlowCta) templateFlowCta.textContent = template.internalCta ? `CTA interno: ${template.internalCta}` : 'CTA interno: abrir fluxo assistido';
+    if (templateFlowTags) {
+      templateFlowTags.innerHTML = [
+        template.priority ? `<span class="template-badge neutral">Prioridade ${escapeHtml(getTemplatePriority(template))}</span>` : '',
+        template.segmentSuggestion ? `<span class="template-badge info">${escapeHtml(template.segmentSuggestion)}</span>` : '',
+        audience?.resolutionMs ? `<span class="template-badge success">${escapeHtml(`${audience.resolutionMs} ms`)}</span>` : '',
+      ].filter(Boolean).join('');
+    }
+    if (templateFlowMessagePreview) {
+      templateFlowMessagePreview.textContent = buildTemplatePreviewText(template, audience);
+    }
+    if (templateFlowSendBtn) {
+      templateFlowSendBtn.disabled = messageDiagnostics.isEmpty;
+      templateFlowSendBtn.textContent = 'Copiar mensagem base';
+    }
+    if (templateFlowScheduleBtn) templateFlowScheduleBtn.hidden = true;
+    if (templateFlowSelectVisibleBtn) templateFlowSelectVisibleBtn.disabled = templateFlowState.loading || getVisibleEligibleTemplateMembers().length === 0;
+    if (templateFlowSelectAllBtn) templateFlowSelectAllBtn.disabled = templateFlowState.loading || !audience?.includedCount;
+    if (templateFlowClearBtn) templateFlowClearBtn.disabled = templateFlowState.loading || selectedCount === 0;
+  };
+
+  const renderTemplateReviewPanel = () => {
+    if (!templateFlowReviewTitle || !templateFlowReviewCount || !templateFlowReviewList || !templateFlowBlockedSummary) return;
+    const selectedMembers = getSelectedTemplateMembers();
+    const blockedMembers = (Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [])
+      .filter((member) => isTemplateMemberBlocked(member));
+
+    if (templateFlowState.loading) {
+      templateFlowReviewTitle.textContent = 'Pacientes sugeridos agora';
+      templateFlowReviewCount.textContent = 'Carregando revisao final...';
+      templateFlowReviewList.innerHTML = '';
+      templateFlowBlockedSummary.innerHTML = '';
+      return;
+    }
+
+    templateFlowReviewTitle.textContent = selectedMembers.length ? 'Pacientes sugeridos agora' : 'Revise a audiencia final';
+
+    if (!selectedMembers.length) {
+      templateFlowReviewCount.textContent = 'Nenhum paciente elegivel nesta revisao.';
+      templateFlowReviewList.innerHTML = '<p class="template-review-empty">Use a busca e os filtros para revisar quem faz sentido abordar nesta campanha.</p>';
+    } else {
+      const displayedMembers = selectedMembers.slice(0, 6);
+      const hiddenCount = selectedMembers.length - displayedMembers.length;
+      templateFlowReviewCount.textContent = `${selectedMembers.length} pacientes sugeridos para contato manual.`;
+      templateFlowReviewList.innerHTML = `
+        ${displayedMembers.map((member) => `
+          <article class="template-review-item">
+            <strong>${escapeHtml(member?.patientName || 'Paciente')}</strong>
+            <span>${escapeHtml(member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido')}</span>
+          </article>
+        `).join('')}
+        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes selecionados alem dos exibidos.</p>` : ''}
+      `;
+    }
+
+    if (!blockedMembers.length) {
+      templateFlowBlockedSummary.innerHTML = '<p class="template-review-ok">Nenhum bloqueio real detectado nesta audiencia.</p>';
+      return;
+    }
+
+    const blockedReasons = new Map();
+    blockedMembers.forEach((member) => {
+      const reason = String(member?.reasonLabel || 'Bloqueio de elegibilidade').trim() || 'Bloqueio de elegibilidade';
+      blockedReasons.set(reason, Number(blockedReasons.get(reason) || 0) + 1);
+    });
+
+    const topReasons = [...blockedReasons.entries()]
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 3);
+
+    templateFlowBlockedSummary.innerHTML = `
+      <p class="template-review-blocked-title">${blockedMembers.length} pacientes ficaram bloqueados.</p>
+      <div class="template-review-blocked-list">
+        ${topReasons.map(([reason, count]) => `<span class="template-badge danger">${escapeHtml(`${count} | ${reason}`)}</span>`).join('')}
+      </div>
+    `;
+  };
+
   const renderTemplateFlow = () => {
     renderTemplateFlowFilters();
-    renderTemplateSummary();
+    renderTemplateSummaryPanel();
     renderTemplateSearchPicker();
     renderTemplateSelectionHint();
-    renderTemplateAudienceList();
+    renderTemplateAudienceCards();
     renderTemplateMessageAssist();
-    renderTemplateReview();
+    renderTemplateReviewPanel();
     renderTemplateSendConfirmation();
   };
 
@@ -1529,7 +1885,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTemplateFlow();
   };
 
-  const loadTemplateAudience = async (template = {}, source = 'campanhas-template') => {
+  const loadTemplateAudience = async (template = {}, source = 'campanhas-template', options = {}) => {
     if (!campanhasApi.resolveAudience) {
       alert('Segmentacao central indisponivel.');
       return;
@@ -1543,8 +1899,10 @@ document.addEventListener('DOMContentLoaded', () => {
     logTemplateFlow('campaign_template_audience_requested', { templateId });
     try {
       const audience = await campanhasApi.resolveAudience({
+        campaignId: String(options?.campaignId || '').trim(),
         templateId,
         segmentKey: getTemplateSegmentKey(template),
+        filters: options?.filters || {},
       });
       if (audience?.unavailable) {
         templateFlowState.audience = audience;
@@ -1608,7 +1966,7 @@ document.addEventListener('DOMContentLoaded', () => {
       templateId: String(template?.id || '').trim(),
       source,
     });
-    await loadTemplateAudience(template, source);
+    await loadTemplateAudience(template, source, options);
     applyTemplateFlowOpenOptions(options);
   };
 
@@ -1724,9 +2082,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!templatesPanel) return;
     templatesPanel.hidden = false;
     const monthly = templatesData.monthly || null;
+    const monthlyStats = monthly ? templateAudienceCache.get(String(monthly.id || '').trim()) || null : null;
     if (monthlyTemplateTitle) monthlyTemplateTitle.textContent = getTemplateTitle(monthly) || 'Campanha do mes';
     if (monthlyTemplateDesc) monthlyTemplateDesc.textContent = getTemplateDescription(monthly) || 'Sem template mensal no momento.';
-    if (monthlyTemplateCta) monthlyTemplateCta.textContent = monthly?.cta ? `Sugestao: ${monthly.cta}` : 'Pacientes elegiveis em revisao';
+    if (monthlyTemplateCta) {
+      const monthlyCountLabel = monthlyStats ? `${Number(monthlyStats.eligibleCount || 0)} pacientes elegiveis` : 'Pacientes elegiveis em revisao';
+      monthlyTemplateCta.textContent = monthly?.cta ? `Sugestao: ${monthly.cta} | ${monthlyCountLabel}` : monthlyCountLabel;
+    }
     if (monthlyTemplateCard) {
       monthlyTemplateCard.style.borderColor = monthly?.cor || '';
       monthlyTemplateCard.style.boxShadow = monthly?.cor ? `0 10px 24px ${monthly.cor}22` : '';
@@ -1747,6 +2109,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="priority-pill priority-${escapeHtml(String(getTemplatePriority(template)).toLowerCase())}">${escapeHtml(getTemplatePriority(template))}</span>
         </div>
         <p>${escapeHtml(getTemplateDescription(template) || 'Sem descricao')}</p>
+        <p class="quick-template-objective">${escapeHtml(getTemplateObjective(template) || 'Campanha sugerida para contato manual.')}</p>
         <small>${escapeHtml(template.category || '')} • ${escapeHtml((templateAudienceCache.get(String(template.id || '').trim())?.eligibleCount ?? '--'))} pacientes elegiveis</small>
         <button type="button" class="btn ghost" data-action="use-template" data-template-index="${idx}" ${canOperateCampaigns ? '' : 'disabled'}>Ver pacientes</button>
       </article>
@@ -1761,69 +2124,96 @@ document.addEventListener('DOMContentLoaded', () => {
       templatesData = { monthly, annualTemplates };
     };
 
+    templateAudienceCache = new Map();
     if (!campanhasApi.templates) {
       applyFallbackTemplates();
       renderTemplates();
-      return;
-    }
-    try {
-      const data = await campanhasApi.templates();
-      const annualTemplatesFromApi = Array.isArray(data?.annualTemplates)
-        ? data.annualTemplates
-        : (Array.isArray(data?.quickTemplates) ? data.quickTemplates : []);
-      const annualTemplates = Array.isArray(annualTemplatesFromApi) ? annualTemplatesFromApi.filter(Boolean) : [];
-      const monthly = data?.monthly || annualTemplates.find((item) => Number(item?.month) === currentMonth) || null;
-      templatesData = {
-        monthly,
-        annualTemplates,
-      };
-      if (!templatesData.monthly || !templatesData.annualTemplates.length) {
+    } else {
+      try {
+        const data = await campanhasApi.templates();
+        const annualTemplatesFromApi = Array.isArray(data?.annualTemplates)
+          ? data.annualTemplates
+          : (Array.isArray(data?.quickTemplates) ? data.quickTemplates : []);
+        const annualTemplates = Array.isArray(annualTemplatesFromApi) ? annualTemplatesFromApi.filter(Boolean) : [];
+        const monthly = data?.monthly || annualTemplates.find((item) => Number(item?.month) === currentMonth) || null;
+        templatesData = {
+          monthly,
+          annualTemplates,
+        };
+        if (!templatesData.monthly || !templatesData.annualTemplates.length) {
+          applyFallbackTemplates();
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar templates de campanha', err);
         applyFallbackTemplates();
       }
-    } catch (err) {
-      console.warn('Erro ao carregar templates de campanha', err);
-      applyFallbackTemplates();
     }
+    renderTemplates();
+
+    if (!campanhasApi.resolveAudience) return;
+    const templatesToResolve = Array.from(new Map(
+      (Array.isArray(templatesData.annualTemplates) ? templatesData.annualTemplates : [])
+        .filter((template) => String(template?.id || '').trim())
+        .map((template) => [String(template.id || '').trim(), template]),
+    ).values());
+    const statsEntries = await Promise.allSettled(templatesToResolve.map(async (template) => {
+      const audience = await campanhasApi.resolveAudience({
+        templateId: String(template?.id || '').trim(),
+        segmentKey: getTemplateSegmentKey(template),
+      });
+      if (!audience || audience.unavailable) {
+        return [String(template?.id || '').trim(), {
+          eligibleCount: 0,
+          totalCount: 0,
+          blockedCount: 0,
+          patientIds: [],
+          withPhoneCount: 0,
+        }];
+      }
+      const members = Array.isArray(audience?.members) ? audience.members : [];
+      const eligibleMembers = members.filter((member) => member?.included === true);
+      return [String(template?.id || '').trim(), {
+        eligibleCount: Number(audience?.includedCount || eligibleMembers.length || 0),
+        totalCount: Number(audience?.total || members.length || 0),
+        blockedCount: Number(audience?.blockedCount || 0),
+        patientIds: eligibleMembers.map((member) => String(member?.patientId || '').trim()).filter(Boolean),
+        withPhoneCount: eligibleMembers.filter((member) => String(member?.phone || '').trim()).length,
+      }];
+    }));
+    statsEntries.forEach((entry) => {
+      if (entry.status !== 'fulfilled' || !Array.isArray(entry.value)) return;
+      const [templateId, stats] = entry.value;
+      if (!templateId) return;
+      templateAudienceCache.set(templateId, stats || null);
+    });
     renderTemplates();
   };
 
   const reloadCampaignsData = async () => {
     await loadCampaignPatients();
-    await loadContactOpportunities();
+    campanhas = await loadCampaigns();
+    await loadCampaignAudienceStats();
+    await loadTemplates();
     render();
     await updateHealthPanel();
   };
 
   const render = () => {
     listEl.innerHTML = '';
-    if (!contactOpportunities.length) {
+    const visibleCampaigns = (Array.isArray(campanhas) ? campanhas : []).filter((camp) => {
+      const status = String(camp?.status || 'ativa').trim().toLowerCase();
+      return !['concluida', 'inativa'].includes(status);
+    });
+    if (!visibleCampaigns.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.textContent = 'Nenhuma oportunidade de contato encontrada agora.';
+      empty.textContent = 'Nenhuma campanha ativa ainda. Escolha uma campanha da biblioteca acima para revisar seus pacientes.';
       listEl.appendChild(empty);
       return;
     }
-    contactOpportunities.forEach((opportunity) => {
-      const card = document.createElement('article');
-      card.className = `opportunity-card priority-${opportunity.priority}`;
-      card.dataset.id = opportunity.id;
-      card.innerHTML = `
-        <div class="opportunity-main">
-          <div class="opportunity-title-row">
-            <h4>${escapeHtml(opportunity.patientName)}</h4>
-            <span class="opportunity-priority">${escapeHtml(opportunity.priority)}</span>
-          </div>
-          <p>${escapeHtml(opportunity.reason)}</p>
-          <div class="opportunity-meta">
-            <span>Origem: ${escapeHtml(opportunity.source)}</span>
-            <span>${escapeHtml(opportunity.detail || 'Contato manual sugerido')}</span>
-          </div>
-        </div>
-        <div class="opportunity-actions">
-          <button type="button" class="btn primary" data-action="contact-opportunity" data-id="${escapeHtml(opportunity.id)}">Entrar em contato</button>
-        </div>
-      `;
-      listEl.appendChild(card);
+    visibleCampaigns.forEach((camp) => {
+      const stats = campaignAudienceCache.get(String(camp?.id || '').trim()) || null;
+      listEl.appendChild(createCard(camp, stats));
     });
   };
 
@@ -2111,7 +2501,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const dispatchCampaignWhatsApp = async (camp) => {
-    alert('Disparo em massa de campanhas foi desativado. Use Entrar em contato nas oportunidades.');
+    alert('Disparo em massa de campanhas foi desativado. Revise os pacientes manualmente.');
     return;
     const canSendCampaign = false;
     if (!camp || !canSendCampaign) {
@@ -2148,7 +2538,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const performTemplateSendNow = async (payload) => {
-    alert('Disparo em massa de campanhas foi desativado. Use Entrar em contato nas oportunidades.');
+    alert('Disparo em massa de campanhas foi desativado. Use as acoes manuais por paciente.');
     return;
     const canSendCampaign = false;
     if (!canSendCampaign) {
@@ -2240,19 +2630,19 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const handleTemplateSendNow = async () => {
-    alert('Disparo em massa de campanhas foi desativado. Use Entrar em contato nas oportunidades.');
-    return;
-    if (templateFlowState.loading || templateFlowState.sending) return;
-    const payload = buildTemplateSendConfirmationPayload();
-    if (payload?.error) {
-      alert(payload.error);
+    if (templateFlowState.loading) return;
+    const draftMessage = String(templateFlowMessage?.value || '').trim();
+    if (!draftMessage) {
+      alert('Escreva ou ajuste a mensagem antes de copiar.');
       return;
     }
-    openTemplateSendConfirmModal(payload);
+    await copyTextToClipboard(draftMessage);
+    alert('Mensagem base copiada. Agora escolha o paciente e abra o WhatsApp manualmente.');
   };
 
   const init = async () => {
     currentUser = await ensureUser();
+    window.__VOITHOS_ACTIVE_CLINIC_ID__ = String(currentUser?.clinicId || '').trim();
     canManage = CAMPAIGN_MANAGE_ROLES.has(String(currentUser?.tipo || '').trim().toLowerCase());
     canOperateCampaigns = CAMPAIGN_OPERATE_ROLES.has(String(currentUser?.tipo || '').trim().toLowerCase());
     if (openBtn) {
@@ -2266,7 +2656,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (templatesPanel) templatesPanel.hidden = false;
     await loadCampaignPatients();
-    await loadContactOpportunities();
+    campanhas = await loadCampaigns();
+    await loadCampaignAudienceStats();
     await loadTemplates();
     setupPublicoField();
     renderTemplateFlow();
@@ -2319,22 +2710,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const action = actionButton.dataset.action;
       const id = actionButton.dataset.id || '';
       if (!action || !id) return;
-      if (action === 'contact-opportunity') {
-        const opportunity = contactOpportunities.find((item) => item.id === id);
-        if (!opportunity) return;
-        const message = buildOpportunityMessage(opportunity);
-        if (opportunity.whatsappPhone) {
-          window.open(`https://wa.me/${encodeURIComponent(opportunity.whatsappPhone)}?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
-          return;
-        }
-        const patientUrl = opportunity.patientId
-          ? `editar-paciente.html?id=${encodeURIComponent(opportunity.patientId)}`
-          : 'arquivos.html';
-        window.location.href = patientUrl;
-        return;
-      }
       const camp = campanhas.find((c) => c.id === id);
       if (!camp) return;
+      if (action === 'view-patients') {
+        const template = getCampaignTemplateModel(camp);
+        await openTemplateFlowModal(template, 'campanhas-card-view', {
+          campaignId: camp.id || '',
+          campaignName: camp.nome || getTemplateTitle(template),
+          message: getCampaignSuggestedMessage(camp),
+          filters: camp?.audienceFilters || {},
+        });
+        return;
+      }
       if (action === 'edit') {
         if (!canManage || camp.somenteLeitura) return;
         openModalWith(camp);
@@ -2358,10 +2745,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const card = target instanceof HTMLElement ? target.closest('.campanha-card') : null;
     if (!card) return;
     const id = card.dataset.id || '';
-    if (!id || !canManage) return;
+    if (!id || !canOperateCampaigns) return;
     const camp = campanhas.find((c) => c.id === id);
-    if (!camp || camp.somenteLeitura) return;
-    openModalWith(camp);
+    if (!camp) return;
+    const template = getCampaignTemplateModel(camp);
+    await openTemplateFlowModal(template, 'campanhas-card-click', {
+      campaignId: camp.id || '',
+      campaignName: camp.nome || getTemplateTitle(template),
+      message: getCampaignSuggestedMessage(camp),
+      filters: camp?.audienceFilters || {},
+    });
   });
   quickTemplatesGrid?.addEventListener('click', (ev) => {
     const btn = ev.target instanceof HTMLElement ? ev.target.closest('[data-action="use-template"]') : null;
@@ -2482,7 +2875,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   templateFlowAudienceList?.addEventListener('click', (ev) => {
     const target = ev.target instanceof HTMLElement ? ev.target : null;
-    if (!target || target.closest('input, button, a, textarea, label')) return;
+    if (!target) return;
+    const patientActionButton = target.closest('[data-template-patient-action]');
+    if (patientActionButton instanceof HTMLElement) {
+      const action = patientActionButton.dataset.templatePatientAction || '';
+      const patientId = patientActionButton.dataset.templatePatientId || '';
+      handleTemplatePatientAction(action, patientId);
+      return;
+    }
+    if (target.closest('input, button, a, textarea, label, pre')) return;
     const memberCard = target.closest('[data-template-member-id]');
     if (!(memberCard instanceof HTMLElement)) return;
     if (memberCard.dataset.templateMemberBlocked === 'true') return;
@@ -2519,7 +2920,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   window.addEventListener('storage', (event) => {
-    if (event.key === 'voithos-campaigns-updated') {
+    const scopedKey = String(window.__VOITHOS_ACTIVE_CLINIC_ID__ || '').trim()
+      ? `voithos-campaigns-updated:${String(window.__VOITHOS_ACTIVE_CLINIC_ID__ || '').trim()}`
+      : 'voithos-campaigns-updated';
+    if (event.key === 'voithos-campaigns-updated' || event.key === scopedKey) {
       reloadCampaignsData();
     }
   });
