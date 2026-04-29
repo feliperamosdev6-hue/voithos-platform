@@ -28,6 +28,21 @@ const readValue = (key, fallback = '') => {
   return fallback;
 };
 
+const parseBoolean = (value, fallback = false) => {
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
+
+const parseOptionalDate = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString();
+};
+
 const normalizeBaseUrl = (value, fallback = '') => {
   const raw = String(value || fallback || '').trim().replace(/\/+$/, '');
   if (!raw) return '';
@@ -47,6 +62,9 @@ const appEnv = {
   planMessageSchedulerIntervalMinutes: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_INTERVAL_MINUTES', '60')) || 60),
   planMessageSchedulerLimitPerClinic: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_LIMIT_PER_CLINIC', '200')) || 200),
   planMessageDueSoonDays: Math.max(1, Number(readValue('PLAN_MESSAGE_DUE_SOON_DAYS', '3')) || 3),
+  subscriptionEnforcementEnabled: parseBoolean(readValue('SUBSCRIPTION_ENFORCEMENT_ENABLED', 'false'), false),
+  subscriptionCommercialActivationAt: parseOptionalDate(readValue('SUBSCRIPTION_COMMERCIAL_ACTIVATION_AT', '')),
+  subscriptionLegacyEndDate: parseOptionalDate(readValue('SUBSCRIPTION_LEGACY_END_DATE', '')),
   appointmentActionLinksEnabled: String(readValue('APPOINTMENT_ACTION_LINKS_ENABLED', 'false')).trim().toLowerCase() === 'true',
   appointmentActionBaseUrl: normalizeBaseUrl(readValue('APPOINTMENT_ACTION_BASE_URL', readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000'))),
   appointmentActionTokenTtlHours: Math.max(1, Number(readValue('APPOINTMENT_ACTION_TOKEN_TTL_HOURS', '36')) || 36),

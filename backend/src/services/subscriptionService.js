@@ -1,32 +1,46 @@
 const { AppError } = require('../errors/AppError');
+const { appEnv } = require('../config/appEnv');
+const { clinicRepository } = require('../repositories/clinicRepository');
 const { subscriptionRepository } = require('../repositories/subscriptionRepository');
 
 const GRACE_PERIOD_DAYS = 3;
+const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
+const ENFORCEMENT_DISABLED_STATUS = 'ENFORCEMENT_DISABLED';
 
 const SUBSCRIPTION_PLANS = Object.freeze({
+  LEGACY: Object.freeze({
+    planType: 'LEGACY',
+    amount: 0,
+    durationDays: null,
+    public: false,
+  }),
   MONTHLY: Object.freeze({
     planType: 'MONTHLY',
     amount: 94.9,
     durationDays: 30,
+    public: true,
   }),
   QUARTERLY: Object.freeze({
     planType: 'QUARTERLY',
     amount: 269.9,
     durationDays: 90,
+    public: true,
   }),
   SEMIANNUAL: Object.freeze({
     planType: 'SEMIANNUAL',
     amount: 499.9,
     durationDays: 180,
+    public: true,
   }),
   ANNUAL: Object.freeze({
     planType: 'ANNUAL',
     amount: 899.9,
     durationDays: 365,
+    public: true,
   }),
 });
 
-const ACCESS_ALLOWED_STATUSES = new Set(['ACTIVE', 'GRACE_PERIOD']);
+const ACCESS_ALLOWED_STATUSES = new Set(['ACTIVE', 'GRACE_PERIOD', LEGACY_ACCESS_STATUS]);
 const VALID_CONFIRM_PAYMENT_STATUSES = new Set(['PENDING', 'PAID']);
 
 const normalizeText = (value) => String(value || '').trim();
@@ -42,7 +56,7 @@ const normalizePlanType = (value) => {
     throw new AppError(
       400,
       'VALIDATION_ERROR',
-      `planType must be one of: ${Object.keys(SUBSCRIPTION_PLANS).join(', ')}.`
+      `planType must be one of: ${Object.keys(SUBSCRIPTION_PLANS).filter((planType) => SUBSCRIPTION_PLANS[planType].public).join(', ')}.`
     );
   }
   return normalized;
@@ -57,6 +71,13 @@ const normalizeOptionalDate = (value, fieldName) => {
   return parsed;
 };
 
+const parseEnvDate = (value) => {
+  const raw = normalizeText(value);
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const addDays = (date, days) => {
   const next = new Date(date);
   next.setDate(next.getDate() + Number(days || 0));
@@ -66,9 +87,29 @@ const addDays = (date, days) => {
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
 const getPlanDefinition = (planType) => SUBSCRIPTION_PLANS[normalizePlanType(planType)];
+const getPublicPlanCatalog = () => Object.values(SUBSCRIPTION_PLANS).filter((plan) => plan.public === true);
+
+const isLegacyClinicByCutoff = (clinic) => {
+  const activationAt = parseEnvDate(appEnv.subscriptionCommercialActivationAt);
+  if (!activationAt) return true;
+
+  const createdAt = clinic?.createdAt ? new Date(clinic.createdAt) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) return true;
+
+  return createdAt.getTime() < activationAt.getTime();
+};
+
+const logLegacyAccess = (clinic, reason) => {
+  console.warn('[subscription][legacy-access]', {
+    clinicId: clinic?.id || '',
+    clinicCreatedAt: clinic?.createdAt || null,
+    commercialActivationAt: appEnv.subscriptionCommercialActivationAt || '',
+    reason,
+  });
+};
 
 const deriveSubscriptionStatus = (subscription, now = new Date()) => {
-  if (!subscription) return 'PENDING_PAYMENT';
+  if (!subscription) return LEGACY_ACCESS_STATUS;
 
   const currentStatus = normalizeText(subscription.status).toUpperCase();
   if (currentStatus === 'CANCELED') {
@@ -85,6 +126,10 @@ const deriveSubscriptionStatus = (subscription, now = new Date()) => {
   const endTime = subscription.endDate ? new Date(subscription.endDate).getTime() : 0;
   const graceTime = subscription.graceUntil ? new Date(subscription.graceUntil).getTime() : 0;
   const nowTime = now.getTime();
+
+  if (currentStatus === 'ACTIVE' && !endTime && !graceTime) {
+    return 'ACTIVE';
+  }
 
   if (!endTime || !graceTime) {
     return currentStatus || 'PENDING_PAYMENT';
@@ -115,10 +160,15 @@ const buildOverview = (subscription, now = new Date(), options = {}) => {
   return {
     subscription,
     effectiveStatus,
-    accessAllowed: ACCESS_ALLOWED_STATUSES.has(effectiveStatus) || options.bypassed === true,
+    accessAllowed: typeof options.accessAllowed === 'boolean'
+      ? options.accessAllowed
+      : ACCESS_ALLOWED_STATUSES.has(effectiveStatus) || options.bypassed === true,
     bypassed: options.bypassed === true,
-    warning: effectiveStatus === 'GRACE_PERIOD' ? buildGraceMessage(subscription, now) : '',
-    plans: Object.values(SUBSCRIPTION_PLANS),
+    enforcementEnabled: appEnv.subscriptionEnforcementEnabled === true,
+    legacyAccess: effectiveStatus === LEGACY_ACCESS_STATUS,
+    warning: options.warning || (effectiveStatus === 'GRACE_PERIOD' ? buildGraceMessage(subscription, now) : ''),
+    technicalNotice: options.technicalNotice || '',
+    plans: getPublicPlanCatalog(),
   };
 };
 
@@ -153,20 +203,60 @@ const resolveRenewalStartDate = (subscription, paidAt) => {
 };
 
 const subscriptionService = {
-  getPlanCatalog: () => Object.values(SUBSCRIPTION_PLANS),
+  getPlanCatalog: () => getPublicPlanCatalog(),
+
+  isEnforcementEnabled: () => appEnv.subscriptionEnforcementEnabled === true,
 
   getMySubscription: async ({ clinicId, role }) => {
     if (normalizeText(role).toUpperCase() === 'SUPER_ADMIN') {
-      return buildOverview(null, new Date(), { bypassed: true, effectiveStatus: 'ACTIVE' });
+      return buildOverview(null, new Date(), {
+        bypassed: true,
+        effectiveStatus: 'ACTIVE',
+        accessAllowed: true,
+      });
     }
 
     if (!normalizeText(clinicId)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
     }
 
+    const now = new Date();
     const subscription = await subscriptionRepository.findByClinicId({ clinicId });
-    const synced = await syncLifecycle(subscription, new Date());
-    return buildOverview(synced, new Date());
+
+    if (!subscription) {
+      const clinic = await clinicRepository.findById(clinicId);
+      const reason = isLegacyClinicByCutoff(clinic) ? 'legacy_clinic_without_subscription' : 'no_subscription_record';
+      logLegacyAccess(clinic || { id: clinicId }, reason);
+
+      return buildOverview(null, now, {
+        effectiveStatus: LEGACY_ACCESS_STATUS,
+        accessAllowed: true,
+        warning: appEnv.subscriptionEnforcementEnabled === true
+          ? 'Acesso legado liberado por compatibilidade ate a ativacao comercial.'
+          : 'Cobranca desativada por feature flag.',
+        technicalNotice: reason,
+      });
+    }
+
+    const synced = await syncLifecycle(subscription, now);
+    return buildOverview(synced, now);
+  },
+
+  getAccessOverview: async ({ clinicId, role }) => {
+    const overview = await subscriptionService.getMySubscription({ clinicId, role });
+    if (appEnv.subscriptionEnforcementEnabled !== true) {
+      return {
+        ...overview,
+        effectiveStatus: overview.effectiveStatus === LEGACY_ACCESS_STATUS
+          ? LEGACY_ACCESS_STATUS
+          : ENFORCEMENT_DISABLED_STATUS,
+        accessAllowed: true,
+        warning: overview.warning || 'Cobranca desativada por feature flag.',
+        technicalNotice: overview.technicalNotice || 'subscription_enforcement_disabled',
+      };
+    }
+
+    return overview;
   },
 
   createSubscription: async ({ clinicId, planType, provider, externalPaymentId, paymentLink }) => {
@@ -223,8 +313,8 @@ const subscriptionService = {
     const currentSubscription = await syncLifecycle(payment.subscription, confirmedAt);
     const plan = getPlanDefinition(currentSubscription.planType);
     const startDate = resolveRenewalStartDate(currentSubscription, confirmedAt);
-    const endDate = addDays(startDate, plan.durationDays);
-    const graceUntil = addDays(endDate, GRACE_PERIOD_DAYS);
+    const endDate = Number(plan.durationDays) > 0 ? addDays(startDate, plan.durationDays) : null;
+    const graceUntil = endDate ? addDays(endDate, GRACE_PERIOD_DAYS) : null;
 
     const subscription = await subscriptionRepository.confirmPaymentAndActivateSubscription({
       clinicId,
@@ -251,7 +341,8 @@ const subscriptionService = {
     }
 
     const synced = await syncLifecycle(existing, new Date());
-    const nextPlanType = planType ? normalizePlanType(planType) : synced.planType;
+    const fallbackPlanType = synced.planType === 'LEGACY' ? 'MONTHLY' : synced.planType;
+    const nextPlanType = planType ? normalizePlanType(planType) : fallbackPlanType;
     const plan = getPlanDefinition(nextPlanType);
     const resetStatusToPending = !ACCESS_ALLOWED_STATUSES.has(normalizeText(synced.status).toUpperCase());
 
@@ -269,7 +360,7 @@ const subscriptionService = {
   },
 
   ensureAccess: async ({ clinicId, role }) => {
-    const overview = await subscriptionService.getMySubscription({ clinicId, role });
+    const overview = await subscriptionService.getAccessOverview({ clinicId, role });
     if (overview.accessAllowed) {
       return overview;
     }
@@ -296,7 +387,9 @@ const subscriptionService = {
 };
 
 module.exports = {
+  ENFORCEMENT_DISABLED_STATUS,
   GRACE_PERIOD_DAYS,
+  LEGACY_ACCESS_STATUS,
   SUBSCRIPTION_PLANS,
   subscriptionService,
 };

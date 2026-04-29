@@ -168,6 +168,7 @@ enum LaboratoryOrderStatus {
 }
 
 enum SubscriptionPlanType {
+  LEGACY
   MONTHLY
   QUARTERLY
   SEMIANNUAL

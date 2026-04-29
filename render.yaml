@@ -50,6 +50,8 @@ services:
         value: "true"
       - key: APPOINTMENT_REMINDER_SCHEDULER_ENABLED
         value: "true"
+      - key: SUBSCRIPTION_ENFORCEMENT_ENABLED
+        value: "false"
 
   - type: web
     name: voithos-whatsapp-ng
