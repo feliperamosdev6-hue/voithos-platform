@@ -246,11 +246,16 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Acesse sua conta para continuar');
   };
 
-  const goToVerification = (email, message, verificationMeta = {}) => {
+  const goToVerification = (email, message, verificationMeta = {}, legacyVerificationMeta = null) => {
+    const resolvedVerificationMeta = verificationMeta && typeof verificationMeta === 'object' && !Array.isArray(verificationMeta)
+      ? verificationMeta
+      : (legacyVerificationMeta && typeof legacyVerificationMeta === 'object' && !Array.isArray(legacyVerificationMeta)
+        ? legacyVerificationMeta
+        : {});
     stopAllTimers();
     setVerificationTarget(email || verificationFlowState.email || '');
-    verificationFlowState.resendAvailableAt = String(verificationMeta?.resendAvailableAt || '');
-    verificationFlowState.sendCount = Number(verificationMeta?.sendCount || 0);
+    verificationFlowState.resendAvailableAt = String(resolvedVerificationMeta?.resendAvailableAt || '');
+    verificationFlowState.sendCount = Number(resolvedVerificationMeta?.sendCount || 0);
     showScreen('verification');
     updateSubtitle('Confirme seu e-mail');
     startVerificationTimer(verificationFlowState.resendAvailableAt);
@@ -297,21 +302,13 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Senha redefinida');
   };
 
-  const routeAuthenticatedUser = (user, fallbackEmail = '', verificationMessageText = '', verificationMeta = {}) => {
+  const routeAuthenticatedUser = (user) => {
     if (user?.tipo === 'super_admin') {
       window.location.href = 'super-admin.html';
       return true;
     }
     if (user?.mustChangePassword && !user?.isImpersonatedSession) {
       window.location.href = 'change-password.html';
-      return true;
-    }
-    if (user?.emailVerificationPending === true) {
-      goToVerification(
-        user?.email || fallbackEmail,
-        verificationMessageText || 'Seu e-mail precisa ser confirmado para continuar.',
-        verificationMeta
-      );
       return true;
     }
     window.location.href = 'index.html';
@@ -326,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const user = await authApi.currentUser();
       if (user) {
         if (user.tipo === 'super_admin') return;
-        routeAuthenticatedUser(user, user?.email || '');
+        routeAuthenticatedUser(user);
       }
     } catch (err) {
       console.warn('Nao foi possivel validar sessao existente.', err);
@@ -587,7 +584,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await authApi.login({ email, senha });
       if (result?.success && result?.user) {
-        routeAuthenticatedUser(result.user, email);
+        routeAuthenticatedUser(result.user);
         return;
       }
       setError('Falha no login. Verifique suas credenciais.');
@@ -651,16 +648,20 @@ document.addEventListener('DOMContentLoaded', () => {
         pendingVerification: result?.pendingVerification === true,
       });
 
-      if (result?.success && result?.user) {
-        routeAuthenticatedUser(
-          result.user,
-          adminEmail,
-          `Enviamos um código para ${maskEmail(result.user?.email || adminEmail)}. Confirme para acessar o Index.`,
+      if (result?.success && result?.pendingVerification === true) {
+        goToVerification(
+          result?.user?.email || adminEmail,
+          `Enviamos um codigo para ${maskEmail(result?.user?.email || adminEmail)}. Confirme para acessar o sistema.`,
           {
             resendAvailableAt: result?.resendAvailableAt || '',
             sendCount: result?.sendCount || 0,
           }
         );
+        return;
+      }
+
+      if (result?.success && result?.user) {
+        routeAuthenticatedUser(result.user);
         return;
       }
 
