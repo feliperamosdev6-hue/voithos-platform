@@ -474,6 +474,199 @@
       createdAt: item?.createdAt || '',
       updatedAt: item?.updatedAt || '',
     }));
+  const ANAMNESE_ALLOWED_TYPES = new Set(['text', 'textarea', 'select', 'number', 'date', 'yesno', 'checkbox', 'multicheck']);
+  const normalizeAnamneseQuestionType = (value) => {
+    const raw = cleanText(value || 'text').toLowerCase();
+    if (ANAMNESE_ALLOWED_TYPES.has(raw)) return raw;
+    if (['bool', 'boolean', 'radio', 'simnao', 'sim_nao', 'yes_no'].includes(raw)) return 'yesno';
+    if (['dropdown', 'combo', 'combobox', 'lista'].includes(raw)) return 'select';
+    if (['multiple', 'multiple-choice', 'multiple_choice', 'multi_select', 'multiselect'].includes(raw)) return 'multicheck';
+    if (['longtext', 'paragraph'].includes(raw)) return 'textarea';
+    if (['numeric', 'decimal', 'currency'].includes(raw)) return 'number';
+    return 'text';
+  };
+  const buildDefaultAnamneseModel = () => ({
+    id: 'default',
+    name: 'Padrao',
+    active: true,
+    sections: [
+      {
+        id: 's-geral',
+        title: 'Informacoes gerais',
+        questions: [
+          { id: 'q-data', key: 'anamneseDate', label: 'Data', type: 'date', required: false, options: [] },
+          { id: 'q-responsavel', key: 'responsavel', label: 'Responsavel', type: 'text', required: false, options: [] },
+          { id: 'q-queixa', key: 'queixa', label: 'Queixa principal', type: 'textarea', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-hist-med',
+        title: 'Historico medico',
+        questions: [
+          { id: 'q-hist-saude', key: 'historicoMedico', label: 'Historico de saude', type: 'textarea', required: false, options: [] },
+          { id: 'q-alergias', key: 'alergias', label: 'Alergias', type: 'text', required: false, options: [] },
+          { id: 'q-meds', key: 'medicamentos', label: 'Medicamentos em uso', type: 'text', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-condicoes',
+        title: 'Condicoes sistemicas',
+        questions: [
+          {
+            id: 'q-condicoes',
+            key: 'condicoes[]',
+            label: 'Condicoes sistemicas',
+            type: 'multicheck',
+            required: false,
+            options: ['diabetes', 'hipertensao', 'cardiopatias', 'epilepsia', 'asma', 'coagulacao', 'hepatite_hiv'],
+          },
+        ],
+      },
+      {
+        id: 's-medicacoes',
+        title: 'Medicamentos especificos',
+        questions: [
+          { id: 'q-anticoag', key: 'anticoagulantes', label: 'Usa anticoagulantes', type: 'yesno', required: false, options: [] },
+          { id: 'q-antidepr', key: 'antidepressivos', label: 'Usa antidepressivos', type: 'yesno', required: false, options: [] },
+          { id: 'q-cort', key: 'corticoides', label: 'Usa corticoides', type: 'yesno', required: false, options: [] },
+          { id: 'q-insulina', key: 'insulina', label: 'Usa insulina', type: 'yesno', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-reacoes',
+        title: 'Reacoes anteriores',
+        questions: [
+          { id: 'q-anest', key: 'reacaoAnestesia', label: 'Reacao a anestesia odontologica', type: 'yesno', required: false, options: [] },
+          { id: 'q-sang', key: 'sangramentoExcessivo', label: 'Sangramento excessivo', type: 'yesno', required: false, options: [] },
+          { id: 'q-desmaio', key: 'desmaioOdonto', label: 'Desmaio em atendimento odontologico', type: 'yesno', required: false, options: [] },
+          { id: 'q-gestante', key: 'gestante', label: 'Gestante', type: 'yesno', required: false, options: [] },
+          { id: 'q-pressao', key: 'pressao', label: 'Pressao arterial', type: 'text', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-odonto',
+        title: 'Historico odontologico',
+        questions: [
+          { id: 'q-hist-odonto', key: 'historicoOdonto', label: 'Historico odontologico', type: 'textarea', required: false, options: [] },
+          { id: 'q-escov', key: 'escovacao', label: 'Frequencia de escovacao', type: 'select', required: false, options: ['1', '2', '3', '4'] },
+          { id: 'q-ult-visita', key: 'ultimaVisita', label: 'Ultima visita ao dentista', type: 'date', required: false, options: [] },
+          { id: 'q-motivo-visita', key: 'motivoUltimaVisita', label: 'Motivo da ultima visita', type: 'text', required: false, options: [] },
+          { id: 'q-sensib', key: 'sensibilidade', label: 'Sensibilidade dentaria', type: 'yesno', required: false, options: [] },
+          { id: 'q-dor-mast', key: 'dorMastigar', label: 'Dor ao mastigar', type: 'yesno', required: false, options: [] },
+          { id: 'q-brux', key: 'bruxismo', label: 'Ranger os dentes (bruxismo)', type: 'yesno', required: false, options: [] },
+          { id: 'q-fio', key: 'fioDental', label: 'Uso de fio dental', type: 'yesno', required: false, options: [] },
+          { id: 'q-habitos', key: 'habitos', label: 'Habitos e observacoes', type: 'textarea', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-consent',
+        title: 'Declaracoes e consentimento',
+        questions: [
+          {
+            id: 'q-declaracao',
+            key: 'declaracaoVerdade',
+            label: 'Declaro que as informacoes prestadas sao verdadeiras e informarei qualquer alteracao no meu estado de saude.',
+            type: 'checkbox',
+            required: true,
+            options: [],
+          },
+          { id: 'q-data-hora', key: 'dataHoraPreenchimento', label: 'Data e hora do preenchimento', type: 'text', required: false, options: [] },
+          { id: 'q-origem', key: 'origemPreenchimento', label: 'Origem do preenchimento', type: 'select', required: false, options: ['paciente', 'recepcao', 'dentista'] },
+          { id: 'q-assinatura', key: 'assinaturaDigital', label: 'Assinatura digital do paciente (futuro)', type: 'text', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-plano',
+        title: 'Plano e observacoes',
+        questions: [
+          { id: 'q-plano', key: 'planoTratamento', label: 'Plano de tratamento', type: 'textarea', required: false, options: [] },
+          { id: 'q-observacoes', key: 'observacoes', label: 'Observacoes gerais', type: 'textarea', required: false, options: [] },
+        ],
+      },
+    ],
+  });
+  const extractAnamneseSections = (item = {}) => {
+    const nested = item?.data || item?.fields || item?.payload || {};
+    const directSections = item?.sections || item?.secoes;
+    const nestedSections = nested?.sections || nested?.secoes;
+    if (Array.isArray(directSections)) return directSections;
+    if (Array.isArray(nestedSections)) return nestedSections;
+    const looseQuestions = item?.questions || item?.perguntas || nested?.questions || nested?.perguntas;
+    if (Array.isArray(looseQuestions) && looseQuestions.length) {
+      return [{ title: item?.sectionTitle || nested?.sectionTitle || 'Perguntas gerais', questions: looseQuestions }];
+    }
+    return [];
+  };
+  const normalizeAnamneseQuestion = (question = {}, sectionIndex = 0, questionIndex = 0) => {
+    const label = cleanText(question?.label || question?.pergunta || question?.title);
+    if (!label) return null;
+    const type = normalizeAnamneseQuestionType(question?.type || question?.tipo);
+    const rawOptions = question?.options || question?.opcoes || question?.choices || [];
+    const options = Array.isArray(rawOptions)
+      ? rawOptions.map((item) => cleanText(item?.value || item?.label || item)).filter(Boolean)
+      : [];
+    return {
+      id: cleanText(question?.id || `q-${sectionIndex}-${questionIndex}`),
+      key: cleanText(question?.key || question?.campo || question?.id || `campo_${sectionIndex + 1}_${questionIndex + 1}`),
+      label,
+      type,
+      required: question?.required === true || question?.obrigatoria === true,
+      options: type === 'select' || type === 'multicheck' ? options : [],
+    };
+  };
+  const normalizeAnamneseSection = (section = {}, sectionIndex = 0) => {
+    const questionsSource = Array.isArray(section?.questions)
+      ? section.questions
+      : (Array.isArray(section?.perguntas) ? section.perguntas : []);
+    const questions = questionsSource
+      .map((question, questionIndex) => normalizeAnamneseQuestion(question, sectionIndex, questionIndex))
+      .filter(Boolean);
+    if (!questions.length) return null;
+    return {
+      id: cleanText(section?.id || `s-${sectionIndex}`),
+      title: cleanText(section?.title || section?.nome || section?.label || `Secao ${sectionIndex + 1}`),
+      questions,
+    };
+  };
+  const serializeAnamneseModel = (model = {}) => {
+    const normalized = normalizeAnamneseModel(model);
+    return {
+      id: normalized.id,
+      name: normalized.name,
+      active: normalized.active === true,
+      sections: normalized.sections,
+      createdAt: normalized.createdAt || '',
+      updatedAt: normalized.updatedAt || '',
+    };
+  };
+  function normalizeAnamneseModel(item = {}, index = 0) {
+    const fallback = buildDefaultAnamneseModel();
+    const sections = extractAnamneseSections(item)
+      .map((section, sectionIndex) => normalizeAnamneseSection(section, sectionIndex))
+      .filter(Boolean);
+    const effectiveSections = sections.length ? sections : fallback.sections;
+    const active = item?.active === true || item?.ativo === true || item?.isActive === true;
+    const name = cleanText(item?.name || item?.nome || item?.title || item?.titulo || `Modelo ${index + 1}`) || `Modelo ${index + 1}`;
+    return {
+      id: cleanText(item?.id || item?._id || `${index === 0 ? 'default' : `anamnese_${index + 1}`}`) || `${index === 0 ? 'default' : `anamnese_${index + 1}`}`,
+      name,
+      nome: name,
+      active,
+      ativo: active,
+      sections: effectiveSections,
+      createdAt: item?.createdAt || '',
+      updatedAt: item?.updatedAt || '',
+    };
+  }
+  const normalizeAnamneseModelList = (items = []) => {
+    const list = (Array.isArray(items) ? items : []).map((item, index) => normalizeAnamneseModel(item, index));
+    if (!list.length) return [normalizeAnamneseModel(buildDefaultAnamneseModel(), 0)];
+    if (!list.some((item) => item.active)) {
+      list[0].active = true;
+      list[0].ativo = true;
+    }
+    return list;
+  };
   const normalizeProcedureItem = (item = {}) => ({
     id: cleanText(item?.id || item?.codigo || createLocalId('proc')),
     codigo: cleanText(item?.codigo || item?.id || ''),
@@ -2846,68 +3039,70 @@
   const anamneseModels = {
     getActive: async () => {
       const settings = await getOperationalSettings();
-      const models = normalizeModelList(settings?.anamneseModels, 'anamnese');
-      return models.find((item) => item.ativo) || models[0] || null;
+      const models = normalizeAnamneseModelList(settings?.anamneseModels);
+      return models.find((item) => item.active) || models[0] || null;
     },
     list: async () => {
       const settings = await getOperationalSettings();
-      return normalizeModelList(settings?.anamneseModels, 'anamnese');
+      return normalizeAnamneseModelList(settings?.anamneseModels);
     },
     create: async (payload = {}) => {
       const settings = await getOperationalSettings();
-      const models = normalizeModelList(settings?.anamneseModels, 'anamnese');
-      const nextModels = models.concat({
+      const models = normalizeAnamneseModelList(settings?.anamneseModels);
+      const nextModel = normalizeAnamneseModel({
+        ...payload,
         id: cleanText(payload?.id || createLocalId('anamnese')),
-        nome: cleanText(payload?.nome || payload?.title || 'Modelo de anamnese'),
-        titulo: cleanText(payload?.titulo || payload?.nome || payload?.title || ''),
-        categoria: cleanText(payload?.categoria || payload?.category || ''),
-        conteudo: payload?.conteudo ?? payload?.content ?? '',
-        data: payload?.data ?? payload?.fields ?? {},
-        ativo: models.length === 0 || payload?.ativo === true,
-      }).map((item, index, list) => ({
-        ...item,
-        ativo: item.ativo === true && list.findIndex((entry) => entry.ativo === true) === index,
-      }));
+        active: models.length === 0 || payload?.active === true || payload?.ativo === true,
+      }, models.length);
+      const nextModels = (nextModel.active
+        ? models.map((item) => ({ ...item, active: false, ativo: false }))
+        : models.slice()
+      ).concat(nextModel).map((item) => serializeAnamneseModel(item));
       const updated = await patchOperationalSettings({ anamneseModels: nextModels });
-      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+      return normalizeAnamneseModelList(updated?.anamneseModels);
     },
     update: async (payload = {}) => {
       const settings = await getOperationalSettings();
-      const models = normalizeModelList(settings?.anamneseModels, 'anamnese').map((item) => (
-        cleanText(item.id) === cleanText(payload?.id)
-          ? {
+      const targetId = cleanText(payload?.id);
+      const models = normalizeAnamneseModelList(settings?.anamneseModels).map((item, index) => (
+        cleanText(item.id) === targetId
+          ? normalizeAnamneseModel({
               ...item,
-              nome: cleanText(payload?.nome || payload?.title || item.nome),
-              titulo: cleanText(payload?.titulo || payload?.nome || payload?.title || item.titulo),
-              categoria: cleanText(payload?.categoria || payload?.category || item.categoria),
-              conteudo: payload?.conteudo ?? payload?.content ?? item.conteudo,
-              data: payload?.data ?? payload?.fields ?? item.data,
-              ativo: payload?.ativo === undefined ? item.ativo : payload.ativo === true,
-            }
+              ...payload,
+              active: payload?.active === undefined && payload?.ativo === undefined
+                ? item.active
+                : (payload?.active === true || payload?.ativo === true),
+            }, index)
           : item
       ));
-      const updated = await patchOperationalSettings({ anamneseModels: models });
-      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+      const nextModels = models.map((item) => serializeAnamneseModel(item));
+      const updated = await patchOperationalSettings({ anamneseModels: nextModels });
+      return normalizeAnamneseModelList(updated?.anamneseModels);
     },
     remove: async (id) => {
       const settings = await getOperationalSettings();
-      const models = normalizeModelList(settings?.anamneseModels, 'anamnese')
+      const models = normalizeAnamneseModelList(settings?.anamneseModels)
         .filter((item) => cleanText(item.id) !== cleanText(id?.id || id));
-      const nextModels = models.map((item, index) => ({
+      const nextModels = models.map((item, index) => serializeAnamneseModel({
         ...item,
+        active: item.active || (index === 0 && !models.some((entry) => entry.active)),
         ativo: item.ativo || (index === 0 && !models.some((entry) => entry.ativo)),
       }));
       const updated = await patchOperationalSettings({ anamneseModels: nextModels });
-      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+      return normalizeAnamneseModelList(updated?.anamneseModels);
     },
     setActive: async (id) => {
       const settings = await getOperationalSettings();
-      const models = normalizeModelList(settings?.anamneseModels, 'anamnese').map((item) => ({
-        ...item,
-        ativo: cleanText(item.id) === cleanText(id?.id || id),
-      }));
+      const models = normalizeAnamneseModelList(settings?.anamneseModels).map((item) => {
+        const isActive = cleanText(item.id) === cleanText(id?.id || id);
+        return serializeAnamneseModel({
+          ...item,
+          active: isActive,
+          ativo: isActive,
+        });
+      });
       const updated = await patchOperationalSettings({ anamneseModels: models });
-      return normalizeModelList(updated?.anamneseModels, 'anamnese');
+      return normalizeAnamneseModelList(updated?.anamneseModels);
     },
   };
 

@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const appApi = window.appApi || {};
+  const authApi = appApi.auth || window.auth || {};
   const patientsApi = appApi.patients || window.api?.patients || {};
   const documentsApi = appApi.documents || window.api?.documents || {};
   const anamneseModelsApi = appApi.anamneseModels || window.api?.anamneseModels || {};
@@ -15,10 +16,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const deviceInfo = document.getElementById('deviceInfo');
 
   let activeModel = null;
+  let currentUser = null;
 
   const getClinicStorageKey = (baseKey) => {
     const clinicId = String(currentUser?.clinicId || '').trim();
     return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
+  const getClinicStorageCandidates = (baseKey) => {
+    const candidates = [getClinicStorageKey(baseKey), `${baseKey}:global`, baseKey];
+    return candidates.filter((value, index) => value && candidates.indexOf(value) === index);
   };
 
   const api = {
@@ -38,6 +45,184 @@ document.addEventListener('DOMContentLoaded', () => {
       .join(' ');
   };
 
+  const ALLOWED_TYPES = new Set(['text', 'textarea', 'select', 'number', 'date', 'yesno', 'checkbox', 'multicheck']);
+
+  const normalizeQuestionType = (value) => {
+    const raw = String(value || 'text').trim().toLowerCase();
+    if (ALLOWED_TYPES.has(raw)) return raw;
+    if (['bool', 'boolean', 'radio', 'simnao', 'sim_nao', 'yes_no'].includes(raw)) return 'yesno';
+    if (['dropdown', 'combo', 'combobox', 'lista'].includes(raw)) return 'select';
+    if (['multiple', 'multiple-choice', 'multiple_choice', 'multi_select', 'multiselect'].includes(raw)) return 'multicheck';
+    if (['longtext', 'paragraph'].includes(raw)) return 'textarea';
+    if (['numeric', 'decimal', 'currency'].includes(raw)) return 'number';
+    return 'text';
+  };
+
+  const buildRichFallbackModel = () => ({
+    id: 'default',
+    name: 'Padrao',
+    active: true,
+    sections: [
+      {
+        id: 's-geral',
+        title: 'Informacoes gerais',
+        questions: [
+          { id: 'q-data', key: 'anamneseDate', label: 'Data', type: 'date', required: false, options: [] },
+          { id: 'q-responsavel', key: 'responsavel', label: 'Responsavel', type: 'text', required: false, options: [] },
+          { id: 'q-queixa', key: 'queixa', label: 'Queixa principal', type: 'textarea', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-hist-med',
+        title: 'Historico medico',
+        questions: [
+          { id: 'q-hist-saude', key: 'historicoMedico', label: 'Historico de saude', type: 'textarea', required: false, options: [] },
+          { id: 'q-alergias', key: 'alergias', label: 'Alergias', type: 'text', required: false, options: [] },
+          { id: 'q-meds', key: 'medicamentos', label: 'Medicamentos em uso', type: 'text', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-condicoes',
+        title: 'Condicoes sistemicas',
+        questions: [
+          {
+            id: 'q-condicoes',
+            key: 'condicoes[]',
+            label: 'Condicoes sistemicas',
+            type: 'multicheck',
+            required: false,
+            options: ['diabetes', 'hipertensao', 'cardiopatias', 'epilepsia', 'asma', 'coagulacao', 'hepatite_hiv'],
+          },
+        ],
+      },
+      {
+        id: 's-medicacoes',
+        title: 'Medicamentos especificos',
+        questions: [
+          { id: 'q-anticoag', key: 'anticoagulantes', label: 'Usa anticoagulantes', type: 'yesno', required: false, options: [] },
+          { id: 'q-antidepr', key: 'antidepressivos', label: 'Usa antidepressivos', type: 'yesno', required: false, options: [] },
+          { id: 'q-cort', key: 'corticoides', label: 'Usa corticoides', type: 'yesno', required: false, options: [] },
+          { id: 'q-insulina', key: 'insulina', label: 'Usa insulina', type: 'yesno', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-reacoes',
+        title: 'Reacoes anteriores',
+        questions: [
+          { id: 'q-anest', key: 'reacaoAnestesia', label: 'Reacao a anestesia odontologica', type: 'yesno', required: false, options: [] },
+          { id: 'q-sang', key: 'sangramentoExcessivo', label: 'Sangramento excessivo', type: 'yesno', required: false, options: [] },
+          { id: 'q-desmaio', key: 'desmaioOdonto', label: 'Desmaio em atendimento odontologico', type: 'yesno', required: false, options: [] },
+          { id: 'q-gestante', key: 'gestante', label: 'Gestante', type: 'yesno', required: false, options: [] },
+          { id: 'q-pressao', key: 'pressao', label: 'Pressao arterial', type: 'text', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-odonto',
+        title: 'Historico odontologico',
+        questions: [
+          { id: 'q-hist-odonto', key: 'historicoOdonto', label: 'Historico odontologico', type: 'textarea', required: false, options: [] },
+          { id: 'q-escov', key: 'escovacao', label: 'Frequencia de escovacao', type: 'select', required: false, options: ['1', '2', '3', '4'] },
+          { id: 'q-ult-visita', key: 'ultimaVisita', label: 'Ultima visita ao dentista', type: 'date', required: false, options: [] },
+          { id: 'q-motivo-visita', key: 'motivoUltimaVisita', label: 'Motivo da ultima visita', type: 'text', required: false, options: [] },
+          { id: 'q-sensib', key: 'sensibilidade', label: 'Sensibilidade dentaria', type: 'yesno', required: false, options: [] },
+          { id: 'q-dor-mast', key: 'dorMastigar', label: 'Dor ao mastigar', type: 'yesno', required: false, options: [] },
+          { id: 'q-brux', key: 'bruxismo', label: 'Ranger os dentes (bruxismo)', type: 'yesno', required: false, options: [] },
+          { id: 'q-fio', key: 'fioDental', label: 'Uso de fio dental', type: 'yesno', required: false, options: [] },
+          { id: 'q-habitos', key: 'habitos', label: 'Habitos e observacoes', type: 'textarea', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-consent',
+        title: 'Declaracoes e consentimento',
+        questions: [
+          {
+            id: 'q-declaracao',
+            key: 'declaracaoVerdade',
+            label: 'Declaro que as informacoes prestadas sao verdadeiras e informarei qualquer alteracao no meu estado de saude.',
+            type: 'checkbox',
+            required: true,
+            options: [],
+          },
+          { id: 'q-data-hora', key: 'dataHoraPreenchimento', label: 'Data e hora do preenchimento', type: 'text', required: false, options: [] },
+          { id: 'q-origem', key: 'origemPreenchimento', label: 'Origem do preenchimento', type: 'select', required: false, options: ['paciente', 'recepcao', 'dentista'] },
+          { id: 'q-assinatura', key: 'assinaturaDigital', label: 'Assinatura digital do paciente (futuro)', type: 'text', required: false, options: [] },
+        ],
+      },
+      {
+        id: 's-plano',
+        title: 'Plano e observacoes',
+        questions: [
+          { id: 'q-plano', key: 'planoTratamento', label: 'Plano de tratamento', type: 'textarea', required: false, options: [] },
+          { id: 'q-observacoes', key: 'observacoes', label: 'Observacoes gerais', type: 'textarea', required: false, options: [] },
+        ],
+      },
+    ],
+  });
+
+  const extractModelSections = (model = {}) => {
+    const nested = model?.data || model?.fields || model?.payload || {};
+    const directSections = model?.sections || model?.secoes;
+    const nestedSections = nested?.sections || nested?.secoes;
+    if (Array.isArray(directSections)) return directSections;
+    if (Array.isArray(nestedSections)) return nestedSections;
+
+    const looseQuestions = model?.questions || model?.perguntas || nested?.questions || nested?.perguntas;
+    if (Array.isArray(looseQuestions) && looseQuestions.length) {
+      return [{ title: model?.sectionTitle || nested?.sectionTitle || 'Perguntas gerais', questions: looseQuestions }];
+    }
+    return [];
+  };
+
+  const normalizeQuestion = (question = {}, sectionIndex = 0, questionIndex = 0) => {
+    const label = String(question?.label || question?.pergunta || question?.title || '').trim();
+    if (!label) return null;
+    const type = normalizeQuestionType(question?.type || question?.tipo);
+    const key = String(question?.key || question?.campo || question?.id || `campo_${sectionIndex + 1}_${questionIndex + 1}`).trim();
+    const rawOptions = question?.options || question?.opcoes || question?.choices || [];
+    const options = Array.isArray(rawOptions)
+      ? rawOptions.map((item) => String(item?.value || item?.label || item || '').trim()).filter(Boolean)
+      : [];
+    return {
+      id: String(question?.id || `q-${sectionIndex}-${questionIndex}`).trim(),
+      key,
+      label,
+      type,
+      required: Boolean(question?.required || question?.obrigatoria),
+      options: type === 'select' || type === 'multicheck' ? options : [],
+    };
+  };
+
+  const normalizeSection = (section = {}, sectionIndex = 0) => {
+    const title = String(section?.title || section?.nome || section?.label || `Secao ${sectionIndex + 1}`).trim();
+    const questionsSource = Array.isArray(section?.questions)
+      ? section.questions
+      : (Array.isArray(section?.perguntas) ? section.perguntas : []);
+    const questions = questionsSource
+      .map((question, questionIndex) => normalizeQuestion(question, sectionIndex, questionIndex))
+      .filter(Boolean);
+    if (!questions.length) return null;
+    return {
+      id: String(section?.id || `s-${sectionIndex}`).trim(),
+      title,
+      questions,
+    };
+  };
+
+  const normalizeModel = (model) => {
+    const fallback = buildRichFallbackModel();
+    if (!model || typeof model !== 'object') return fallback;
+    const sections = extractModelSections(model)
+      .map((section, sectionIndex) => normalizeSection(section, sectionIndex))
+      .filter(Boolean);
+    if (!sections.length) return fallback;
+    return {
+      id: String(model?.id || fallback.id).trim() || fallback.id,
+      name: String(model?.name || model?.nome || fallback.name).trim() || fallback.name,
+      active: model?.active !== false && model?.ativo !== false,
+      sections,
+    };
+  };
+
   const showMessage = (text, type = 'info') => {
     if (patientResult) {
       patientResult.textContent = text;
@@ -48,26 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
       formMessage.dataset.type = type;
     }
   };
-
-  const buildFallbackModel = () => ({
-    id: 'fallback',
-    name: 'Padrao',
-    sections: [
-      {
-        id: 'fallback-geral',
-        title: 'Informacoes gerais',
-        questions: [
-          { key: 'anamneseDate', label: 'Data', type: 'date', required: false, options: [] },
-          { key: 'responsavel', label: 'Responsavel', type: 'text', required: false, options: [] },
-          { key: 'queixa', label: 'Queixa principal', type: 'textarea', required: false, options: [] },
-          { key: 'historicoMedico', label: 'Historico de saude', type: 'textarea', required: false, options: [] },
-          { key: 'planoTratamento', label: 'Plano de tratamento', type: 'textarea', required: false, options: [] },
-          { key: 'observacoes', label: 'Observacoes gerais', type: 'textarea', required: false, options: [] },
-          { key: 'dataHoraPreenchimento', label: 'Data e hora do preenchimento', type: 'text', required: false, options: [] },
-        ],
-      },
-    ],
-  });
 
   const createFieldHtml = (question, sectionIndex, questionIndex) => {
     const key = String(question.key || '').trim();
@@ -256,12 +421,20 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadPatientFromStorage = async () => {
-    const raw = localStorage.getItem(getClinicStorageKey('anamnesePatient')) || localStorage.getItem('anamnesePatient');
-    if (!raw) return;
-    localStorage.removeItem(getClinicStorageKey('anamnesePatient'));
-    localStorage.removeItem('anamnesePatient');
+    let patient = null;
+    for (const key of getClinicStorageCandidates('anamnesePatient')) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      localStorage.removeItem(key);
+      try {
+        patient = JSON.parse(raw);
+        break;
+      } catch (err) {
+        console.warn('Falha ao desserializar paciente salvo para anamnese', err);
+      }
+    }
+    if (!patient) return;
     try {
-      const patient = JSON.parse(raw);
       if (!patient) return;
       const name = patient.fullName || patient.nome || 'Paciente';
       const pront = patient.prontuario || patient.id || patient._id || '';
@@ -316,10 +489,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadActiveModel = async () => {
     try {
       const model = await api.getActiveModel?.();
-      activeModel = model || buildFallbackModel();
+      activeModel = normalizeModel(model);
     } catch (err) {
-      console.warn('Falha ao carregar modelo ativo, usando fallback', err);
-      activeModel = buildFallbackModel();
+      console.warn('Falha ao carregar modelo ativo, usando fallback robusto', err);
+      activeModel = buildRichFallbackModel();
     }
     renderActiveModel(activeModel);
   };
@@ -350,6 +523,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   (async () => {
+    try {
+      currentUser = await authApi.currentUser?.();
+    } catch (err) {
+      console.warn('Falha ao carregar usuario atual para escopo da anamnese', err);
+    }
     await loadActiveModel();
     setAutoFields();
     await loadPatientFromStorage();

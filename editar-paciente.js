@@ -33,9 +33,28 @@ document.addEventListener('DOMContentLoaded', async () => {
   let procedures = [];
   let selectedSelfieFile = null;
 
-  const getClinicStorageKey = (baseKey) => {
-    const clinicId = String(currentUser?.clinicId || '').trim();
+  const getClinicStorageKey = (baseKey, user = currentUser) => {
+    const clinicId = String(user?.clinicId || '').trim();
     return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
+  };
+
+  const getClinicStorageCandidates = (baseKey, user = currentUser) => {
+    const candidates = [getClinicStorageKey(baseKey, user), `${baseKey}:global`, baseKey];
+    return candidates.filter((value, index) => value && candidates.indexOf(value) === index);
+  };
+
+  const consumeStoredPatientContext = (baseKey, user = currentUser) => {
+    for (const key of getClinicStorageCandidates(baseKey, user)) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      localStorage.removeItem(key);
+      try {
+        return JSON.parse(raw);
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
   };
 
   const acceptedSelfieTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'application/pdf'];
@@ -442,22 +461,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   const init = async () => {
+    try {
+      currentUser = await authApi.currentUser?.();
+    } catch (err) {
+      console.warn('Nao foi possivel carregar usuario atual antes da reidratacao do paciente.', err);
+    }
+
     const params = new URLSearchParams(window.location.search);
     const prontuarioParam = params.get('prontuario');
     let prontuario = prontuarioParam;
 
     if (!prontuario) {
-      const stored = localStorage.getItem(getClinicStorageKey('editingPatient')) || localStorage.getItem('editingPatient');
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          prontuario = parsed?.prontuario || null;
-          localStorage.removeItem(getClinicStorageKey('editingPatient'));
-          localStorage.removeItem('editingPatient');
-        } catch (e) {
-          prontuario = null;
-        }
-      }
+      const parsed = consumeStoredPatientContext('editingPatient', currentUser);
+      prontuario = parsed?.prontuario || parsed?.id || parsed?._id || null;
     }
 
     if (!prontuario) {
@@ -467,7 +483,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     try {
-      currentUser = await authApi.currentUser();
       await loadDentistas();
       currentPatient = await patientsApi.read(prontuario);
       if (!currentPatient) throw new Error('Paciente nao encontrado.');
