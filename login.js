@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const emailInput = document.getElementById('login-email');
   const forgotPasswordLink = document.getElementById('forgot-password-link');
   const signupForm = document.getElementById('signup-form');
-  const showSignupLink = document.getElementById('show-signup-link');
   const hideSignupLink = document.getElementById('hide-signup-link');
   const signupEntryHint = document.getElementById('signup-entry-hint');
   const screenSubtitle = document.getElementById('screen-subtitle');
@@ -107,6 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
     subscriptionOverview: null,
     onboardingState: null,
   };
+  const initialFlowState = {
+    requestedMode: 'login',
+    skipAutoSessionResume: false,
+  };
 
   const setError = (message) => {
     if (errorMessage) errorMessage.textContent = message || '';
@@ -118,6 +121,58 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const hideAllScreens = () => {
     Object.values(screens).forEach((screen) => screen?.classList.add('hidden'));
+  };
+
+  const resetVerificationFlowState = () => {
+    verificationFlowState.email = '';
+    verificationFlowState.maskedEmail = '';
+    verificationFlowState.resendAvailableAt = '';
+    verificationFlowState.sendCount = 0;
+    if (verificationEmailBadge) verificationEmailBadge.textContent = '';
+    if (emailVerificationCodeInput) emailVerificationCodeInput.value = '';
+    setFlowMessage(verificationMessage, '');
+  };
+
+  const resetPasswordRecoveryState = () => {
+    resetFlowState.email = '';
+    resetFlowState.maskedEmail = '';
+    resetFlowState.code = '';
+    if (recoveryEmailInput) recoveryEmailInput.value = '';
+    if (resetCodeInput) resetCodeInput.value = '';
+    if (newPasswordInput) newPasswordInput.value = '';
+    if (confirmNewPasswordInput) confirmNewPasswordInput.value = '';
+    if (maskedEmailBadge) maskedEmailBadge.textContent = '';
+    setFlowMessage(recoveryMessage, '');
+    setFlowMessage(codeMessage, '');
+    setFlowMessage(passwordMessage, '');
+  };
+
+  const resetOnboardingFlowState = ({ preservePlan = false } = {}) => {
+    const selectedPlanType = preservePlan ? onboardingFlowState.selectedPlanType : '';
+    onboardingFlowState.selectedPlanType = selectedPlanType;
+    onboardingFlowState.operationType = '';
+    onboardingFlowState.subscriptionOverview = null;
+    onboardingFlowState.onboardingState = null;
+    setProfileSelectionMessage('');
+    setPaymentMessage('');
+  };
+
+  const resetSignupFormState = ({ prefillEmail = '', preservePlan = false } = {}) => {
+    if (signupForm instanceof HTMLFormElement) signupForm.reset();
+    if (signupForm?.adminEmail) signupForm.adminEmail.value = prefillEmail;
+    if (signupForm?.clinicEmail) signupForm.clinicEmail.value = '';
+    if (emailInput) emailInput.value = prefillEmail;
+    setError('');
+    setSignupMessage('');
+    setSignupPlanBanner(preservePlan ? onboardingFlowState.selectedPlanType : '');
+  };
+
+  const resetPublicEntryFlow = ({ prefillEmail = '', preservePlan = false } = {}) => {
+    stopAllTimers();
+    resetVerificationFlowState();
+    resetPasswordRecoveryState();
+    resetOnboardingFlowState({ preservePlan });
+    resetSignupFormState({ prefillEmail, preservePlan });
   };
 
   const toggleSignupForm = (visible) => {
@@ -171,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!signupPlanBanner) return;
     if (!planView.planType) {
       signupPlanBanner.classList.add('hidden');
+      if (signupEntryHint) signupEntryHint.textContent = 'Escolha um plano na landing para iniciar um novo cadastro.';
       return;
     }
     signupPlanBanner.classList.remove('hidden');
@@ -262,17 +318,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const sourceLabel = String(options.sourceLabel || '').trim();
     const selectedPlanType = normalizePlanType(options.planType || onboardingFlowState.selectedPlanType);
 
+    resetPublicEntryFlow({ prefillEmail, preservePlan: Boolean(selectedPlanType) });
     setError('');
     setSignupMessage('');
     toggleSignupForm(true);
     updateSubtitle('Criar conta');
     hideAllScreens();
-    onboardingFlowState.selectedPlanType = selectedPlanType || onboardingFlowState.selectedPlanType;
+    onboardingFlowState.selectedPlanType = selectedPlanType;
     setSignupPlanBanner(onboardingFlowState.selectedPlanType);
 
     if (prefillEmail) {
       if (signupForm?.adminEmail) signupForm.adminEmail.value = prefillEmail;
-      if (emailInput && !emailInput.value) emailInput.value = prefillEmail;
+      if (emailInput) emailInput.value = prefillEmail;
     }
 
     if (sourceLabel) {
@@ -305,15 +362,38 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   };
 
-  const applyInitialFlowRequest = () => {
+  const clearInitialFlowUrl = () => {
+    try {
+      const url = new URL(window.location.href);
+      ['mode', 'screen', 'plan', 'email'].forEach((key) => url.searchParams.delete(key));
+      url.hash = '';
+      const normalizedPath = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState({}, document.title, normalizedPath);
+    } catch (_error) {
+      // URL cleanup is best-effort only.
+    }
+  };
+
+  const applyInitialFlowRequest = async () => {
     const request = readInitialFlowRequest();
+    initialFlowState.requestedMode = request.mode;
+    initialFlowState.skipAutoSessionResume = request.mode === 'signup';
+
+    if (request.mode === 'signup' && authApi?.clearSession) {
+      await authApi.clearSession({ remote: false }).catch(() => null);
+    }
+
+    if (request.mode === 'signup' || request.mode === 'recovery' || request.plan || request.email) {
+      clearInitialFlowUrl();
+    }
+
     if (request.email) {
       if (emailInput) emailInput.value = request.email;
       if (recoveryEmailInput) recoveryEmailInput.value = request.email;
     }
 
     if (request.mode === 'signup') {
-      onboardingFlowState.selectedPlanType = request.plan || onboardingFlowState.selectedPlanType;
+      onboardingFlowState.selectedPlanType = request.plan || '';
       const planView = buildPlanView(onboardingFlowState.selectedPlanType);
       const sourceLabel = planView.planType ? `Plano ${planView.label}` : '';
       goToSignup({ email: request.email, sourceLabel, planType: onboardingFlowState.selectedPlanType });
@@ -479,7 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const goToLogin = () => {
-    stopAllTimers();
+    resetPublicEntryFlow({ prefillEmail: '' });
+    initialFlowState.skipAutoSessionResume = false;
     showScreen('login');
     updateSubtitle('Acesse sua conta para continuar');
   };
@@ -630,6 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const checkActiveSession = async () => {
     if (!authApi?.currentUser) return;
+    if (initialFlowState.skipAutoSessionResume) return;
     try {
       const user = await authApi.currentUser();
       if (user) {
@@ -657,10 +739,16 @@ document.addEventListener('DOMContentLoaded', () => {
   backToLoginFromCode?.addEventListener('click', goToLogin);
   backToLoginFromPassword?.addEventListener('click', goToLogin);
   backToLoginFromSuccess?.addEventListener('click', goToLogin);
-  backToVerificationFromProfile?.addEventListener('click', () => goToVerification(verificationFlowState.email, '', {
-    resendAvailableAt: verificationFlowState.resendAvailableAt,
-    sendCount: verificationFlowState.sendCount,
-  }));
+  backToVerificationFromProfile?.addEventListener('click', () => {
+    if (!verificationFlowState.email) {
+      goToLogin();
+      return;
+    }
+    goToVerification(verificationFlowState.email, '', {
+      resendAvailableAt: verificationFlowState.resendAvailableAt,
+      sendCount: verificationFlowState.sendCount,
+    });
+  });
   backToProfileFromPayment?.addEventListener('click', goToOnboardingProfile);
 
   resendVerificationPlaceholder?.addEventListener('click', async () => {
@@ -956,9 +1044,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (result?.success && result?.pendingVerification === true) {
+        const verificationPrompt = result?.reusedActiveVerification === true
+          ? `Ja existe um codigo valido para ${maskEmail(result?.user?.email || adminEmail)}. Use o codigo anterior ou aguarde para reenviar.`
+          : `Enviamos um codigo para ${maskEmail(result?.user?.email || adminEmail)}. Confirme para acessar o sistema.`;
         goToVerification(
           result?.user?.email || adminEmail,
-          `Enviamos um codigo para ${maskEmail(result?.user?.email || adminEmail)}. Confirme para acessar o sistema.`,
+          verificationPrompt,
           {
             resendAvailableAt: result?.resendAvailableAt || '',
             sendCount: result?.sendCount || 0,
@@ -1049,6 +1140,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  applyInitialFlowRequest();
-  checkActiveSession();
+  const initializeAuthScreen = async () => {
+    await applyInitialFlowRequest();
+    await checkActiveSession();
+  };
+
+  initializeAuthScreen().catch((error) => {
+    console.error('Erro ao inicializar fluxo de autenticacao.', error);
+    goToLogin();
+  });
 });

@@ -36,6 +36,12 @@
       if (!window.auth?.logout) return unavailable('auth.logout');
       return window.auth.logout();
     },
+    clearSession: async (payload) => {
+      if (window.auth?.clearSession) return window.auth.clearSession(payload);
+      if (window.__webAdapter?.auth?.clearSession) return window.__webAdapter.auth.clearSession(payload);
+      if (window.auth?.logout) return window.auth.logout();
+      return { success: true };
+    },
     currentUser: async () => {
       if (!window.auth?.currentUser) return null;
       return window.auth.currentUser();

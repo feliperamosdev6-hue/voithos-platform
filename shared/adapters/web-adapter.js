@@ -1855,6 +1855,8 @@
         clinic,
         token,
         pendingVerification,
+        emailVerificationSent: result?.emailVerificationSent === true,
+        reusedActiveVerification: result?.reusedActiveVerification === true,
         verificationExpiresAt: result?.verificationExpiresAt || null,
         resendAvailableAt: result?.resendAvailableAt || null,
         sendCount: Number(result?.sendCount || 0),
@@ -2030,6 +2032,19 @@
         }
       } catch (_error) {
         // local session still needs to be cleared
+      }
+      clearWebSession();
+      return { success: true };
+    },
+    clearSession: async ({ remote = false } = {}) => {
+      if (remote === true) {
+        try {
+          if (getStoredToken()) {
+            await request('POST', '/auth/logout', {}, { auth: true });
+          }
+        } catch (_error) {
+          // local session still needs to be cleared
+        }
       }
       clearWebSession();
       return { success: true };

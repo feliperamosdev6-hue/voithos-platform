@@ -3112,8 +3112,12 @@ const clinicService = {
         email: adminEmail,
         clinic: nomeFantasia,
       });
-      const emailVerificationCode = generateEmailVerificationCode();
-      const emailVerificationExpiresAt = getEmailVerificationExpiresAt();
+      let emailVerificationCode = generateEmailVerificationCode();
+      let emailVerificationExpiresAt = getEmailVerificationExpiresAt();
+      let resendAvailableAt = getEmailVerificationResendAvailableAt(1);
+      let sendCount = 1;
+      let shouldSendVerificationEmail = true;
+      let reusedActiveVerification = false;
       const duplicatedClinic = await clinicRepository.findByDocument(document.documentNumber);
       console.info('[signup][clinic-service]', {
         stage: 'clinic_lookup_completed',
@@ -3141,14 +3145,29 @@ const clinicService = {
         const pendingExpiresAt = existingPendingSignup.verificationExpiresAt
           ? new Date(existingPendingSignup.verificationExpiresAt).getTime()
           : 0;
-        if (pendingExpiresAt > Date.now()) {
-          throw new AppError(
-            409,
-            'PENDING_SIGNUP_EXISTS',
-            'Ja existe um cadastro pendente para este e-mail. Confirme o codigo enviado ou use reenviar.'
-          );
+        const existingResendAt = existingPendingSignup.resendAvailableAt
+          ? new Date(existingPendingSignup.resendAvailableAt).getTime()
+          : 0;
+        const hasActiveVerification = pendingExpiresAt > Date.now();
+        const isResendLocked = existingResendAt > Date.now();
+
+        if (hasActiveVerification && isResendLocked) {
+          reusedActiveVerification = true;
+          shouldSendVerificationEmail = false;
+          emailVerificationCode = String(existingPendingSignup.verificationCode || emailVerificationCode).trim();
+          emailVerificationExpiresAt = existingPendingSignup.verificationExpiresAt
+            ? new Date(existingPendingSignup.verificationExpiresAt)
+            : emailVerificationExpiresAt;
+          resendAvailableAt = existingPendingSignup.resendAvailableAt
+            ? new Date(existingPendingSignup.resendAvailableAt)
+            : resendAvailableAt;
+          sendCount = Math.max(1, Number(existingPendingSignup.sendCount || 1));
+        } else {
+          sendCount = hasActiveVerification
+            ? Math.max(1, Number(existingPendingSignup.sendCount || 0) + 1)
+            : 1;
+          resendAvailableAt = getEmailVerificationResendAvailableAt(sendCount);
         }
-        await pendingSignupRepository.deleteByEmail(adminEmail);
       }
 
       const passwordHash = await authService.hashPassword(password);
@@ -3167,8 +3186,8 @@ const clinicService = {
         },
         verificationCode: emailVerificationCode,
         verificationExpiresAt: emailVerificationExpiresAt,
-        resendAvailableAt: getEmailVerificationResendAvailableAt(1),
-        sendCount: 1,
+        resendAvailableAt,
+        sendCount,
       });
       console.info('[signup][clinic-service]', {
         stage: 'pending_signup_saved',
@@ -3177,31 +3196,35 @@ const clinicService = {
         sendCount: Number(pendingSignup?.sendCount || 0),
       });
 
-      try {
-        console.info('[signup][clinic-service]', {
-          stage: 'verification_email_send_started',
-          email: adminEmail,
-          clinic: nomeFantasia,
-        });
-        const emailResult = await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
-        console.info('[email] Signup verification email accepted', {
-          stage: 'verification_email_send_completed',
-          email: adminEmail,
-          resendEmailId: emailResult?.data?.id || '',
-        });
-      } catch (emailError) {
-        console.error('[email] Failed to send signup verification email', {
-          stage: 'verification_email_send_failed',
-          email: adminEmail,
-          error: emailError?.message || emailError,
-          resendError: emailError?.resendError || null,
-        });
-        throw new AppError(502, 'SIGNUP_VERIFICATION_EMAIL_FAILED', 'Nao foi possivel enviar o codigo de confirmacao agora.');
+      if (shouldSendVerificationEmail) {
+        try {
+          console.info('[signup][clinic-service]', {
+            stage: 'verification_email_send_started',
+            email: adminEmail,
+            clinic: nomeFantasia,
+            sendCount,
+          });
+          const emailResult = await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
+          console.info('[email] Signup verification email accepted', {
+            stage: 'verification_email_send_completed',
+            email: adminEmail,
+            resendEmailId: emailResult?.data?.id || '',
+          });
+        } catch (emailError) {
+          console.error('[email] Failed to send signup verification email', {
+            stage: 'verification_email_send_failed',
+            email: adminEmail,
+            error: emailError?.message || emailError,
+            resendError: emailError?.resendError || null,
+          });
+          throw new AppError(502, 'SIGNUP_VERIFICATION_EMAIL_FAILED', 'Nao foi possivel enviar o codigo de confirmacao agora.');
+        }
       }
 
       return {
         pendingVerification: true,
-        emailVerificationSent: true,
+        emailVerificationSent: shouldSendVerificationEmail,
+        reusedActiveVerification,
         resendAvailableAt: pendingSignup?.resendAvailableAt || null,
         verificationExpiresAt: pendingSignup?.verificationExpiresAt || null,
         sendCount: Number(pendingSignup?.sendCount || 0),
