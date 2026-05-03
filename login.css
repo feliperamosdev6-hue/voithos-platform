@@ -138,6 +138,11 @@ body {
     text-decoration: underline;
 }
 
+.login-help-muted {
+    color: #6b7280;
+    line-height: 1.45;
+}
+
 .footer-container {
     position: absolute;
     bottom: 20px;
@@ -170,6 +175,40 @@ body {
     display: grid;
     grid-template-columns: 1fr;
     gap: 0;
+}
+
+.signup-plan-banner {
+    margin-bottom: 18px;
+    padding: 16px 18px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(31, 168, 122, 0.12), rgba(42, 157, 143, 0.08));
+    border: 1px solid rgba(31, 168, 122, 0.18);
+    text-align: left;
+}
+
+.signup-plan-kicker,
+.plan-summary-label {
+    display: inline-flex;
+    margin-bottom: 6px;
+    color: #156a4d;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.signup-plan-banner strong,
+.plan-summary-card strong {
+    display: block;
+    color: #102131;
+    font-size: 1.12rem;
+    margin-bottom: 4px;
+}
+
+.signup-plan-banner small {
+    display: block;
+    color: #4b5563;
+    line-height: 1.45;
 }
 
 .auth-brand {
@@ -213,6 +252,10 @@ body {
     padding: 18px;
 }
 
+.flow-card-wide {
+    padding: 20px;
+}
+
 .btn-secondary,
 .btn-link {
     width: 100%;
@@ -254,6 +297,128 @@ body {
     color: #156a4d;
     font-size: 0.88rem;
     font-weight: 700;
+}
+
+.selection-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.selection-card {
+    border: 1px solid #dbe6ef;
+    border-radius: 18px;
+    background: #fff;
+    padding: 18px 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 190px;
+}
+
+.selection-card:hover,
+.selection-card:focus-visible {
+    transform: translateY(-2px);
+    border-color: rgba(31, 168, 122, 0.45);
+    box-shadow: 0 18px 32px rgba(15, 23, 42, 0.08);
+    outline: none;
+}
+
+.selection-card strong {
+    color: #102131;
+    font-size: 1.05rem;
+}
+
+.selection-card span {
+    color: #556476;
+    line-height: 1.5;
+}
+
+.selection-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, #2a9d8f, #1fa87a);
+    color: #fff;
+    font-weight: 800;
+    font-size: 1rem;
+}
+
+.plan-summary-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid rgba(31, 168, 122, 0.18);
+    background: linear-gradient(135deg, rgba(31, 168, 122, 0.1), rgba(42, 157, 143, 0.06));
+}
+
+.plan-summary-card p {
+    margin: 0;
+    color: #4f6473;
+    line-height: 1.45;
+}
+
+.plan-summary-price {
+    white-space: nowrap;
+    color: #102131;
+    font-size: 1.4rem;
+    font-weight: 800;
+}
+
+.payment-status-strip {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: rgba(16, 33, 49, 0.04);
+    border: 1px solid rgba(16, 33, 49, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.payment-status-strip strong {
+    color: #102131;
+}
+
+.payment-status-strip span {
+    color: #516071;
+    line-height: 1.45;
+}
+
+.payment-next-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.payment-next-card {
+    border-radius: 16px;
+    border: 1px solid #e5ebf1;
+    background: #fff;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.payment-next-card strong {
+    color: #102131;
+    font-size: 0.98rem;
+}
+
+.payment-next-card span {
+    color: #5a6877;
+    line-height: 1.45;
 }
 
 .success-panel {
@@ -314,6 +479,10 @@ body {
         padding: 14px 12px;
     }
 
+    .flow-card-wide {
+        padding: 16px 14px;
+    }
+
     .input-group {
         margin-bottom: 16px;
     }
@@ -340,6 +509,23 @@ body {
         position: static;
         margin: 18px 0 4px;
         text-align: center;
+    }
+
+    .selection-grid,
+    .payment-next-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .selection-card {
+        min-height: auto;
+    }
+
+    .plan-summary-card {
+        flex-direction: column;
+    }
+
+    .plan-summary-price {
+        font-size: 1.2rem;
     }
 }
 

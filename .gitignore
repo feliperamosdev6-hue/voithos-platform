@@ -31,6 +31,7 @@ storage/
 TENANTS/
 USERS/
 render-static/
+services/voithos-landing/
 pacientes.json
 
 tmp-*.log

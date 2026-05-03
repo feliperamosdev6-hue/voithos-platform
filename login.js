@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const signupForm = document.getElementById('signup-form');
   const showSignupLink = document.getElementById('show-signup-link');
   const hideSignupLink = document.getElementById('hide-signup-link');
+  const signupEntryHint = document.getElementById('signup-entry-hint');
   const screenSubtitle = document.getElementById('screen-subtitle');
   const screens = {
     login: document.getElementById('screen-login'),
@@ -15,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     code: document.getElementById('screen-code'),
     password: document.getElementById('screen-password'),
     success: document.getElementById('screen-success'),
+    onboardingProfile: document.getElementById('screen-onboarding-profile'),
+    onboardingPayment: document.getElementById('screen-onboarding-payment'),
   };
   const emailVerificationCodeInput = document.getElementById('verification-code-input');
   const confirmVerificationButton = document.getElementById('confirm-verification-button');
@@ -38,9 +41,46 @@ document.addEventListener('DOMContentLoaded', () => {
   const recoveryMessage = document.getElementById('recovery-message');
   const codeMessage = document.getElementById('code-message');
   const passwordMessage = document.getElementById('password-message');
+  const signupPlanBanner = document.getElementById('signup-plan-banner');
+  const signupPlanName = document.getElementById('signup-plan-name');
+  const signupPlanCopy = document.getElementById('signup-plan-copy');
+  const profileSelectionMessage = document.getElementById('profile-selection-message');
+  const profileSelectionButtons = Array.from(document.querySelectorAll('[data-operation-type]'));
+  const backToVerificationFromProfile = document.getElementById('back-to-verification-from-profile');
+  const paymentPlanName = document.getElementById('payment-plan-name');
+  const paymentPlanDescription = document.getElementById('payment-plan-description');
+  const paymentPlanPrice = document.getElementById('payment-plan-price');
+  const paymentStatusTitle = document.getElementById('payment-status-title');
+  const paymentStatusCopy = document.getElementById('payment-status-copy');
+  const paymentMessage = document.getElementById('payment-message');
+  const preparePaymentButton = document.getElementById('prepare-payment-button');
+  const backToProfileFromPayment = document.getElementById('back-to-profile-from-payment');
   const authApi = window.appApi?.auth || window.auth;
+  const clinicApi = window.appApi?.clinic || window.clinic || {};
+  const subscriptionApi = window.appApi?.subscription || window.subscription || {};
   const RESEND_WAIT_SECONDS = 5 * 60;
   const VERIFICATION_WAIT_SECONDS = 2 * 60;
+  const PLAN_DEFINITIONS = {
+    MONTHLY: { slug: 'mensal', label: 'Mensal', price: 'R$ 94,90', description: 'Cobranca mensal para comecar com flexibilidade.' },
+    QUARTERLY: { slug: 'trimestral', label: 'Trimestral', price: 'R$ 269,90', description: 'Ciclo ideal para validar a operacao sem perder continuidade.' },
+    SEMIANNUAL: { slug: 'semestral', label: 'Semestral', price: 'R$ 499,90', description: 'Plano mais escolhido por clinicas em crescimento.' },
+    ANNUAL: { slug: 'anual', label: 'Anual', price: 'R$ 899,90', description: 'Maior economia para uso continuo da plataforma.' },
+  };
+  const PLAN_ALIASES = {
+    mensal: 'MONTHLY',
+    monthly: 'MONTHLY',
+    trimestral: 'QUARTERLY',
+    quarterly: 'QUARTERLY',
+    semestral: 'SEMIANNUAL',
+    semiannual: 'SEMIANNUAL',
+    anual: 'ANNUAL',
+    annual: 'ANNUAL',
+  };
+  const OPERATION_TYPE_LABELS = {
+    AUTONOMOUS_DENTIST: 'Dentista autonomo',
+    CLINIC: 'Clinica',
+    OTHER: 'Outros',
+  };
   const getUiBaseUrl = () => {
     try {
       return String(window.__APP_API_BASE__ || localStorage.getItem('apiBase') || '').trim();
@@ -61,6 +101,12 @@ document.addEventListener('DOMContentLoaded', () => {
     sendCount: 0,
     resendTimerId: null,
   };
+  const onboardingFlowState = {
+    selectedPlanType: '',
+    operationType: '',
+    subscriptionOverview: null,
+    onboardingState: null,
+  };
 
   const setError = (message) => {
     if (errorMessage) errorMessage.textContent = message || '';
@@ -68,6 +114,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const setSignupMessage = (message) => {
     if (signupMessage) signupMessage.textContent = message || '';
+  };
+
+  const hideAllScreens = () => {
+    Object.values(screens).forEach((screen) => screen?.classList.add('hidden'));
   };
 
   const toggleSignupForm = (visible) => {
@@ -88,6 +138,194 @@ document.addEventListener('DOMContentLoaded', () => {
     setError('');
     setSignupMessage('');
     if (verificationMessage) verificationMessage.textContent = '';
+  };
+
+  const normalizePlanType = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return PLAN_ALIASES[normalized] || PLAN_ALIASES[normalized.replace(/[\s_-]+/g, '')] || (PLAN_DEFINITIONS[String(value || '').trim().toUpperCase()] ? String(value || '').trim().toUpperCase() : '');
+  };
+
+  const normalizeOperationType = (value) => {
+    const normalized = String(value || '').trim().toUpperCase();
+    if (normalized === 'AUTONOMOUS_DENTIST' || normalized === 'AUTONOMOUS' || normalized === 'DENTIST') return 'AUTONOMOUS_DENTIST';
+    if (normalized === 'CLINIC') return 'CLINIC';
+    if (normalized === 'OTHER' || normalized === 'OUTRO') return 'OTHER';
+    return '';
+  };
+
+  const buildPlanView = (planType, catalog = []) => {
+    const normalizedPlanType = normalizePlanType(planType);
+    const fallback = PLAN_DEFINITIONS[normalizedPlanType] || null;
+    const remoteMatch = (Array.isArray(catalog) ? catalog : []).find((item) => String(item?.planType || '').trim().toUpperCase() === normalizedPlanType);
+    return {
+      planType: normalizedPlanType,
+      label: fallback?.label || String(remoteMatch?.planType || '').trim() || 'Plano',
+      price: remoteMatch?.amount ? `R$ ${Number(remoteMatch.amount).toFixed(2).replace('.', ',')}` : (fallback?.price || '--'),
+      description: fallback?.description || 'Finalize a assinatura para liberar o acesso completo ao sistema.',
+    };
+  };
+
+  const setSignupPlanBanner = (planType) => {
+    const planView = buildPlanView(planType, onboardingFlowState.subscriptionOverview?.plans || []);
+    onboardingFlowState.selectedPlanType = planView.planType;
+    if (!signupPlanBanner) return;
+    if (!planView.planType) {
+      signupPlanBanner.classList.add('hidden');
+      return;
+    }
+    signupPlanBanner.classList.remove('hidden');
+    if (signupPlanName) signupPlanName.textContent = `${planView.label} | ${planView.price}`;
+    if (signupPlanCopy) signupPlanCopy.textContent = 'Seu cadastro seguira para confirmacao de e-mail, definicao do perfil operacional e ativacao da assinatura.';
+    if (signupEntryHint) signupEntryHint.textContent = `${planView.label} selecionado na landing.`;
+  };
+
+  const setPaymentMessage = (message) => {
+    if (paymentMessage) paymentMessage.textContent = message || '';
+  };
+
+  const setProfileSelectionMessage = (message) => {
+    if (profileSelectionMessage) profileSelectionMessage.textContent = message || '';
+  };
+
+  const renderPaymentSummary = () => {
+    const overview = onboardingFlowState.subscriptionOverview || null;
+    const planView = buildPlanView(
+      onboardingFlowState.selectedPlanType || onboardingFlowState.onboardingState?.selectedPlan || overview?.subscription?.planType,
+      overview?.plans || []
+    );
+    const effectiveStatus = String(overview?.effectiveStatus || '').trim().toUpperCase();
+    const paymentLink = String(overview?.subscription?.lastPayment?.paymentLink || '').trim();
+
+    if (paymentPlanName) paymentPlanName.textContent = planView.label || 'Plano nao definido';
+    if (paymentPlanDescription) paymentPlanDescription.textContent = planView.description;
+    if (paymentPlanPrice) paymentPlanPrice.textContent = planView.price || '--';
+
+    if (!overview?.subscription) {
+      if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ainda nao iniciada';
+      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Prepare a assinatura agora para seguir para a cobranca da conta.';
+      if (preparePaymentButton) preparePaymentButton.textContent = 'Preparar assinatura';
+      return;
+    }
+
+    if (effectiveStatus === 'ACTIVE' || effectiveStatus === 'GRACE_PERIOD') {
+      if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ativa';
+      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Pagamento confirmado. O acesso completo ao webapp ja pode ser liberado.';
+      if (preparePaymentButton) preparePaymentButton.textContent = 'Entrar no sistema';
+      return;
+    }
+
+    if (paymentStatusTitle) paymentStatusTitle.textContent = 'Pagamento pendente';
+    if (paymentStatusCopy) {
+      paymentStatusCopy.textContent = paymentLink
+        ? `Assinatura preparada. Link tecnico atual: ${paymentLink}. A tela de cobranca sera conectada na proxima etapa.`
+        : 'Assinatura preparada. A cobranca desta conta ainda sera conectada ao gateway na proxima etapa.';
+    }
+    if (preparePaymentButton) preparePaymentButton.textContent = 'Atualizar status do pagamento';
+  };
+
+  const shouldKeepUserInOnboarding = () => {
+    const selectedPlanType = onboardingFlowState.selectedPlanType || onboardingFlowState.onboardingState?.selectedPlan || '';
+    const operationType = onboardingFlowState.operationType || onboardingFlowState.onboardingState?.operationType || '';
+    const effectiveStatus = String(onboardingFlowState.subscriptionOverview?.effectiveStatus || '').trim().toUpperCase();
+
+    if (!selectedPlanType) return false;
+    if (!operationType) return true;
+    return !['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus);
+  };
+
+  const syncOnboardingState = async () => {
+    const [onboardingState, subscriptionOverview] = await Promise.all([
+      clinicApi?.getOnboardingState ? clinicApi.getOnboardingState().catch(() => null) : Promise.resolve(null),
+      subscriptionApi?.getMySubscription ? subscriptionApi.getMySubscription().catch(() => null) : Promise.resolve(null),
+    ]);
+
+    onboardingFlowState.onboardingState = onboardingState && typeof onboardingState === 'object' ? onboardingState : null;
+    onboardingFlowState.subscriptionOverview = subscriptionOverview && typeof subscriptionOverview === 'object' ? subscriptionOverview : null;
+    onboardingFlowState.selectedPlanType = normalizePlanType(
+      onboardingFlowState.onboardingState?.selectedPlan
+      || onboardingFlowState.selectedPlanType
+      || onboardingFlowState.subscriptionOverview?.subscription?.planType
+    );
+    onboardingFlowState.operationType = normalizeOperationType(
+      onboardingFlowState.onboardingState?.operationType || onboardingFlowState.operationType
+    );
+    setSignupPlanBanner(onboardingFlowState.selectedPlanType);
+    renderPaymentSummary();
+    return {
+      onboardingState: onboardingFlowState.onboardingState,
+      subscriptionOverview: onboardingFlowState.subscriptionOverview,
+    };
+  };
+
+  const goToSignup = (options = {}) => {
+    const prefillEmail = String(options.email || '').trim().toLowerCase();
+    const sourceLabel = String(options.sourceLabel || '').trim();
+    const selectedPlanType = normalizePlanType(options.planType || onboardingFlowState.selectedPlanType);
+
+    setError('');
+    setSignupMessage('');
+    toggleSignupForm(true);
+    updateSubtitle('Criar conta');
+    hideAllScreens();
+    onboardingFlowState.selectedPlanType = selectedPlanType || onboardingFlowState.selectedPlanType;
+    setSignupPlanBanner(onboardingFlowState.selectedPlanType);
+
+    if (prefillEmail) {
+      if (signupForm?.adminEmail) signupForm.adminEmail.value = prefillEmail;
+      if (emailInput && !emailInput.value) emailInput.value = prefillEmail;
+    }
+
+    if (sourceLabel) {
+      setSignupMessage(`${sourceLabel} selecionado. Conclua o cadastro para continuar.`);
+    }
+
+    const firstSignupField = signupForm?.querySelector('input, select');
+    if (firstSignupField instanceof HTMLElement) {
+      firstSignupField.focus();
+    }
+  };
+
+  const normalizeRequestedMode = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (['signup', 'cadastro', 'register', 'trial'].includes(normalized)) return 'signup';
+    if (['recovery', 'reset', 'forgot', 'password-reset', 'recuperar-senha'].includes(normalized)) return 'recovery';
+    return 'login';
+  };
+
+  const readInitialFlowRequest = () => {
+    const params = new URLSearchParams(window.location.search || '');
+    const hashValue = String(window.location.hash || '').replace(/^#/, '').trim().toLowerCase();
+    const rawMode = params.get('mode') || params.get('screen') || hashValue;
+    const email = String(params.get('email') || '').trim().toLowerCase();
+    const plan = String(params.get('plan') || '').trim();
+    return {
+      mode: normalizeRequestedMode(rawMode),
+      email,
+      plan: normalizePlanType(plan),
+    };
+  };
+
+  const applyInitialFlowRequest = () => {
+    const request = readInitialFlowRequest();
+    if (request.email) {
+      if (emailInput) emailInput.value = request.email;
+      if (recoveryEmailInput) recoveryEmailInput.value = request.email;
+    }
+
+    if (request.mode === 'signup') {
+      onboardingFlowState.selectedPlanType = request.plan || onboardingFlowState.selectedPlanType;
+      const planView = buildPlanView(onboardingFlowState.selectedPlanType);
+      const sourceLabel = planView.planType ? `Plano ${planView.label}` : '';
+      goToSignup({ email: request.email, sourceLabel, planType: onboardingFlowState.selectedPlanType });
+      return;
+    }
+
+    if (request.mode === 'recovery') {
+      goToRecovery();
+      return;
+    }
+
+    goToLogin();
   };
 
   const maskEmail = (email) => {
@@ -302,7 +540,22 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Senha redefinida');
   };
 
-  const routeAuthenticatedUser = (user) => {
+  const goToOnboardingProfile = () => {
+    stopAllTimers();
+    showScreen('onboardingProfile');
+    updateSubtitle('Defina seu perfil operacional');
+    setProfileSelectionMessage('');
+  };
+
+  const goToOnboardingPayment = () => {
+    stopAllTimers();
+    showScreen('onboardingPayment');
+    updateSubtitle('Prepare a ativacao da assinatura');
+    setPaymentMessage('');
+    renderPaymentSummary();
+  };
+
+  const routePrivilegedAuthenticatedUser = (user) => {
     if (user?.tipo === 'super_admin') {
       window.location.href = 'super-admin.html';
       return true;
@@ -311,8 +564,66 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = 'change-password.html';
       return true;
     }
+    return false;
+  };
+
+  const routeAuthenticatedUser = () => {
     window.location.href = 'index.html';
     return true;
+  };
+
+  const resumeAuthenticatedExperience = async (user, options = {}) => {
+    if (routePrivilegedAuthenticatedUser(user)) {
+      return true;
+    }
+
+    if (!clinicApi?.getOnboardingState || !subscriptionApi?.getMySubscription) {
+      window.location.href = 'index.html';
+      return true;
+    }
+
+    try {
+      await syncOnboardingState();
+      const selectedPlanType = onboardingFlowState.selectedPlanType || onboardingFlowState.onboardingState?.selectedPlan || '';
+      const operationType = onboardingFlowState.operationType || onboardingFlowState.onboardingState?.operationType || '';
+      const effectiveStatus = String(onboardingFlowState.subscriptionOverview?.effectiveStatus || '').trim().toUpperCase();
+
+      if (!selectedPlanType) {
+        window.location.href = 'index.html';
+        return true;
+      }
+
+      if (!operationType) {
+        goToOnboardingProfile();
+        return true;
+      }
+
+      if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
+        if (!onboardingFlowState.onboardingState?.completedAt && clinicApi?.updateOnboardingState) {
+          try {
+            await clinicApi.updateOnboardingState({
+              selectedPlan: selectedPlanType,
+              operationType,
+              completedAt: new Date().toISOString(),
+            });
+          } catch (_error) {}
+        }
+        window.location.href = 'index.html';
+        return true;
+      }
+
+      if (options?.forcePayment === true || shouldKeepUserInOnboarding()) {
+        goToOnboardingPayment();
+        return true;
+      }
+
+      window.location.href = 'index.html';
+      return true;
+    } catch (error) {
+      console.warn('Nao foi possivel resolver o onboarding autenticado.', error);
+      window.location.href = 'index.html';
+      return true;
+    }
   };
 
   const normalizeDigits = (value, maxLength) => String(value || '').replace(/\D/g, '').slice(0, maxLength);
@@ -322,8 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const user = await authApi.currentUser();
       if (user) {
-        if (user.tipo === 'super_admin') return;
-        routeAuthenticatedUser(user);
+        await resumeAuthenticatedExperience(user);
       }
     } catch (err) {
       console.warn('Nao foi possivel validar sessao existente.', err);
@@ -333,15 +643,6 @@ document.addEventListener('DOMContentLoaded', () => {
   forgotPasswordLink?.addEventListener('click', (event) => {
     event.preventDefault();
     goToRecovery();
-  });
-
-  showSignupLink?.addEventListener('click', (event) => {
-    event.preventDefault();
-    setError('');
-    setSignupMessage('');
-    toggleSignupForm(true);
-    updateSubtitle('Criar conta');
-    Object.values(screens).forEach((screen) => screen?.classList.add('hidden'));
   });
 
   hideSignupLink?.addEventListener('click', (event) => {
@@ -356,6 +657,11 @@ document.addEventListener('DOMContentLoaded', () => {
   backToLoginFromCode?.addEventListener('click', goToLogin);
   backToLoginFromPassword?.addEventListener('click', goToLogin);
   backToLoginFromSuccess?.addEventListener('click', goToLogin);
+  backToVerificationFromProfile?.addEventListener('click', () => goToVerification(verificationFlowState.email, '', {
+    resendAvailableAt: verificationFlowState.resendAvailableAt,
+    sendCount: verificationFlowState.sendCount,
+  }));
+  backToProfileFromPayment?.addEventListener('click', goToOnboardingProfile);
 
   resendVerificationPlaceholder?.addEventListener('click', async () => {
     const email = verificationFlowState.email || String(emailInput?.value || '').trim().toLowerCase();
@@ -445,10 +751,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!result?.success) {
         throw new Error('verification_failed');
       }
-      setFlowMessage(verificationMessage, 'E-mail confirmado com sucesso. Entrando no sistema...');
+      setFlowMessage(verificationMessage, 'E-mail confirmado com sucesso. Preparando seu onboarding...');
       stopAllTimers();
       window.setTimeout(() => {
-        routeAuthenticatedUser(result?.user || { email, emailVerified: true }, email);
+        resumeAuthenticatedExperience(result?.user || { email, emailVerified: true }, { forcePayment: true });
       }, 700);
     } catch (error) {
       console.error('Erro ao confirmar e-mail', error);
@@ -584,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const result = await authApi.login({ email, senha });
       if (result?.success && result?.user) {
-        routeAuthenticatedUser(result.user);
+        await resumeAuthenticatedExperience(result.user);
         return;
       }
       setError('Falha no login. Verifique suas credenciais.');
@@ -640,6 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
         telefone,
         password,
         passwordConfirmation,
+        selectedPlan: onboardingFlowState.selectedPlanType,
       });
       logAuthUiDiagnostic('signup_result', {
         endpoint: '/auth/signup',
@@ -661,7 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (result?.success && result?.user) {
-        routeAuthenticatedUser(result.user);
+        await resumeAuthenticatedExperience(result.user, { forcePayment: true });
         return;
       }
 
@@ -678,6 +985,70 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  showScreen('login');
+  profileSelectionButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const operationType = normalizeOperationType(button.getAttribute('data-operation-type'));
+      if (!operationType) {
+        setProfileSelectionMessage('Selecione um perfil valido para continuar.');
+        return;
+      }
+      if (!clinicApi?.updateOnboardingState) {
+        setProfileSelectionMessage('Nao foi possivel salvar seu perfil agora.');
+        return;
+      }
+
+      try {
+        setProfileSelectionMessage('Salvando perfil...');
+        const result = await clinicApi.updateOnboardingState({
+          selectedPlan: onboardingFlowState.selectedPlanType,
+          operationType,
+        });
+        onboardingFlowState.onboardingState = result || onboardingFlowState.onboardingState;
+        onboardingFlowState.operationType = normalizeOperationType(result?.operationType || operationType);
+        setProfileSelectionMessage('');
+        await syncOnboardingState();
+        goToOnboardingPayment();
+      } catch (error) {
+        console.error('Erro ao salvar perfil operacional', error);
+        setProfileSelectionMessage(error?.message || 'Nao foi possivel salvar seu perfil agora.');
+      }
+    });
+  });
+
+  preparePaymentButton?.addEventListener('click', async () => {
+    const effectiveStatus = String(onboardingFlowState.subscriptionOverview?.effectiveStatus || '').trim().toUpperCase();
+    if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
+      routeAuthenticatedUser();
+      return;
+    }
+
+    if (!onboardingFlowState.selectedPlanType) {
+      setPaymentMessage('Selecione um plano valido para continuar.');
+      return;
+    }
+
+    if (!subscriptionApi?.create || !subscriptionApi?.getMySubscription) {
+      setPaymentMessage('Pagamento indisponivel neste ambiente.');
+      return;
+    }
+
+    try {
+      setPaymentMessage('Preparando assinatura...');
+      if (!onboardingFlowState.subscriptionOverview?.subscription) {
+        await subscriptionApi.create({
+          planType: onboardingFlowState.selectedPlanType,
+          provider: 'MANUAL',
+        });
+      }
+      await syncOnboardingState();
+      renderPaymentSummary();
+      setPaymentMessage('Assinatura preparada. A cobranca sera conectada ao gateway na proxima etapa.');
+    } catch (error) {
+      console.error('Erro ao preparar assinatura', error);
+      setPaymentMessage(error?.message || 'Nao foi possivel preparar a assinatura agora.');
+    }
+  });
+
+  applyInitialFlowRequest();
   checkActiveSession();
 });

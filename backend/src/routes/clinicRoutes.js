@@ -7,7 +7,9 @@ const {
   listClinics,
   createClinicBootstrap,
   getMyOperationalSettings,
+  getMyOnboardingState,
   updateMyOperationalSettings,
+  updateMyOnboardingState,
   getMyClinicProfile,
   updateMyClinicProfile,
   exportMyClinicData,
@@ -50,7 +52,10 @@ const importUpload = multer({
 });
 
 router.get('/', authenticateOptional, listClinics);
-router.use(authenticate, checkSubscription);
+router.use(authenticate);
+router.get('/me/onboarding', getMyOnboardingState);
+router.patch('/me/onboarding', updateMyOnboardingState);
+router.use(checkSubscription);
 router.post('/bootstrap', createClinicBootstrap);
 router.get('/me/operational-settings', getMyOperationalSettings);
 router.patch('/me/operational-settings', updateMyOperationalSettings);

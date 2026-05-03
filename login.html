@@ -26,7 +26,7 @@
                     </div>
                     <button type="submit" class="btn-login">Entrar</button>
                     <p class="login-help"><a href="#" id="forgot-password-link">Esqueci minha senha</a></p>
-                    <p class="login-help"><a href="#" id="show-signup-link">Criar conta</a></p>
+                    <p class="login-help login-help-muted" id="signup-entry-hint">Escolha um plano na landing page para iniciar seu cadastro.</p>
                     <p id="error-message" class="error-message"></p>
                 </form>
             </section>
@@ -120,8 +120,86 @@
                 </div>
             </section>
 
+            <section id="screen-onboarding-profile" class="auth-screen hidden">
+                <div class="flow-header">
+                    <p class="flow-kicker">Onboarding</p>
+                    <h2 class="flow-title">Como voce vai operar a Voithos?</h2>
+                    <p class="flow-copy">Escolha o perfil que melhor descreve seu uso para ajustarmos a implantacao e a cobranca inicial.</p>
+                </div>
+
+                <div class="flow-card flow-card-wide">
+                    <div class="selection-grid">
+                        <button type="button" class="selection-card" data-operation-type="AUTONOMOUS_DENTIST">
+                            <span class="selection-icon" aria-hidden="true">D</span>
+                            <strong>Dentista autonomo</strong>
+                            <span>Atendimento proprio, rotina enxuta e cobranca direta.</span>
+                        </button>
+                        <button type="button" class="selection-card" data-operation-type="CLINIC">
+                            <span class="selection-icon" aria-hidden="true">C</span>
+                            <strong>Clinica</strong>
+                            <span>Equipe, recepcao, agenda compartilhada e operacao recorrente.</span>
+                        </button>
+                        <button type="button" class="selection-card" data-operation-type="OTHER">
+                            <span class="selection-icon" aria-hidden="true">O</span>
+                            <strong>Outros</strong>
+                            <span>Consultorio em transicao, parceiro ou formato operacional hibrido.</span>
+                        </button>
+                    </div>
+                    <p class="flow-message" id="profile-selection-message"></p>
+                    <button type="button" class="btn-secondary" id="back-to-verification-from-profile">Voltar</button>
+                </div>
+            </section>
+
+            <section id="screen-onboarding-payment" class="auth-screen hidden">
+                <div class="flow-header">
+                    <p class="flow-kicker">Pagamento</p>
+                    <h2 class="flow-title">Revise seu plano antes da cobranca</h2>
+                    <p class="flow-copy">A assinatura sera criada agora e o acesso completo ao webapp sera liberado assim que o pagamento for confirmado.</p>
+                </div>
+
+                <div class="flow-card flow-card-wide">
+                    <div class="plan-summary-card">
+                        <div>
+                            <span class="plan-summary-label">Plano selecionado</span>
+                            <strong id="payment-plan-name">Nao definido</strong>
+                            <p id="payment-plan-description">Selecione um plano para continuar com a ativacao.</p>
+                        </div>
+                        <div class="plan-summary-price" id="payment-plan-price">--</div>
+                    </div>
+
+                    <div class="payment-status-strip" id="payment-status-strip">
+                        <strong id="payment-status-title">Assinatura ainda nao iniciada</strong>
+                        <span id="payment-status-copy">Assim que voce continuar, vamos preparar a cobranca desta conta.</span>
+                    </div>
+
+                    <div class="payment-next-grid">
+                        <article class="payment-next-card">
+                            <strong>1. Cadastro confirmado</strong>
+                            <span>Conta criada e e-mail validado.</span>
+                        </article>
+                        <article class="payment-next-card">
+                            <strong>2. Assinatura preparada</strong>
+                            <span>Vamos registrar a cobranca pendente com o plano escolhido.</span>
+                        </article>
+                        <article class="payment-next-card">
+                            <strong>3. Liberacao do acesso</strong>
+                            <span>O botao Entrar passa a levar voce direto ao sistema apos confirmacao do pagamento.</span>
+                        </article>
+                    </div>
+
+                    <button type="button" class="btn-login" id="prepare-payment-button">Preparar assinatura</button>
+                    <button type="button" class="btn-secondary" id="back-to-profile-from-payment">Voltar</button>
+                    <p class="flow-message" id="payment-message"></p>
+                </div>
+            </section>
+
             <form id="signup-form" class="signup-form hidden">
                 <div class="form-divider"><span>Nova conta</span></div>
+                <div class="signup-plan-banner hidden" id="signup-plan-banner">
+                    <span class="signup-plan-kicker">Plano selecionado</span>
+                    <strong id="signup-plan-name">Voithos</strong>
+                    <small id="signup-plan-copy">Seu cadastro seguira para confirmacao de e-mail e ativacao da assinatura.</small>
+                </div>
                 <div class="signup-grid">
                     <div class="input-group">
                         <label for="signup-document-type">CPF ou CNPJ</label>

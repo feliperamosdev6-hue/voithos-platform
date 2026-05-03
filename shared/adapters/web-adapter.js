@@ -1740,6 +1740,8 @@
 
       return normalizedClinic;
     },
+    getOnboardingState: async () => request('GET', '/clinics/me/onboarding', null, { auth: true }),
+    updateOnboardingState: async (payload = {}) => request('PATCH', '/clinics/me/onboarding', payload || {}, { auth: true }),
     save: async (payload = {}) => {
       const currentClinic = getStoredClinic() || {};
       const legacyPayload = buildLegacyClinicSavePayload(payload, currentClinic);
@@ -1813,6 +1815,13 @@
     connectWhatsApp: async () => request('POST', '/clinics/me/whatsapp/connect', {}, { auth: true }),
     disconnectWhatsApp: async () => request('POST', '/clinics/me/whatsapp/disconnect', {}, { auth: true }),
     deleteWhatsAppInstance: async () => request('DELETE', '/clinics/me/whatsapp/instance', null, { auth: true }),
+  };
+
+  const subscription = {
+    getMySubscription: async () => request('GET', '/subscription/me', null, { auth: true }),
+    create: async (payload = {}) => request('POST', '/subscription/create', payload || {}, { auth: true }),
+    confirmPayment: async (payload = {}) => request('POST', '/subscription/confirm-payment', payload || {}, { auth: true }),
+    renew: async (payload = {}) => request('POST', '/subscription/renew', payload || {}, { auth: true }),
   };
 
   const auth = {
@@ -3410,6 +3419,7 @@
     campanhas,
     campanhasGlobal,
     clinic: clinicApi,
+    subscription,
     whatsapp,
     anamneseModels,
     files,

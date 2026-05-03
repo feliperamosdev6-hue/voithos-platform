@@ -64,6 +64,21 @@ const maskEmail = (email) => {
   return `${localMask}@${domain}`;
 };
 
+const normalizeSelectedPlan = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  const aliases = {
+    MENSAL: 'MONTHLY',
+    MONTHLY: 'MONTHLY',
+    TRIMESTRAL: 'QUARTERLY',
+    QUARTERLY: 'QUARTERLY',
+    SEMESTRAL: 'SEMIANNUAL',
+    SEMIANNUAL: 'SEMIANNUAL',
+    ANUAL: 'ANNUAL',
+    ANNUAL: 'ANNUAL',
+  };
+  return aliases[raw] || '';
+};
+
 const logPasswordReset = (stage, details = {}) => {
   console.info('[password-reset][auth-service]', {
     stage,
@@ -245,6 +260,7 @@ const extractPendingSignupData = (pendingSignup) => {
     adminEmail: normalizeEmail(rawData.adminEmail || pendingSignup?.email || ''),
     clinicEmail: normalizeEmail(rawData.clinicEmail || rawData.adminEmail || pendingSignup?.email || ''),
     clinicPhone: String(rawData.clinicPhone || '').trim(),
+    selectedPlan: normalizeSelectedPlan(rawData.selectedPlan || rawData.planType || rawData.plan),
   };
 };
 
@@ -277,6 +293,15 @@ const finalizePendingSignup = async (pendingSignup) => {
         email: signupData.clinicEmail || signupData.adminEmail || null,
         telefoneComercial: signupData.clinicPhone || null,
         endereco: null,
+        operationalSettings: {
+          onboarding: {
+            selectedPlan: signupData.selectedPlan,
+            operationType: '',
+            startedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            completedAt: '',
+          },
+        },
       },
     });
 

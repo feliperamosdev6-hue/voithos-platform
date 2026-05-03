@@ -51,6 +51,35 @@ const getMyOperationalSettings = async (req, res, next) => {
   }
 };
 
+const getMyOnboardingState = async (req, res, next) => {
+  try {
+    const data = await clinicService.getOnboardingState({
+      clinicId: req?.auth?.clinicId,
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updateMyOnboardingState = async (req, res, next) => {
+  try {
+    const data = await clinicService.updateOnboardingState({
+      clinicId: req?.auth?.clinicId,
+      patch: req?.body || {},
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const updateMyOperationalSettings = async (req, res, next) => {
   try {
     const data = await clinicService.updateOperationalSettings({
@@ -486,7 +515,9 @@ module.exports = {
   listClinics,
   createClinicBootstrap,
   getMyOperationalSettings,
+  getMyOnboardingState,
   updateMyOperationalSettings,
+  updateMyOnboardingState,
   getMyClinicProfile,
   updateMyClinicProfile,
   exportMyClinicData,

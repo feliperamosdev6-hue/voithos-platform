@@ -476,6 +476,16 @@
       if (window.api?.clinic?.save) return window.api.clinic.save(payload);
       return unavailable('clinic.save');
     },
+    getOnboardingState: async () => {
+      if (window.api?.clinic?.getOnboardingState) return window.api.clinic.getOnboardingState();
+      if (window.__webAdapter?.clinic?.getOnboardingState) return window.__webAdapter.clinic.getOnboardingState();
+      return unavailable('clinic.getOnboardingState');
+    },
+    updateOnboardingState: async (payload) => {
+      if (window.api?.clinic?.updateOnboardingState) return window.api.clinic.updateOnboardingState(payload);
+      if (window.__webAdapter?.clinic?.updateOnboardingState) return window.__webAdapter.clinic.updateOnboardingState(payload);
+      return unavailable('clinic.updateOnboardingState');
+    },
     testWhatsApp: async (payload) => {
       if (window.api?.clinic?.testWhatsApp) return window.api.clinic.testWhatsApp(payload);
       return unavailable('clinic.testWhatsApp');
@@ -511,6 +521,29 @@
     deleteWhatsAppInstance: async () => {
       if (window.api?.clinic?.deleteWhatsAppInstance) return window.api.clinic.deleteWhatsAppInstance();
       return unavailable('clinic.deleteWhatsAppInstance');
+    },
+  };
+
+  const subscription = {
+    getMySubscription: async () => {
+      if (window.api?.subscription?.getMySubscription) return window.api.subscription.getMySubscription();
+      if (window.__webAdapter?.subscription?.getMySubscription) return window.__webAdapter.subscription.getMySubscription();
+      return unavailable('subscription.getMySubscription');
+    },
+    create: async (payload) => {
+      if (window.api?.subscription?.create) return window.api.subscription.create(payload);
+      if (window.__webAdapter?.subscription?.create) return window.__webAdapter.subscription.create(payload);
+      return unavailable('subscription.create');
+    },
+    confirmPayment: async (payload) => {
+      if (window.api?.subscription?.confirmPayment) return window.api.subscription.confirmPayment(payload);
+      if (window.__webAdapter?.subscription?.confirmPayment) return window.__webAdapter.subscription.confirmPayment(payload);
+      return unavailable('subscription.confirmPayment');
+    },
+    renew: async (payload) => {
+      if (window.api?.subscription?.renew) return window.api.subscription.renew(payload);
+      if (window.__webAdapter?.subscription?.renew) return window.__webAdapter.subscription.renew(payload);
+      return unavailable('subscription.renew');
     },
   };
 
@@ -742,6 +775,7 @@
       campanhas,
       campanhasGlobal,
       clinic,
+      subscription,
       whatsapp,
       anamneseModels,
       files,

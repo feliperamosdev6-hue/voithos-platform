@@ -119,6 +119,9 @@ const DEFAULT_PAYMENT_SETTINGS = {
   updatedAt: '',
 };
 
+const VALID_ONBOARDING_PLAN_TYPES = ['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL'];
+const VALID_ONBOARDING_OPERATION_TYPES = ['AUTONOMOUS_DENTIST', 'CLINIC', 'OTHER'];
+
 const PATIENT_IMPORT_ALIASES = {
   capim: {
     name: ['nome', 'nomepaciente', 'paciente', 'patientname', 'fullname'],
@@ -201,6 +204,13 @@ const getDefaultOperationalSettings = () => ({
     updatedAt: '',
   },
   paymentSettings: DEFAULT_PAYMENT_SETTINGS,
+  onboarding: {
+    selectedPlan: '',
+    operationType: '',
+    startedAt: '',
+    updatedAt: '',
+    completedAt: '',
+  },
   clinicProfile: {
     whatsapp: '',
     cro: '',
@@ -463,6 +473,42 @@ const normalizePaymentSettings = (value = {}) => {
   };
 };
 
+const normalizeOnboardingPlan = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  const aliases = {
+    MENSAL: 'MONTHLY',
+    MONTHLY: 'MONTHLY',
+    TRIMESTRAL: 'QUARTERLY',
+    QUARTERLY: 'QUARTERLY',
+    SEMESTRAL: 'SEMIANNUAL',
+    SEMIANNUAL: 'SEMIANNUAL',
+    ANUAL: 'ANNUAL',
+    ANNUAL: 'ANNUAL',
+  };
+  return aliases[raw] || '';
+};
+
+const normalizeOnboardingOperationType = (value) => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'DENTIST' || raw === 'AUTONOMOUS' || raw === 'AUTONOMOUS_DENTIST') return 'AUTONOMOUS_DENTIST';
+  if (raw === 'CLINIC') return 'CLINIC';
+  if (raw === 'OTHER' || raw === 'OUTRO') return 'OTHER';
+  return '';
+};
+
+const normalizeOnboardingState = (value = {}) => {
+  const raw = isPlainObject(value) ? value : {};
+  const defaults = getDefaultOperationalSettings().onboarding;
+  return {
+    ...defaults,
+    selectedPlan: normalizeOnboardingPlan(raw.selectedPlan || raw.planType),
+    operationType: normalizeOnboardingOperationType(raw.operationType || raw.businessType),
+    startedAt: String(raw.startedAt || '').trim().slice(0, 40),
+    updatedAt: String(raw.updatedAt || '').trim().slice(0, 40),
+    completedAt: String(raw.completedAt || '').trim().slice(0, 40),
+  };
+};
+
 const normalizeOperationalSettings = (value = {}) => {
   const raw = isPlainObject(value) ? value : {};
   const clinicProfile = normalizeClinicProfileExtras(raw.clinicProfile);
@@ -474,6 +520,7 @@ const normalizeOperationalSettings = (value = {}) => {
     ),
     birthdayMessaging: normalizeBirthdayMessaging(raw.birthdayMessaging),
     paymentSettings: normalizePaymentSettings(raw.paymentSettings),
+    onboarding: normalizeOnboardingState(raw.onboarding),
     clinicProfile,
     campaigns: normalizeClinicCampaigns(raw.campaigns),
     anamneseModels: Array.isArray(raw.anamneseModels) ? raw.anamneseModels : [],
@@ -529,6 +576,12 @@ const mergeOperationalSettings = (current = {}, patch = {}) => {
           },
         })
       : safeCurrent.paymentSettings,
+    onboarding: Object.prototype.hasOwnProperty.call(safePatch, 'onboarding')
+      ? normalizeOnboardingState({
+          ...safeCurrent.onboarding,
+          ...(isPlainObject(safePatch.onboarding) ? safePatch.onboarding : {}),
+        })
+      : safeCurrent.onboarding,
     clinicProfile: nextClinicProfile,
     campaigns: Object.prototype.hasOwnProperty.call(safePatch, 'campaigns')
       ? normalizeClinicCampaigns(safePatch.campaigns)
@@ -2386,6 +2439,11 @@ const clinicService = {
     }
   },
 
+  getOnboardingState: async ({ clinicId } = {}) => {
+    const operationalSettings = await clinicService.getOperationalSettings({ clinicId });
+    return normalizeOnboardingState(operationalSettings?.onboarding || {});
+  },
+
   updateOperationalSettings: async ({ clinicId, patch = {} } = {}) => {
     const normalizedClinicId = String(clinicId || '').trim();
     if (!normalizedClinicId) {
@@ -2397,6 +2455,54 @@ const clinicService = {
       const next = mergeOperationalSettings(current || {}, patch || {});
       const stored = await clinicRepository.updateOperationalSettings(normalizedClinicId, next);
       return normalizeOperationalSettings(stored || next);
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  updateOnboardingState: async ({ clinicId, patch = {} } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+
+    const safePatch = isPlainObject(patch) ? patch : {};
+    const selectedPlanPatch = normalizeOnboardingPlan(safePatch.selectedPlan || safePatch.planType);
+    const operationTypePatch = normalizeOnboardingOperationType(safePatch.operationType || safePatch.businessType);
+    if (Object.prototype.hasOwnProperty.call(safePatch, 'selectedPlan') || Object.prototype.hasOwnProperty.call(safePatch, 'planType')) {
+      if (safePatch.selectedPlan && !VALID_ONBOARDING_PLAN_TYPES.includes(selectedPlanPatch)) {
+        throw new AppError(400, 'VALIDATION_ERROR', `selectedPlan must be one of: ${VALID_ONBOARDING_PLAN_TYPES.join(', ')}.`);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(safePatch, 'operationType') || Object.prototype.hasOwnProperty.call(safePatch, 'businessType')) {
+      if (safePatch.operationType && !VALID_ONBOARDING_OPERATION_TYPES.includes(operationTypePatch)) {
+        throw new AppError(400, 'VALIDATION_ERROR', `operationType must be one of: ${VALID_ONBOARDING_OPERATION_TYPES.join(', ')}.`);
+      }
+    }
+    const nowIso = new Date().toISOString();
+    const currentOperationalSettings = await clinicService.getOperationalSettings({ clinicId: normalizedClinicId });
+    const currentOnboarding = normalizeOnboardingState(currentOperationalSettings?.onboarding || {});
+    const nextOnboarding = normalizeOnboardingState({
+      ...currentOnboarding,
+      ...(isPlainObject(safePatch) ? safePatch : {}),
+      startedAt: currentOnboarding.startedAt || nowIso,
+      updatedAt: nowIso,
+      completedAt: safePatch?.completedAt === null
+        ? ''
+        : (String(safePatch?.completedAt || currentOnboarding.completedAt || '').trim()),
+    });
+
+    try {
+      const stored = await clinicRepository.updateOperationalSettings(
+        normalizedClinicId,
+        mergeOperationalSettings(currentOperationalSettings || {}, {
+          onboarding: nextOnboarding,
+        })
+      );
+      return normalizeOnboardingState(stored?.onboarding || nextOnboarding);
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -2979,6 +3085,7 @@ const clinicService = {
     const passwordConfirmation = String(payload?.passwordConfirmation || payload?.confirmarSenha || '').trim();
     const clinicEmail = normalizeEmail(payload?.clinicEmail || adminEmail || '');
     const clinicPhone = String(payload?.telefone || payload?.phone || payload?.telefoneComercial || '').trim();
+    const selectedPlan = normalizeOnboardingPlan(payload?.selectedPlan || payload?.planType || payload?.plan || '');
     const document = validateDocument(payload?.documentType, payload?.documentNumber);
 
     if (!nomeFantasia || !adminNome || !adminEmail || !password || !passwordConfirmation) {
@@ -2991,6 +3098,12 @@ const clinicService = {
 
     if (password !== passwordConfirmation) {
       throw new AppError(400, 'VALIDATION_ERROR', 'Password confirmation does not match.');
+    }
+
+    if (payload?.selectedPlan != null || payload?.planType != null || payload?.plan != null) {
+      if (!VALID_ONBOARDING_PLAN_TYPES.includes(selectedPlan)) {
+        throw new AppError(400, 'VALIDATION_ERROR', `selectedPlan must be one of: ${VALID_ONBOARDING_PLAN_TYPES.join(', ')}.`);
+      }
     }
 
     try {
@@ -3050,6 +3163,7 @@ const clinicService = {
           adminEmail,
           clinicEmail,
           clinicPhone,
+          selectedPlan,
         },
         verificationCode: emailVerificationCode,
         verificationExpiresAt: emailVerificationExpiresAt,
