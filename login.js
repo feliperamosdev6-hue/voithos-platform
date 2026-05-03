@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   const initialFlowState = {
     requestedMode: 'login',
-    skipAutoSessionResume: false,
+    allowAutoSessionResume: false,
   };
 
   const setError = (message) => {
@@ -355,10 +355,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawMode = params.get('mode') || params.get('screen') || hashValue;
     const email = String(params.get('email') || '').trim().toLowerCase();
     const plan = String(params.get('plan') || '').trim();
+    const resume = String(params.get('resume') || params.get('resumeSession') || '').trim().toLowerCase();
     return {
       mode: normalizeRequestedMode(rawMode),
       email,
       plan: normalizePlanType(plan),
+      resume: ['1', 'true', 'yes', 'on'].includes(resume),
     };
   };
 
@@ -377,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyInitialFlowRequest = async () => {
     const request = readInitialFlowRequest();
     initialFlowState.requestedMode = request.mode;
-    initialFlowState.skipAutoSessionResume = request.mode === 'signup';
+    initialFlowState.allowAutoSessionResume = request.resume === true;
 
     if (request.mode === 'signup' && authApi?.clearSession) {
       await authApi.clearSession({ remote: false }).catch(() => null);
@@ -560,7 +562,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const goToLogin = () => {
     resetPublicEntryFlow({ prefillEmail: '' });
-    initialFlowState.skipAutoSessionResume = false;
+    initialFlowState.allowAutoSessionResume = false;
     showScreen('login');
     updateSubtitle('Acesse sua conta para continuar');
   };
@@ -711,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const checkActiveSession = async () => {
     if (!authApi?.currentUser) return;
-    if (initialFlowState.skipAutoSessionResume) return;
+    if (!initialFlowState.allowAutoSessionResume) return;
     try {
       const user = await authApi.currentUser();
       if (user) {
