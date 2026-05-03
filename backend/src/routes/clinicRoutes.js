@@ -6,6 +6,7 @@ const { authenticateOptional } = require('../middlewares/authenticateOptional');
 const {
   listClinics,
   createClinicBootstrap,
+  getSuperAdminOnboardingDashboard,
   getMyOperationalSettings,
   getMyOnboardingState,
   updateMyOperationalSettings,
@@ -53,6 +54,7 @@ const importUpload = multer({
 
 router.get('/', authenticateOptional, listClinics);
 router.use(authenticate);
+router.get('/super-admin/onboarding-dashboard', getSuperAdminOnboardingDashboard);
 router.get('/me/onboarding', getMyOnboardingState);
 router.patch('/me/onboarding', updateMyOnboardingState);
 router.use(checkSubscription);

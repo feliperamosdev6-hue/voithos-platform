@@ -37,6 +37,19 @@ const createClinicBootstrap = async (req, res, next) => {
   }
 };
 
+const getSuperAdminOnboardingDashboard = async (req, res, next) => {
+  try {
+    requireSuperAdmin(req);
+    const data = await clinicService.getSuperAdminOnboardingDashboard();
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getMyOperationalSettings = async (req, res, next) => {
   try {
     const data = await clinicService.getOperationalSettings({
@@ -514,6 +527,7 @@ const deleteMyCampaign = async (req, res, next) => {
 module.exports = {
   listClinics,
   createClinicBootstrap,
+  getSuperAdminOnboardingDashboard,
   getMyOperationalSettings,
   getMyOnboardingState,
   updateMyOperationalSettings,

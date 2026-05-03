@@ -2125,6 +2125,7 @@
       const data = await request('GET', '/clinics', null, { auth: true });
       return (Array.isArray(data) ? data : []).map(mapClinicSummary);
     },
+    getOnboardingDashboard: async () => request('GET', '/clinics/super-admin/onboarding-dashboard', null, { auth: true }),
     createClinic: async (payload = {}) => {
       const result = await request('POST', '/clinics/bootstrap', payload || {}, { auth: true });
       return {

@@ -20,6 +20,32 @@
     </header>
 
     <section class="card">
+      <div class="section-heading">
+        <div>
+          <h2>Funil de onboarding</h2>
+          <p>Visao operacional do cadastro, confirmacao e ativacao das clinicas.</p>
+        </div>
+        <button id="btn-refresh-dashboard" class="btn-outline" type="button">Atualizar painel</button>
+      </div>
+      <div id="dashboard-metrics" class="metrics-grid"></div>
+      <div class="dashboard-columns">
+        <div class="dashboard-panel">
+          <h3>Etapas ativas</h3>
+          <div id="dashboard-stages" class="stage-list"></div>
+        </div>
+        <div class="dashboard-panel">
+          <h3>Planos em andamento</h3>
+          <div id="dashboard-plans" class="stage-list"></div>
+        </div>
+      </div>
+      <div class="dashboard-panel">
+        <h3>Fila recente do funil</h3>
+        <div id="dashboard-recent-entries" class="activity-list"></div>
+      </div>
+      <p id="dashboard-error" class="error"></p>
+    </section>
+
+    <section class="card">
       <h2>Criar clinica</h2>
       <form id="clinic-form" class="form-grid">
         <label>
@@ -63,7 +89,31 @@
     </section>
 
     <section class="card">
-      <h2>Clinicas cadastradas</h2>
+      <div class="section-heading">
+        <div>
+          <h2>Clinicas cadastradas</h2>
+          <p>Lista operacional com status atual do onboarding e da assinatura.</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <label>
+          Buscar
+          <input id="clinic-search" placeholder="Nome, e-mail, CNPJ/CPF ou ID">
+        </label>
+        <label>
+          Etapa
+          <select id="clinic-stage-filter">
+            <option value="">Todas</option>
+            <option value="EMAIL_VERIFICATION_PENDING">Confirmacao de e-mail</option>
+            <option value="PROFILE_PENDING">Aguardando perfil</option>
+            <option value="PAYMENT_PENDING">Aguardando pagamento</option>
+            <option value="ACTIVE">Onboarding concluido</option>
+            <option value="GRACE_PERIOD">Tolerancia</option>
+            <option value="BLOCKED">Bloqueada</option>
+            <option value="CANCELED">Cancelada</option>
+          </select>
+        </label>
+      </div>
       <div id="clinics-list" class="list-empty">Carregando...</div>
     </section>
   </main>

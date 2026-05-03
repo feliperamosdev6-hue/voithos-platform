@@ -5,6 +5,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCreate = document.getElementById('btn-create-clinic');
   const clinicsList = document.getElementById('clinics-list');
   const createError = document.getElementById('create-error');
+  const dashboardError = document.getElementById('dashboard-error');
+  const dashboardMetrics = document.getElementById('dashboard-metrics');
+  const dashboardStages = document.getElementById('dashboard-stages');
+  const dashboardPlans = document.getElementById('dashboard-plans');
+  const dashboardRecentEntries = document.getElementById('dashboard-recent-entries');
+  const btnRefreshDashboard = document.getElementById('btn-refresh-dashboard');
+  const clinicSearchInput = document.getElementById('clinic-search');
+  const clinicStageFilter = document.getElementById('clinic-stage-filter');
   const btnLogout = document.getElementById('btn-logout');
   const btnOpenWhatsappSupport = document.getElementById('btn-open-whatsapp-support');
 
@@ -18,10 +26,53 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnCloseSuccessModalX = document.getElementById('btn-close-success-modal-x');
 
   const clinicCredentialsCache = new Map();
+  const dashboardClinicMap = new Map();
+  let clinicsCache = [];
+  let dashboardCache = null;
   let lastCreatedClinicId = '';
 
   const setError = (message) => {
     if (createError) createError.textContent = message || '';
+  };
+
+  const setDashboardError = (message) => {
+    if (dashboardError) dashboardError.textContent = message || '';
+  };
+
+  const formatDateTime = (value) => {
+    const parsed = value ? new Date(value) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) return '-';
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(parsed);
+  };
+
+  const formatPlanLabel = (plan) => {
+    const labels = {
+      MONTHLY: 'Mensal',
+      QUARTERLY: 'Trimestral',
+      SEMIANNUAL: 'Semestral',
+      ANNUAL: 'Anual',
+    };
+    return labels[String(plan || '').trim().toUpperCase()] || '-';
+  };
+
+  const formatOperationLabel = (operationType) => {
+    const labels = {
+      AUTONOMOUS_DENTIST: 'Dentista autonomo',
+      CLINIC: 'Clinica',
+      OTHER: 'Outros',
+    };
+    return labels[String(operationType || '').trim().toUpperCase()] || '-';
+  };
+
+  const getBadgeClass = (stage) => {
+    const normalized = String(stage || '').trim().toUpperCase();
+    if (['BLOCKED', 'CANCELED'].includes(normalized)) return 'badge is-danger';
+    if (['EMAIL_VERIFICATION_PENDING', 'PROFILE_PENDING', 'PAYMENT_PENDING', 'GRACE_PERIOD'].includes(normalized)) return 'badge is-warn';
+    if (normalized === 'ACTIVE') return 'badge';
+    return 'badge is-neutral';
   };
 
   const copyText = async (text) => {
@@ -77,23 +128,167 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const renderMetricCards = (summary = {}) => {
+    if (!dashboardMetrics) return;
+    const cards = [
+      {
+        label: 'Clinicas totais',
+        value: Number(summary.totalClinics || 0),
+        subcopy: `${Number(summary.clinicsCreatedToday || 0)} hoje | ${Number(summary.clinicsCreatedLast7Days || 0)} nos ultimos 7 dias`,
+      },
+      {
+        label: 'Aguardando e-mail',
+        value: Number(summary.activePendingSignups || 0),
+        subcopy: `${Number(summary.pendingSignupsCreatedToday || 0)} novos hoje`,
+      },
+      {
+        label: 'Aguardando perfil',
+        value: Number(summary.clinicsAwaitingProfile || 0),
+        subcopy: 'Clinicas criadas sem perfil operacional definido',
+      },
+      {
+        label: 'Aguardando pagamento',
+        value: Number(summary.clinicsAwaitingPayment || 0),
+        subcopy: `${Number(summary.activeSubscriptions || 0)} ativas | ${Number(summary.gracePeriodSubscriptions || 0)} em tolerancia`,
+      },
+    ];
+
+    dashboardMetrics.innerHTML = cards.map((card) => `
+      <article class="metric-card">
+        <div class="metric-label">${card.label}</div>
+        <div class="metric-value">${card.value}</div>
+        <div class="metric-subcopy">${card.subcopy}</div>
+      </article>
+    `).join('');
+  };
+
+  const renderKeyValuePanel = (container, items = [], emptyLabel) => {
+    if (!container) return;
+    if (!items.length) {
+      container.innerHTML = `<div class="list-empty">${emptyLabel}</div>`;
+      return;
+    }
+    container.innerHTML = items.map((item) => `
+      <div class="stage-item">
+        <div class="stage-item-header">
+          <span class="stage-item-label">${item.label}</span>
+          <span class="stage-item-value">${item.value}</span>
+        </div>
+        ${item.subcopy ? `<div class="activity-meta">${item.subcopy}</div>` : ''}
+      </div>
+    `).join('');
+  };
+
+  const renderRecentEntries = (entries = []) => {
+    if (!dashboardRecentEntries) return;
+    if (!entries.length) {
+      dashboardRecentEntries.innerHTML = '<div class="list-empty">Nenhuma atividade recente do funil.</div>';
+      return;
+    }
+
+    dashboardRecentEntries.innerHTML = entries.map((entry) => `
+      <article class="activity-item">
+        <div class="activity-item-header">
+          <div class="activity-title">${entry.nomeFantasia || entry.nomeClinica || entry.email || entry.clinicId || 'Registro do onboarding'}</div>
+          <span class="${getBadgeClass(entry.stage)}">${entry.stageLabel || entry.stage || 'Etapa'}</span>
+        </div>
+        <div class="activity-meta">
+          ${entry.entryType === 'pending_signup'
+            ? `Lead pendente | ${entry.email || '-'} | Plano ${formatPlanLabel(entry.selectedPlan)}`
+            : `Clinica ${entry.clinicId || '-'} | ${entry.adminEmail || entry.clinicEmail || '-'} | Plano ${formatPlanLabel(entry.selectedPlan)}`}
+        </div>
+        <div class="activity-submeta">
+          ${entry.operationType ? `Perfil ${formatOperationLabel(entry.operationType)} | ` : ''}Atualizado em ${formatDateTime(entry.sortDate || entry.updatedAt || entry.createdAt)}
+        </div>
+      </article>
+    `).join('');
+  };
+
+  const renderDashboard = (dashboard = null) => {
+    dashboardCache = dashboard;
+    const summary = dashboard?.summary || {};
+    const stageBreakdown = dashboard?.stageBreakdown || {};
+    const planBreakdown = dashboard?.planBreakdown || {};
+    const clinicSnapshots = Array.isArray(dashboard?.clinicSnapshots) ? dashboard.clinicSnapshots : [];
+    dashboardClinicMap.clear();
+    clinicSnapshots.forEach((snapshot) => {
+      dashboardClinicMap.set(String(snapshot?.clinicId || '').trim(), snapshot);
+    });
+
+    renderMetricCards(summary);
+    renderKeyValuePanel(dashboardStages, [
+      { label: 'Confirmacao de e-mail', value: Number(stageBreakdown.EMAIL_VERIFICATION_PENDING || 0) },
+      { label: 'Aguardando perfil', value: Number(stageBreakdown.PROFILE_PENDING || 0) },
+      { label: 'Aguardando pagamento', value: Number(stageBreakdown.PAYMENT_PENDING || 0) },
+      { label: 'Onboarding concluido', value: Number(stageBreakdown.ACTIVE || 0) },
+      { label: 'Em tolerancia', value: Number(stageBreakdown.GRACE_PERIOD || 0) },
+      { label: 'Bloqueadas', value: Number(stageBreakdown.BLOCKED || 0) },
+      { label: 'Canceladas', value: Number(stageBreakdown.CANCELED || 0) },
+    ], 'Nenhuma etapa ativa no momento.');
+    renderKeyValuePanel(dashboardPlans, [
+      { label: 'Mensal', value: Number(planBreakdown.MONTHLY || 0) },
+      { label: 'Trimestral', value: Number(planBreakdown.QUARTERLY || 0) },
+      { label: 'Semestral', value: Number(planBreakdown.SEMIANNUAL || 0) },
+      { label: 'Anual', value: Number(planBreakdown.ANNUAL || 0) },
+    ], 'Nenhum plano em andamento.');
+    renderRecentEntries(Array.isArray(dashboard?.recentEntries) ? dashboard.recentEntries : []);
+    renderClinics(clinicsCache);
+  };
+
+  const getClinicStageSnapshot = (clinicId) => dashboardClinicMap.get(String(clinicId || '').trim()) || null;
+
+  const filterClinics = (clinics = []) => {
+    const query = String(clinicSearchInput?.value || '').trim().toLowerCase();
+    const stageFilter = String(clinicStageFilter?.value || '').trim().toUpperCase();
+
+    return (Array.isArray(clinics) ? clinics : []).filter((clinic) => {
+      const clinicId = String(clinic.clinicId || '').trim();
+      const snapshot = getClinicStageSnapshot(clinicId);
+      const haystack = [
+        clinicId,
+        clinic?.nomeFantasia,
+        clinic?.razaoSocial,
+        clinic?.cnpjOuCpf,
+        clinic?.email,
+        snapshot?.adminEmail,
+        snapshot?.clinicEmail,
+      ].map((value) => String(value || '').trim().toLowerCase()).join(' ');
+
+      if (query && !haystack.includes(query)) return false;
+      if (stageFilter) {
+        const normalizedStage = String(snapshot?.stage || '').trim().toUpperCase();
+        if (normalizedStage !== stageFilter) return false;
+      }
+      return true;
+    });
+  };
+
   const renderClinics = (clinics) => {
     if (!clinicsList) return;
-    if (!Array.isArray(clinics) || clinics.length === 0) {
+    const filteredClinics = filterClinics(clinics);
+    if (!filteredClinics.length) {
       clinicsList.innerHTML = '<div class="list-empty">Nenhuma clinica cadastrada.</div>';
       return;
     }
 
-    clinicsList.innerHTML = clinics.map((clinic) => {
+    clinicsList.innerHTML = filteredClinics.map((clinic) => {
       const status = clinic.status === 'active' ? 'Ativa' : 'Suspensa';
       const clinicId = String(clinic.clinicId || '');
       const hasCredentials = clinicCredentialsCache.has(clinicId);
+      const snapshot = getClinicStageSnapshot(clinicId);
+      const stageLabel = snapshot?.stageLabel || 'Sem telemetria';
       return `
         <article class="clinic-item" data-clinic-id="${clinicId}">
-          <div class="clinic-name">${clinic.nomeFantasia || clinic.razaoSocial || 'Sem nome'}</div>
+          <div class="clinic-topline">
+            <div class="clinic-name">${clinic.nomeFantasia || clinic.razaoSocial || 'Sem nome'}</div>
+            <span class="${getBadgeClass(snapshot?.stage)}">${stageLabel}</span>
+          </div>
           <div class="clinic-meta">ID: ${clinicId}</div>
           <div class="clinic-meta">CNPJ/CPF: ${clinic.cnpjOuCpf || '-'}</div>
           <div class="clinic-meta">Status: ${status}</div>
+          <div class="clinic-meta">Plano: ${formatPlanLabel(snapshot?.selectedPlan)} | Perfil: ${formatOperationLabel(snapshot?.operationType)}</div>
+          <div class="clinic-meta">Admin: ${snapshot?.adminEmail || '-'}</div>
+          <div class="clinic-meta">Atualizado: ${formatDateTime(snapshot?.onboardingUpdatedAt || snapshot?.updatedAt || clinic?.updatedAt)}</div>
           <div class="clinic-actions">
             <button type="button" class="btn-primary" data-action="open-clinic" data-clinic-id="${clinicId}">Abrir clinica</button>
             <button type="button" data-action="copy-id" data-clinic-id="${clinicId}">Copiar ID</button>
@@ -120,12 +315,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const loadClinics = async () => {
     try {
       const clinics = await authApi.listClinics();
-      renderClinics(clinics || []);
-      return clinics || [];
+      clinicsCache = clinics || [];
+      renderClinics(clinicsCache);
+      return clinicsCache;
     } catch (err) {
       clinicsList.textContent = err?.message || 'Falha ao carregar clinicas.';
       return [];
     }
+  };
+
+  const loadDashboard = async () => {
+    if (!authApi?.getOnboardingDashboard) return null;
+    try {
+      setDashboardError('');
+      const dashboard = await authApi.getOnboardingDashboard();
+      renderDashboard(dashboard || null);
+      return dashboard || null;
+    } catch (err) {
+      setDashboardError(err?.message || 'Falha ao carregar o dashboard do onboarding.');
+      return null;
+    }
+  };
+
+  const refreshSuperAdminData = async () => {
+    const [dashboard] = await Promise.all([
+      loadDashboard(),
+      loadClinics(),
+    ]);
+    return dashboard;
   };
 
   btnCreate?.addEventListener('click', async () => {
@@ -157,7 +374,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const result = await authApi.createClinic(payload);
-      const clinics = await loadClinics();
+      await refreshSuperAdminData();
+      const clinics = clinicsCache;
 
       let clinicId = String(result?.clinic?.clinicId || '').trim();
       let clinicName = result?.clinic?.nomeFantasia || result?.clinic?.razaoSocial || '';
@@ -291,11 +509,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  btnRefreshDashboard?.addEventListener('click', async () => {
+    await refreshSuperAdminData();
+  });
+
+  clinicSearchInput?.addEventListener('input', () => {
+    renderClinics(clinicsCache);
+  });
+
+  clinicStageFilter?.addEventListener('change', () => {
+    renderClinics(clinicsCache);
+  });
+
   (async () => {
     try {
       const user = await ensureSuperAdmin();
       if (!user) return;
-      await loadClinics();
+      await refreshSuperAdminData();
     } catch (_err) {
       window.location.href = 'login.html';
     }

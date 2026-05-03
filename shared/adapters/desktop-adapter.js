@@ -115,6 +115,11 @@
       if (!window.auth?.listClinics) return unavailable('auth.listClinics');
       return window.auth.listClinics();
     },
+    getOnboardingDashboard: async () => {
+      if (window.auth?.getOnboardingDashboard) return window.auth.getOnboardingDashboard();
+      if (window.__webAdapter?.auth?.getOnboardingDashboard) return window.__webAdapter.auth.getOnboardingDashboard();
+      return unavailable('auth.getOnboardingDashboard');
+    },
     createClinic: async (payload) => {
       if (!window.auth?.createClinic) return unavailable('auth.createClinic');
       return window.auth.createClinic(payload);

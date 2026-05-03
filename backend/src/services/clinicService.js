@@ -509,6 +509,136 @@ const normalizeOnboardingState = (value = {}) => {
   };
 };
 
+const normalizeIsoDate = (value) => {
+  if (!value) return '';
+  const parsed = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+};
+
+const getStartOfDay = (referenceDate = new Date()) => {
+  const date = new Date(referenceDate);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getStartOfDaysAgo = (daysAgo = 0, referenceDate = new Date()) => {
+  const date = getStartOfDay(referenceDate);
+  date.setDate(date.getDate() - Math.max(0, Number(daysAgo) || 0));
+  return date;
+};
+
+const isDateOnOrAfter = (value, boundary) => {
+  const parsed = value instanceof Date ? value : new Date(value);
+  const boundaryDate = boundary instanceof Date ? boundary : new Date(boundary);
+  if (Number.isNaN(parsed.getTime()) || Number.isNaN(boundaryDate.getTime())) return false;
+  return parsed.getTime() >= boundaryDate.getTime();
+};
+
+const deriveAdminEntry = (users = []) => {
+  const list = Array.isArray(users) ? users : [];
+  const admin = list.find((user) => user?.isClinicAdmin === true) || list[0] || null;
+  return {
+    adminEmail: normalizeEmail(admin?.email || ''),
+    adminName: String(admin?.nome || '').trim(),
+  };
+};
+
+const deriveSubscriptionEffectiveStatusForDashboard = (subscription) => {
+  if (!subscription) return 'NO_SUBSCRIPTION';
+  const currentStatus = String(subscription.status || '').trim().toUpperCase();
+  if (currentStatus === 'CANCELED') return 'CANCELED';
+  if (currentStatus === 'PENDING_PAYMENT') {
+    const lastPaymentStatus = String(subscription.lastPayment?.status || '').trim().toUpperCase();
+    if (!subscription.endDate || !subscription.graceUntil || lastPaymentStatus === 'PENDING') {
+      return 'PENDING_PAYMENT';
+    }
+  }
+
+  const nowTime = Date.now();
+  const endTime = subscription.endDate ? new Date(subscription.endDate).getTime() : 0;
+  const graceTime = subscription.graceUntil ? new Date(subscription.graceUntil).getTime() : 0;
+
+  if (currentStatus === 'ACTIVE' && !endTime && !graceTime) return 'ACTIVE';
+  if (!endTime || !graceTime) return currentStatus || 'PENDING_PAYMENT';
+  if (nowTime <= endTime) return 'ACTIVE';
+  if (nowTime <= graceTime) return 'GRACE_PERIOD';
+  return 'BLOCKED';
+};
+
+const deriveOnboardingStage = ({ onboardingState, subscription }) => {
+  const selectedPlan = normalizeOnboardingPlan(onboardingState?.selectedPlan);
+  const operationType = normalizeOnboardingOperationType(onboardingState?.operationType);
+  const effectiveSubscriptionStatus = deriveSubscriptionEffectiveStatusForDashboard(subscription);
+
+  if (!selectedPlan) {
+    return {
+      stage: 'NO_ONBOARDING',
+      label: 'Sem onboarding comercial',
+      selectedPlan: '',
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (!operationType) {
+    return {
+      stage: 'PROFILE_PENDING',
+      label: 'Aguardando perfil operacional',
+      selectedPlan,
+      operationType: '',
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (!subscription || ['NO_SUBSCRIPTION', 'PENDING_PAYMENT'].includes(effectiveSubscriptionStatus)) {
+    return {
+      stage: 'PAYMENT_PENDING',
+      label: 'Aguardando pagamento',
+      selectedPlan,
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (effectiveSubscriptionStatus === 'GRACE_PERIOD') {
+    return {
+      stage: 'GRACE_PERIOD',
+      label: 'Assinatura em tolerancia',
+      selectedPlan,
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (effectiveSubscriptionStatus === 'BLOCKED') {
+    return {
+      stage: 'BLOCKED',
+      label: 'Assinatura bloqueada',
+      selectedPlan,
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (effectiveSubscriptionStatus === 'CANCELED') {
+    return {
+      stage: 'CANCELED',
+      label: 'Assinatura cancelada',
+      selectedPlan,
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  return {
+    stage: 'ACTIVE',
+    label: 'Onboarding concluido',
+    selectedPlan,
+    operationType,
+    effectiveSubscriptionStatus,
+  };
+};
+
 const normalizeOperationalSettings = (value = {}) => {
   const raw = isPlainObject(value) ? value : {};
   const clinicProfile = normalizeClinicProfileExtras(raw.clinicProfile);
@@ -2417,6 +2547,233 @@ const clinicService = {
     } catch (error) {
       if (isMissingTableError(error)) {
         return [];
+      }
+      throw error;
+    }
+  },
+
+  getSuperAdminOnboardingDashboard: async () => {
+    try {
+      const now = new Date();
+      const startOfToday = getStartOfDay(now);
+      const startOfSevenDays = getStartOfDaysAgo(6, now);
+
+      const [activePendingSignups, clinicRows] = await Promise.all([
+        prisma.pendingSignup.findMany({
+          where: {
+            verificationExpiresAt: {
+              gte: now,
+            },
+          },
+          select: {
+            id: true,
+            email: true,
+            signupData: true,
+            verificationExpiresAt: true,
+            resendAvailableAt: true,
+            sendCount: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        }),
+        prisma.clinic.findMany({
+          select: {
+            id: true,
+            nomeFantasia: true,
+            razaoSocial: true,
+            cnpjCpf: true,
+            email: true,
+            createdAt: true,
+            updatedAt: true,
+            operationalSettings: true,
+            users: {
+              select: {
+                email: true,
+                nome: true,
+                isClinicAdmin: true,
+              },
+              orderBy: {
+                createdAt: 'asc',
+              },
+            },
+            subscription: {
+              select: {
+                planType: true,
+                status: true,
+                startDate: true,
+                endDate: true,
+                graceUntil: true,
+                createdAt: true,
+                updatedAt: true,
+                lastPayment: {
+                  select: {
+                    status: true,
+                    provider: true,
+                    paymentLink: true,
+                    createdAt: true,
+                    paidAt: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        }),
+      ]);
+
+      const summary = {
+        totalClinics: clinicRows.length,
+        clinicsCreatedToday: 0,
+        clinicsCreatedLast7Days: 0,
+        activePendingSignups: activePendingSignups.length,
+        pendingSignupsCreatedToday: 0,
+        pendingSignupsCreatedLast7Days: 0,
+        clinicsAwaitingProfile: 0,
+        clinicsAwaitingPayment: 0,
+        activeSubscriptions: 0,
+        gracePeriodSubscriptions: 0,
+        blockedSubscriptions: 0,
+        canceledSubscriptions: 0,
+      };
+
+      const planBreakdown = {
+        MONTHLY: 0,
+        QUARTERLY: 0,
+        SEMIANNUAL: 0,
+        ANNUAL: 0,
+      };
+
+      const stageBreakdown = {
+        EMAIL_VERIFICATION_PENDING: 0,
+        PROFILE_PENDING: 0,
+        PAYMENT_PENDING: 0,
+        ACTIVE: 0,
+        GRACE_PERIOD: 0,
+        BLOCKED: 0,
+        CANCELED: 0,
+      };
+
+      const clinicSnapshots = clinicRows.map((clinic) => {
+        const operationalSettings = normalizeOperationalSettings(clinic.operationalSettings || {});
+        const onboardingState = operationalSettings.onboarding || getDefaultOperationalSettings().onboarding;
+        const stageInfo = deriveOnboardingStage({
+          onboardingState,
+          subscription: clinic.subscription || null,
+        });
+        const adminEntry = deriveAdminEntry(clinic.users);
+
+        if (isDateOnOrAfter(clinic.createdAt, startOfToday)) summary.clinicsCreatedToday += 1;
+        if (isDateOnOrAfter(clinic.createdAt, startOfSevenDays)) summary.clinicsCreatedLast7Days += 1;
+        if (stageInfo.selectedPlan && Object.prototype.hasOwnProperty.call(planBreakdown, stageInfo.selectedPlan)) {
+          planBreakdown[stageInfo.selectedPlan] += 1;
+        }
+
+        if (stageInfo.stage === 'PROFILE_PENDING') summary.clinicsAwaitingProfile += 1;
+        if (stageInfo.stage === 'PAYMENT_PENDING') summary.clinicsAwaitingPayment += 1;
+        if (stageInfo.stage === 'ACTIVE') summary.activeSubscriptions += 1;
+        if (stageInfo.stage === 'GRACE_PERIOD') summary.gracePeriodSubscriptions += 1;
+        if (stageInfo.stage === 'BLOCKED') summary.blockedSubscriptions += 1;
+        if (stageInfo.stage === 'CANCELED') summary.canceledSubscriptions += 1;
+        if (Object.prototype.hasOwnProperty.call(stageBreakdown, stageInfo.stage)) {
+          stageBreakdown[stageInfo.stage] += 1;
+        }
+
+        return {
+          clinicId: clinic.id,
+          nomeFantasia: String(clinic.nomeFantasia || '').trim(),
+          razaoSocial: String(clinic.razaoSocial || '').trim(),
+          cnpjOuCpf: String(clinic.cnpjCpf || '').trim(),
+          clinicEmail: normalizeEmail(clinic.email || ''),
+          adminEmail: adminEntry.adminEmail,
+          adminName: adminEntry.adminName,
+          selectedPlan: stageInfo.selectedPlan,
+          operationType: stageInfo.operationType,
+          stage: stageInfo.stage,
+          stageLabel: stageInfo.label,
+          effectiveSubscriptionStatus: stageInfo.effectiveSubscriptionStatus,
+          createdAt: normalizeIsoDate(clinic.createdAt),
+          updatedAt: normalizeIsoDate(clinic.updatedAt),
+          onboardingStartedAt: String(onboardingState.startedAt || '').trim(),
+          onboardingUpdatedAt: String(onboardingState.updatedAt || '').trim(),
+          onboardingCompletedAt: String(onboardingState.completedAt || '').trim(),
+        };
+      });
+
+      const pendingSnapshots = activePendingSignups.map((pendingSignup) => {
+        const signupData = isPlainObject(pendingSignup.signupData) ? pendingSignup.signupData : {};
+        const selectedPlan = normalizeOnboardingPlan(signupData.selectedPlan || signupData.planType || signupData.plan);
+        if (isDateOnOrAfter(pendingSignup.createdAt, startOfToday)) summary.pendingSignupsCreatedToday += 1;
+        if (isDateOnOrAfter(pendingSignup.createdAt, startOfSevenDays)) summary.pendingSignupsCreatedLast7Days += 1;
+        if (selectedPlan && Object.prototype.hasOwnProperty.call(planBreakdown, selectedPlan)) {
+          planBreakdown[selectedPlan] += 1;
+        }
+        stageBreakdown.EMAIL_VERIFICATION_PENDING += 1;
+
+        return {
+          id: pendingSignup.id,
+          email: normalizeEmail(pendingSignup.email || ''),
+          nomeClinica: String(signupData.nomeFantasia || '').trim(),
+          responsavelNome: String(signupData.adminNome || '').trim(),
+          selectedPlan,
+          sendCount: Math.max(0, Number(pendingSignup.sendCount || 0)),
+          verificationExpiresAt: normalizeIsoDate(pendingSignup.verificationExpiresAt),
+          resendAvailableAt: normalizeIsoDate(pendingSignup.resendAvailableAt),
+          createdAt: normalizeIsoDate(pendingSignup.createdAt),
+          updatedAt: normalizeIsoDate(pendingSignup.updatedAt),
+          stage: 'EMAIL_VERIFICATION_PENDING',
+          stageLabel: 'Aguardando confirmacao de e-mail',
+        };
+      });
+
+      const recentEntries = [
+        ...pendingSnapshots.map((item) => ({
+          entryType: 'pending_signup',
+          sortDate: item.updatedAt || item.createdAt,
+          ...item,
+        })),
+        ...clinicSnapshots.map((item) => ({
+          entryType: 'clinic_onboarding',
+          sortDate: item.onboardingUpdatedAt || item.updatedAt || item.createdAt,
+          ...item,
+        })),
+      ]
+        .sort((left, right) => String(right.sortDate || '').localeCompare(String(left.sortDate || '')))
+        .slice(0, 30);
+
+      return {
+        summary,
+        stageBreakdown,
+        planBreakdown,
+        recentEntries,
+        clinicSnapshots,
+      };
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        return {
+          summary: {
+            totalClinics: 0,
+            clinicsCreatedToday: 0,
+            clinicsCreatedLast7Days: 0,
+            activePendingSignups: 0,
+            pendingSignupsCreatedToday: 0,
+            pendingSignupsCreatedLast7Days: 0,
+            clinicsAwaitingProfile: 0,
+            clinicsAwaitingPayment: 0,
+            activeSubscriptions: 0,
+            gracePeriodSubscriptions: 0,
+            blockedSubscriptions: 0,
+            canceledSubscriptions: 0,
+          },
+          stageBreakdown: {},
+          planBreakdown: {},
+          recentEntries: [],
+          clinicSnapshots: [],
+        };
       }
       throw error;
     }
