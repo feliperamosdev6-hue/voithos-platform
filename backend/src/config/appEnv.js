@@ -58,6 +58,8 @@ const appEnv = {
   appointmentReminderSchedulerEnabled: String(readValue('APPOINTMENT_REMINDER_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',
   appointmentReminderIntervalMinutes: Math.max(1, Number(readValue('APPOINTMENT_REMINDER_INTERVAL_MINUTES', '60')) || 60),
   appointmentReminderTimeZone: String(readValue('APPOINTMENT_REMINDER_TIMEZONE', 'America/Sao_Paulo')).trim() || 'America/Sao_Paulo',
+  maintenanceSchedulerEnabled: String(readValue('MAINTENANCE_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',
+  maintenanceSchedulerIntervalMinutes: Math.max(5, Number(readValue('MAINTENANCE_SCHEDULER_INTERVAL_MINUTES', '30')) || 30),
   planMessageSchedulerEnabled: String(readValue('PLAN_MESSAGE_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',
   planMessageSchedulerIntervalMinutes: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_INTERVAL_MINUTES', '60')) || 60),
   planMessageSchedulerLimitPerClinic: Math.max(1, Number(readValue('PLAN_MESSAGE_SCHEDULER_LIMIT_PER_CLINIC', '200')) || 200),

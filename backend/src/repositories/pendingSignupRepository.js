@@ -85,6 +85,14 @@ const pendingSignupRepository = {
       WHERE "email" = ${normalizedEmail}
     `;
   },
+
+  deleteExpired: async (referenceDate = new Date()) => prisma.pendingSignup.deleteMany({
+    where: {
+      verificationExpiresAt: {
+        lt: referenceDate instanceof Date ? referenceDate : new Date(referenceDate),
+      },
+    },
+  }),
 };
 
 module.exports = { pendingSignupRepository };

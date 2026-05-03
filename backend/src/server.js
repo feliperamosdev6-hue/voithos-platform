@@ -32,6 +32,7 @@ const internalWhatsappRoutes = require('./routes/internalWhatsappRoutes');
 const notificationEventRoutes = require('./routes/notificationEventRoutes');
 const publicAppointmentActionRoutes = require('./routes/publicAppointmentActionRoutes');
 const { startAppointmentReminderScheduler } = require('./services/appointmentReminderSchedulerService');
+const { startMaintenanceScheduler } = require('./services/maintenanceSchedulerService');
 const { startPlanMessageScheduler } = require('./services/planMessageSchedulerService');
 const { errorHandler } = require('./middlewares/errorHandler');
 
@@ -144,6 +145,7 @@ if (legacySqliteApiEnabled) {
 app.use(errorHandler);
 
 startAppointmentReminderScheduler();
+startMaintenanceScheduler();
 startPlanMessageScheduler();
 
 app.listen(port, () => {

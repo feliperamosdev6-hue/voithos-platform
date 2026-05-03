@@ -719,7 +719,6 @@ const getSessionByToken = async (token) => {
   if (!normalizedToken) return null;
 
   try {
-    await sessionRepository.deleteExpired(new Date());
     const session = await sessionRepository.findByToken(normalizedToken);
     if (!session) return null;
     if (new Date(session.expiresAt).getTime() <= Date.now()) {
