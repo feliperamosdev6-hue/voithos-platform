@@ -969,6 +969,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (['PIX', 'CREDIT', 'DEBIT', 'CASH', 'BOLETO', 'TRANSFER', 'OTHER'].includes(raw)) return raw;
     if (raw === 'CARTAO_CREDITO' || raw === 'CREDITO') return 'CREDIT';
     if (raw === 'CARTAO_DEBITO' || raw === 'DEBITO') return 'DEBIT';
+    if (raw === 'CARD' || raw === 'CARTAO') return 'CREDIT';
     if (raw === 'DINHEIRO') return 'CASH';
     if (raw === 'TRANSFERENCIA') return 'TRANSFER';
     if (raw === 'OUTRO') return 'OTHER';
@@ -1970,6 +1971,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const refreshProcedimentos = async () => {
     if (!currentPatient?.prontuario || !servicesApi.listForPatient) return;
+    const now = Date.now();
+    if (financeSyncRefreshInFlight || (now - financeSyncLastRefreshAt) < 250) return;
+    financeSyncRefreshInFlight = true;
     try {
       const resp = await servicesApi.listForPatient(currentPatient.prontuario);
       currentPatient.servicos = resp?.servicos || [];
@@ -1977,9 +1981,18 @@ document.addEventListener('DOMContentLoaded', () => {
       updateFinanceMetrics(currentPatient.servicos);
       applyOdontogramaSelections(currentPatient.servicos);
       await refreshPatientFinance();
+      financeSyncLastRefreshAt = Date.now();
     } catch (err) {
       console.warn('[PRONTUARIO] nao foi possivel atualizar procedimentos', err);
+    } finally {
+      financeSyncRefreshInFlight = false;
     }
+  };
+
+  let financeSyncLastRefreshAt = 0;
+  let financeSyncRefreshInFlight = false;
+  const syncFinanceViews = async () => {
+    await refreshProcedimentos();
   };
 
 
@@ -3188,6 +3201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await financeApi.update?.({
           id: financeEntryId,
           paymentMethod: nextMethod,
+          paymentMethodDetail: nextMethod,
           metodoPagamento: paymentMethodToFinance(nextMethod),
         });
         buildProcedureToast(`Forma de pagamento: ${paymentMethodLabel(nextMethod)}.`);
@@ -3227,12 +3241,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (linkedProcedure && servicesApi.delete && currentPatient?.prontuario) {
           await servicesApi.delete({ prontuario: currentPatient.prontuario, id: linkedProcedureId });
           emitFinanceUpdated();
-          await refreshProcedimentos();
+          currentPatient.servicos = (Array.isArray(currentPatient.servicos) ? currentPatient.servicos : [])
+            .filter((svc) => String(svc?.id || '') !== String(linkedProcedureId));
+          renderProcedimentos(currentPatient.servicos, getActiveProcedimentosFilter());
+          patientFinanceRows = (patientFinanceRows || []).filter((item) => String(item?.id || '') !== String(financeEntryId));
+          renderPatientFinance(patientFinanceRows);
           buildProcedureToast('Pagamento e procedimento excluidos com sucesso.');
         } else {
           await financeApi.remove?.(financeEntryId);
           emitFinanceUpdated();
-          await refreshProcedimentos();
+          patientFinanceRows = (patientFinanceRows || []).filter((item) => String(item?.id || '') !== String(financeEntryId));
+          renderPatientFinance(patientFinanceRows);
           buildProcedureToast('Pagamento excluido com sucesso.');
         }
       } catch (err) {
@@ -3273,6 +3292,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await financeApi.update?.({
         id: financeEntryId,
         paymentMethod: nextMethod,
+        paymentMethodDetail: nextMethod,
         metodoPagamento: paymentMethodToFinance(nextMethod),
         installments: nextInstallments,
       });
@@ -3632,6 +3652,7 @@ document.addEventListener('DOMContentLoaded', () => {
         descricao,
         valor,
         paymentMethod,
+        paymentMethodDetail: paymentMethod,
         metodoPagamento: paymentMethodToFinance(paymentMethod),
         dueDate: dueDate || null,
         vencimento: dueDate || null,
@@ -3671,12 +3692,13 @@ document.addEventListener('DOMContentLoaded', () => {
             paciente: currentPatient.nome || currentPatient.name || '',
             paymentStatus: 'PENDING',
             status: 'pendente',
-            paymentMethod,
-            metodoPagamento: paymentMethodToFinance(paymentMethod),
-            dueDate: dueDate || null,
-            vencimento: dueDate || null,
-            installments,
-          });
+          paymentMethod,
+          paymentMethodDetail: paymentMethod,
+          metodoPagamento: paymentMethodToFinance(paymentMethod),
+          dueDate: dueDate || null,
+          vencimento: dueDate || null,
+          installments,
+        });
         }
         setPatientPaymentModalStatus('Pagamento adicionado com sucesso.', 'success');
       }
@@ -3835,6 +3857,14 @@ document.addEventListener('DOMContentLoaded', () => {
       procedureFinalizeSaving = false;
       if (submitBtn) submitBtn.disabled = false;
     }
+  });
+
+  window.addEventListener('finance-updated', () => {
+    syncFinanceViews().catch((err) => console.warn('[PRONTUARIO] falha ao sincronizar financeiro apos evento.', err));
+  });
+  window.addEventListener('storage', (event) => {
+    if (event.key !== getClinicStorageKey('voithos-finance-updated')) return;
+    syncFinanceViews().catch((err) => console.warn('[PRONTUARIO] falha ao sincronizar financeiro apos storage.', err));
   });
 
   (async () => {

@@ -35,6 +35,7 @@ const registerFinanceHandlers = ({
   const normalizePaymentMethod = (value) => {
     const raw = cleanText(value).toUpperCase();
     if (['PIX', 'CREDIT', 'DEBIT', 'CASH', 'BOLETO', 'TRANSFER', 'OTHER'].includes(raw)) return raw;
+    if (raw === 'CARD' || raw === 'CARTAO') return 'CREDIT';
     if (raw === 'CARTAO_CREDITO' || raw === 'CREDITO') return 'CREDIT';
     if (raw === 'CARTAO_DEBITO' || raw === 'DEBITO') return 'DEBIT';
     if (raw === 'DINHEIRO') return 'CASH';
@@ -54,6 +55,7 @@ const registerFinanceHandlers = ({
       PIX: 'pix',
       CREDIT: 'cartao_credito',
       DEBIT: 'cartao_debito',
+      CARD: 'cartao_credito',
       CASH: 'dinheiro',
       BOLETO: 'boleto',
       TRANSFER: 'transferencia',
@@ -63,7 +65,13 @@ const registerFinanceHandlers = ({
   };
   const normalizeFinanceRow = (row = {}) => {
     const paymentStatus = normalizePaymentStatus(row?.paymentStatus || row?.status || 'PENDING');
-    const paymentMethod = normalizePaymentMethod(row?.paymentMethod || row?.metodoPagamento || '');
+    const paymentMethod = normalizePaymentMethod(
+      row?.paymentMethodDetail
+      || row?.metadata?.paymentMethodDetail
+      || row?.paymentMethod
+      || row?.metodoPagamento
+      || '',
+    );
     const totalAmount = Number(
       row?.valor ?? row?.totalAmount ?? row?.amount ?? row?.grossAmount ?? 0
     ) || 0;
@@ -650,6 +658,7 @@ const registerFinanceHandlers = ({
         source: lanc?.origem || null,
         type: lanc?.tipo || 'receita',
         paymentMethod: lanc?.paymentMethod || lanc?.metodoPagamento || '',
+        paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
         dueDate: lanc?.dueDate || lanc?.vencimento || lanc?.data || null,
         installments: Array.isArray(lanc?.installments) ? lanc.installments : null,
         installmentsCount: lanc?.installments ?? lanc?.parcelas ?? null,
@@ -683,6 +692,7 @@ const registerFinanceHandlers = ({
         category: lanc.categoria,
         source: lanc.origem,
         dueDate: lanc.dueDate || lanc.vencimento || lanc.data || null,
+        paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
       },
     });
     await runFinanceShadowSync(lancamento, { action: 'financial_updated_shadow_sync' });
@@ -703,6 +713,7 @@ const registerFinanceHandlers = ({
         category: 'procedimentos',
         type: 'receita',
         paymentMethod: payload?.paymentMethod || payload?.metodoPagamento || '',
+        paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.metodoPagamento || '',
         dueDate: payload?.dueDate || payload?.data || null,
         installments: payload?.installments ?? null,
         procedureId: payload?.procedureId || '',
@@ -740,6 +751,7 @@ const registerFinanceHandlers = ({
       installmentId: payload?.installmentId || '',
       amount: payload?.amount || payload?.valor || 0,
       method: payload?.paymentMethod || payload?.metodoPagamento || '',
+      paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.metodoPagamento || '',
       paidAt: payload?.paidAt || new Date().toISOString(),
       metadata: { source: 'finance-confirm-payment' },
     });

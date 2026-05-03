@@ -2224,7 +2224,8 @@
       financeiro: {
         ...finance,
         paymentStatus: cleanText(finance?.paymentStatus || service?.paymentStatus || ''),
-        paymentMethod: cleanText(finance?.paymentMethod || service?.paymentMethod || service?.metodoPagamento || ''),
+        paymentMethod: cleanText(finance?.paymentMethod || finance?.paymentMethodDetail || service?.paymentMethod || service?.metodoPagamento || ''),
+        paymentMethodDetail: cleanText(finance?.paymentMethodDetail || finance?.paymentMethod || service?.paymentMethod || service?.metodoPagamento || ''),
       },
     };
   };
@@ -2609,11 +2610,23 @@
       const data = await request('GET', `/financial/patients/${encodeURIComponent(resolvedPatientId)}/summary`, null, { auth: true });
       return Array.isArray(data?.accounts) ? data.accounts : [];
     },
-    add: async (payload = {}) => request('POST', '/financial/accounts', payload || {}, { auth: true }),
+    add: async (payload = {}) => request(
+      'POST',
+      '/financial/accounts',
+      {
+        ...payload,
+        paymentMethod: payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+        paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+      },
+      { auth: true }
+    ),
     update: async (payload = {}) => request(
       'PATCH',
       `/financial/accounts/${encodeURIComponent(cleanText(payload?.id || payload?.financeEntryId))}`,
-      payload || {},
+      {
+        ...payload,
+        paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+      },
       { auth: true }
     ),
     confirmPayment: async (payload = {}) => request(
@@ -2623,6 +2636,7 @@
         installmentId: cleanText(payload?.installmentId || ''),
         amount: payload?.amount,
         paymentMethod: payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+        paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
         paidAt: payload?.paidAt || new Date().toISOString(),
         metadata: payload?.metadata || {},
       },

@@ -32,6 +32,7 @@ const registerServicesHandlers = ({
     if (allowed.has(raw)) return raw;
     if (raw === 'CARTAO_CREDITO' || raw === 'CREDITO') return 'CREDIT';
     if (raw === 'CARTAO_DEBITO' || raw === 'DEBITO') return 'DEBIT';
+    if (raw === 'CARD' || raw === 'CARTAO') return 'CREDIT';
     if (raw === 'DINHEIRO') return 'CASH';
     if (raw === 'TRANSFERENCIA') return 'TRANSFER';
     if (raw === 'OUTRO') return 'OTHER';
@@ -272,6 +273,7 @@ const registerServicesHandlers = ({
           source: 'procedimento',
           type: 'receita',
           paymentMethod: payload?.paymentMethod || payload?.metodoPagamento || '',
+          paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.metodoPagamento || '',
           dueDate: payload?.dueDate || payload?.data || null,
           installments: payload?.installments ?? null,
           appointmentId: payload?.appointmentId || '',
@@ -458,6 +460,7 @@ const registerServicesHandlers = ({
       paymentStatus,
       metodoPagamento: paymentMethodToFinance(paymentMethod),
       paymentMethod: paymentMethod || '',
+      paymentMethodDetail: cleanText(base.paymentMethodDetail || base.paymentMethod || paymentMethod || ''),
       dueDate,
       vencimento: dueDate,
       paidAt: paymentStatus === 'PAID' ? (base.paidAt || nowIso) : null,

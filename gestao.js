@@ -712,6 +712,7 @@
 
   let usuarioLogado = null;
   let financeRefreshInFlight = false;
+  let financeRefreshLastAt = 0;
   const getFinanceSyncStorageKey = () => {
     const clinicId = String(usuarioLogado?.clinicId || '').trim();
     return clinicId ? `voithos-finance-updated:${clinicId}` : 'voithos-finance-updated:global';
@@ -754,10 +755,12 @@
   };
 
   const refreshFinanceViews = async () => {
-    if (financeRefreshInFlight) return;
+    const now = Date.now();
+    if (financeRefreshInFlight || (now - financeRefreshLastAt) < 250) return;
     financeRefreshInFlight = true;
     try {
       await carregarLancamentos();
+      financeRefreshLastAt = Date.now();
     } finally {
       financeRefreshInFlight = false;
     }
@@ -3261,8 +3264,10 @@
             } else {
               await financeApi.remove?.(id);
             }
+            lancamentos = (lancamentos || []).filter((item) => String(item?.id || '') !== String(id));
+            preencherTabelas();
+            atualizarRelatorioAtual();
             emitFinanceUpdated('gestao-delete');
-            await refreshFinanceViews();
           } catch (err) {
             console.error('Erro ao excluir lancamento financeiro:', err);
             alert('Nao foi possivel excluir o lancamento.');
@@ -3308,8 +3313,6 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
 
 
 

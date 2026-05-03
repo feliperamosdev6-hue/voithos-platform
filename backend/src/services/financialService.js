@@ -1,5 +1,6 @@
 const { AppError } = require('../errors/AppError');
 const { financialRepository } = require('../repositories/financialRepository');
+const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
 const { planMessageService } = require('./planMessageService');
 const { ensurePlanFinancialAccount, ensurePlanFinancialAccounts } = require('./planFinancialAccountSyncService');
 
@@ -20,6 +21,7 @@ const toDateOnly = (value, fallback = '') => {
 
 const cleanText = (value) => String(value || '').trim();
 const PAYMENT_TRANSACTION_TYPES = new Set(['PAYMENT']);
+const PAYMENT_METHOD_DETAILS = new Set(['PIX', 'CREDIT', 'DEBIT', 'CASH', 'BOLETO', 'TRANSFER', 'OTHER']);
 
 const normalizeAccountStatus = (value) => {
   const raw = cleanText(value).toUpperCase();
@@ -48,6 +50,20 @@ const normalizeTransactionMethod = (value) => {
   return raw || 'OTHER';
 };
 
+const normalizePaymentMethodDetail = (value, fallback = 'PIX') => {
+  const raw = cleanText(value).toUpperCase();
+  if (PAYMENT_METHOD_DETAILS.has(raw)) return raw;
+  if (raw === 'CARTAO_CREDITO' || raw === 'CREDITO' || raw === 'CARTAO' || raw === 'CARD') return 'CREDIT';
+  if (raw === 'CARTAO_DEBITO' || raw === 'DEBITO') return 'DEBIT';
+  if (raw === 'DINHEIRO') return 'CASH';
+  if (raw === 'TRANSFERENCIA') return 'TRANSFER';
+  if (raw === 'OUTRO') return 'OTHER';
+  const fallbackRaw = cleanText(fallback).toUpperCase();
+  if (PAYMENT_METHOD_DETAILS.has(fallbackRaw)) return fallbackRaw;
+  if (fallbackRaw === 'CARD' || fallbackRaw === 'CARTAO') return 'CREDIT';
+  return 'PIX';
+};
+
 const normalizePlanStatus = (value) => {
   const raw = cleanText(value).toUpperCase();
   if (raw === 'ATIVO' || raw === 'ACTIVE') return 'ACTIVE';
@@ -66,6 +82,8 @@ const accountStatusToLegacy = (status) => {
 
 const methodToLegacy = (method) => {
   if (method === 'CASH') return 'dinheiro';
+  if (method === 'CREDIT') return 'cartao_credito';
+  if (method === 'DEBIT') return 'cartao_debito';
   if (method === 'CARD') return 'cartao';
   if (method === 'TRANSFER') return 'transferencia';
   if (method === 'BOLETO') return 'boleto';
@@ -118,6 +136,35 @@ const ensureClinicPatient = async ({ clinicId, patientId }) => {
   const patient = await financialRepository.findPatientByIdAndClinic({ clinicId, patientId });
   if (!patient) throw new AppError(404, 'PATIENT_NOT_FOUND', 'Patient not found for this clinic.');
   return patient;
+};
+
+const clearProcedureFinancialSnapshot = async ({ clinicId, account = null } = {}) => {
+  const patientProcedureId = cleanText(account?.patientProcedureId);
+  if (!patientProcedureId) return;
+
+  const procedure = await financialRepository.findPatientProcedureByIdAndClinic({
+    clinicId,
+    patientProcedureId,
+  });
+  if (!procedure) return;
+
+  const payload = procedure.payload && typeof procedure.payload === 'object' ? procedure.payload : {};
+  await patientClinicalRepository.updateProcedure({
+    id: procedure.id,
+    clinicId,
+    patientId: procedure.patientId,
+    data: {
+      financialSnapshot: null,
+      payload: {
+        ...payload,
+        financeiro: null,
+        paymentStatus: '',
+        paymentMethod: '',
+        metodoPagamento: '',
+        vencimento: '',
+      },
+    },
+  });
 };
 
 const sanitizeTenantMetadata = (value = {}) => {
@@ -209,6 +256,10 @@ const mapAccountToLegacy = (row = {}) => {
     rowStatus: row.status,
   });
   const firstDueDate = installments[0]?.dueDate || toDateOnly(row.dueDate);
+  const paymentMethodDetail = normalizePaymentMethodDetail(
+    metadata.paymentMethodDetail || row.paymentMethodDetail || metadata.entryPaymentMethod || row.paymentMethod || row.metodoPagamento || '',
+    row.paymentMethodDetail || row.paymentMethod || metadata.paymentMethodDetail || metadata.entryPaymentMethod || 'PIX',
+  );
   return {
     id: row.id,
     clinicId: row.clinicId,
@@ -234,8 +285,9 @@ const mapAccountToLegacy = (row = {}) => {
     tipo: cleanText(metadata.type || 'receita'),
     status: accountStatusToLegacy(paymentStatus),
     paymentStatus,
-    metodoPagamento: methodToLegacy(row.paymentMethod),
-    paymentMethod: row.paymentMethod || '',
+    metodoPagamento: methodToLegacy(paymentMethodDetail),
+    paymentMethod: paymentMethodDetail,
+    paymentMethodDetail,
     paidAt: installments.find((item) => item.status === 'PAID')?.paidAt || null,
     paidAmount,
     remainingAmount,
@@ -603,7 +655,13 @@ const buildPlanLedgerEntries = (accountRow = {}) => {
   const planTitle = cleanPlanLedgerTitle(accountRow?.description || metadata?.planName || metadata?.title || '');
   const patientName = cleanText(legacyAccount?.paciente || metadata?.patientName || '');
   const prontuario = cleanText(legacyAccount?.prontuario || metadata?.prontuario || accountRow?.patientId || '');
-  const paymentMethod = cleanText(accountRow?.paymentMethod || metadata?.entryPaymentMethod || '');
+  const paymentMethod = cleanText(
+    legacyAccount?.paymentMethod
+    || legacyAccount?.paymentMethodDetail
+    || metadata?.entryPaymentMethod
+    || accountRow?.paymentMethod
+    || '',
+  );
   const metodoPagamento = methodToLegacy(paymentMethod);
   const baseEntry = {
     clinicId: cleanText(accountRow?.clinicId),
@@ -878,6 +936,9 @@ const financialService = {
       ...(payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
       patientName: payload.patientName || patient?.nome || '',
       prontuario: payload.prontuario || patient?.id || '',
+      paymentMethodDetail: normalizePaymentMethodDetail(
+        payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail || 'PIX',
+      ),
       procedureName: payload.procedureName || '',
       funcionario: cleanText(payload.funcionario || payload.dentistaNome || ''),
       dentistId: cleanText(payload.dentistaId || ''),
@@ -900,8 +961,8 @@ const financialService = {
       category: cleanText(payload.category || payload.categoria || '') || null,
       source: cleanText(payload.source || payload.origem || '') || null,
       dueDate: toDate(payload.dueDate || payload.vencimento || payload.data, null),
-      paymentMethod: cleanText(payload.paymentMethod || payload.metodoPagamento)
-        ? normalizeTransactionMethod(payload.paymentMethod || payload.metodoPagamento)
+      paymentMethod: cleanText(payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail)
+        ? normalizeTransactionMethod(payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail)
         : null,
       externalReference: externalReference || null,
       metadata,
@@ -983,12 +1044,20 @@ const financialService = {
         dueDate: payload.dueDate !== undefined || payload.vencimento !== undefined || payload.data !== undefined
           ? toDate(payload.dueDate || payload.vencimento || payload.data, null)
           : existing.dueDate,
-        paymentMethod: payload.paymentMethod !== undefined || payload.metodoPagamento !== undefined
-          ? normalizeTransactionMethod(payload.paymentMethod || payload.metodoPagamento)
+        paymentMethod: payload.paymentMethod !== undefined || payload.metodoPagamento !== undefined || payload.paymentMethodDetail !== undefined || payload?.metadata?.paymentMethodDetail !== undefined
+          ? normalizeTransactionMethod(payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail)
           : existing.paymentMethod,
         metadata: {
           ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
           ...((payload.metadata && typeof payload.metadata === 'object') ? payload.metadata : {}),
+          ...((payload.paymentMethod !== undefined || payload.metodoPagamento !== undefined || payload.paymentMethodDetail !== undefined || payload?.metadata?.paymentMethodDetail !== undefined)
+            ? {
+                paymentMethodDetail: normalizePaymentMethodDetail(
+                  payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail || existing.metadata?.paymentMethodDetail || existing.paymentMethod,
+                  existing.metadata?.paymentMethodDetail || existing.paymentMethod,
+                ),
+              }
+            : {}),
           ...(payload.funcionario !== undefined || payload.dentistaNome !== undefined || payload.dentistaId !== undefined
             ? {
                 funcionario: cleanText(payload.funcionario || payload.dentistaNome || ''),
@@ -1028,6 +1097,10 @@ const financialService = {
       clinicId: normalizedClinicId,
       accountId: normalizedAccountId,
     });
+    await clearProcedureFinancialSnapshot({
+      clinicId: normalizedClinicId,
+      account: row,
+    });
     return { success: true };
   },
 
@@ -1041,6 +1114,10 @@ const financialService = {
     if (!row) throw new AppError(404, 'FINANCIAL_ACCOUNT_NOT_FOUND', 'Financial account not found.');
 
     const normalizedMethod = normalizeTransactionMethod(method);
+    const transactionMetadata = {
+      ...(metadata && typeof metadata === 'object' ? metadata : {}),
+      paymentMethodDetail: normalizePaymentMethodDetail(method, row.paymentMethod || metadata?.paymentMethodDetail),
+    };
     const paidDate = toDate(paidAt, new Date());
 
     let targetInstallment = null;
@@ -1117,7 +1194,7 @@ const financialService = {
       type: 'PAYMENT',
       amount: amountToPersist,
       method: normalizedMethod,
-      metadata,
+      metadata: transactionMetadata,
     });
 
     const refreshed = await financialRepository.findFinancialAccountByIdAndClinic({

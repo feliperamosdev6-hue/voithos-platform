@@ -46,10 +46,12 @@ const normalizeProcedurePaymentMethod = (value) => {
   const raw = cleanText(value).toUpperCase();
   if (!raw) return 'PIX';
   if (raw === 'DINHEIRO') return 'CASH';
-  if (raw === 'CARTAO' || raw === 'CREDIT' || raw === 'DEBIT' || raw === 'CARD') return 'CARD';
+  if (raw === 'CARTAO_CREDITO' || raw === 'CREDITO' || raw === 'CREDIT' || raw === 'CARTAO' || raw === 'CARD') return 'CREDIT';
+  if (raw === 'CARTAO_DEBITO' || raw === 'DEBITO' || raw === 'DEBIT') return 'DEBIT';
   if (raw === 'TRANSFERENCIA' || raw === 'TRANSFER') return 'TRANSFER';
   if (raw === 'BOLETO') return 'BOLETO';
   if (raw === 'PIX') return 'PIX';
+  if (raw === 'OUTRO') return 'OTHER';
   return raw;
 };
 
@@ -168,7 +170,22 @@ const buildProcedureFinancialSnapshot = ({
       ...baseSnapshot,
       financeEntryId: cleanText(baseSnapshot.financeEntryId || financeId),
       paymentStatus: normalizeProcedurePaymentStatus(baseSnapshot.paymentStatus),
-      paymentMethod: normalizeProcedurePaymentMethod(baseSnapshot.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || 'PIX'),
+      paymentMethod: normalizeProcedurePaymentMethod(
+        baseSnapshot.paymentMethodDetail
+        || baseSnapshot.paymentMethod
+        || payload?.paymentMethodDetail
+        || payload?.paymentMethod
+        || payload?.metodoPagamento
+        || 'PIX',
+      ),
+      paymentMethodDetail: normalizeProcedurePaymentMethod(
+        baseSnapshot.paymentMethodDetail
+        || baseSnapshot.paymentMethod
+        || payload?.paymentMethodDetail
+        || payload?.paymentMethod
+        || payload?.metodoPagamento
+        || 'PIX',
+      ),
       dueDate: cleanText(baseSnapshot.dueDate || payload?.vencimento || payload?.dueDate || ''),
       installments: Number(baseSnapshot.installments ?? resolveProcedureInstallments(payload)) || 1,
       amount,
@@ -179,7 +196,20 @@ const buildProcedureFinancialSnapshot = ({
     ...baseSnapshot,
     financeEntryId: cleanText(financeAccount.id || financeId),
     paymentStatus: cleanText(financeAccount.paymentStatus || 'PENDING'),
-    paymentMethod: cleanText(financeAccount.paymentMethod || financeAccount.metodoPagamento || ''),
+    paymentMethod: normalizeProcedurePaymentMethod(
+      financeAccount.paymentMethodDetail
+      || financeAccount.metadata?.paymentMethodDetail
+      || financeAccount.paymentMethod
+      || financeAccount.metodoPagamento
+      || '',
+    ),
+    paymentMethodDetail: normalizeProcedurePaymentMethod(
+      financeAccount.paymentMethodDetail
+      || financeAccount.metadata?.paymentMethodDetail
+      || financeAccount.paymentMethod
+      || financeAccount.metodoPagamento
+      || '',
+    ),
     dueDate: cleanText(financeAccount.dueDate || financeAccount.vencimento || ''),
     paidAt: financeAccount.paidAt || null,
     installments: Number(financeAccount.installmentsCount || baseSnapshot.installments || 1) || 1,
@@ -209,7 +239,22 @@ const mapLinkedFinanceToLegacy = (row = {}, payload = {}) => {
       ...merged,
       financeEntryId: cleanText(merged.financeEntryId || ''),
       paymentStatus: normalizeProcedurePaymentStatus(merged.paymentStatus),
-      paymentMethod: cleanText(merged.paymentMethod || payload?.paymentMethod || payload?.metodoPagamento || ''),
+      paymentMethod: normalizeProcedurePaymentMethod(
+        merged.paymentMethodDetail
+        || merged.paymentMethod
+        || payload?.paymentMethodDetail
+        || payload?.paymentMethod
+        || payload?.metodoPagamento
+        || '',
+      ),
+      paymentMethodDetail: normalizeProcedurePaymentMethod(
+        merged.paymentMethodDetail
+        || merged.paymentMethod
+        || payload?.paymentMethodDetail
+        || payload?.paymentMethod
+        || payload?.metodoPagamento
+        || '',
+      ),
       dueDate: cleanText(merged.dueDate || payload?.vencimento || payload?.dueDate || ''),
       installments: Number(merged.installments ?? resolveProcedureInstallments(payload)) || 1,
       amount: resolveProcedureAmount(payload),
@@ -222,7 +267,8 @@ const mapLinkedFinanceToLegacy = (row = {}, payload = {}) => {
     financeEntryId: legacyAccount.id,
     accountId: legacyAccount.id,
     paymentStatus: legacyAccount.paymentStatus,
-    paymentMethod: legacyAccount.paymentMethod || legacyAccount.metodoPagamento || '',
+    paymentMethod: legacyAccount.paymentMethod || legacyAccount.paymentMethodDetail || legacyAccount.metodoPagamento || '',
+    paymentMethodDetail: legacyAccount.paymentMethodDetail || legacyAccount.paymentMethod || legacyAccount.metodoPagamento || '',
     dueDate: legacyAccount.dueDate || legacyAccount.vencimento || '',
     paidAt: legacyAccount.paidAt || null,
     installments: Number(legacyAccount.installmentsCount || merged.installments || 1) || 1,

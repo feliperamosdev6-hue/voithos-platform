@@ -112,6 +112,8 @@ const registerFaturamentoHandlers = ({
         category: lanc?.categoria || 'faturamento',
         source: 'faturamento',
         type: lanc?.tipo || 'receita',
+        paymentMethod: lanc?.paymentMethod || lanc?.metodoPagamento || '',
+        paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
         dueDate: lanc?.data || lanc?.dueDate || null,
         installments: Array.isArray(lanc?.parcelas?.lista)
           ? lanc.parcelas.lista.map((item, index) => ({
@@ -136,11 +138,13 @@ const registerFaturamentoHandlers = ({
         accountId: lanc.id,
         account: {
           ...lanc,
-          totalAmount: lanc.valor,
-          description: lanc.descricao,
-          dueDate: lanc.data || lanc.dueDate || null,
-        },
-      });
+        totalAmount: lanc.valor,
+        description: lanc.descricao,
+        dueDate: lanc.data || lanc.dueDate || null,
+        paymentMethod: lanc?.paymentMethod || lanc?.metodoPagamento || '',
+        paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
+      },
+    });
     }
     const list = await readFaturamento();
     const idx = list.findIndex((l) => l.id === lanc.id);

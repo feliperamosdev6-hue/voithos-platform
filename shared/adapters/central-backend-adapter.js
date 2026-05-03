@@ -1655,6 +1655,13 @@ const createCentralBackendAdapter = (options = {}) => {
   const createFinancialAccount = async ({ clinicId, patient = {}, appointment = {}, account = {} } = {}) => {
     const normalizedClinicId = String(clinicId || appointment?.clinicId || patient?.clinicId || account?.clinicId || '').trim();
     const normalizedPatientId = String(account?.patientId || patient?.id || patient?.prontuario || '').trim();
+    const paymentMethodDetail = String(
+      account?.paymentMethodDetail
+      || account?.paymentMethod
+      || account?.method
+      || account?.metodoPagamento
+      || ''
+    ).trim();
     const context = normalizedPatientId
       ? await resolveClinicalPatientContext({ clinicId: normalizedClinicId, patient, appointment, allowCreate: true })
       : { clinicId: normalizedClinicId, patient: null };
@@ -1665,6 +1672,7 @@ const createCentralBackendAdapter = (options = {}) => {
         patientId: context.patient?.id || '',
         appointmentId: cleanText(appointment?.id || appointment?.appointmentId || account?.appointmentId),
         ...account,
+        paymentMethodDetail,
       }),
     });
     return payload?.data || null;
@@ -1673,11 +1681,19 @@ const createCentralBackendAdapter = (options = {}) => {
   const updateFinancialAccount = async ({ clinicId, accountId, account = {} } = {}) => {
     const normalizedClinicId = String(clinicId || account?.clinicId || '').trim();
     const normalizedAccountId = String(accountId || account?.id || '').trim();
+    const paymentMethodDetail = String(
+      account?.paymentMethodDetail
+      || account?.paymentMethod
+      || account?.method
+      || account?.metodoPagamento
+      || ''
+    ).trim();
     const payload = await requestInternalJson(`/internal/financial/accounts/${encodeURIComponent(normalizedAccountId)}`, {
       method: 'PATCH',
       body: JSON.stringify({
         clinicId: normalizedClinicId,
         ...account,
+        paymentMethodDetail,
       }),
     });
     return payload?.data || null;
@@ -1693,9 +1709,10 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || { success: true };
   };
 
-  const registerFinancialPayment = async ({ clinicId, accountId, installmentId = '', amount, method, paidAt, metadata = {} } = {}) => {
+  const registerFinancialPayment = async ({ clinicId, accountId, installmentId = '', amount, method, paymentMethodDetail = '', paidAt, metadata = {} } = {}) => {
     const normalizedClinicId = String(clinicId || '').trim();
     const normalizedAccountId = String(accountId || '').trim();
+    const normalizedPaymentMethodDetail = String(paymentMethodDetail || method || '').trim();
     const payload = await requestInternalJson(`/internal/financial/accounts/${encodeURIComponent(normalizedAccountId)}/payments`, {
       method: 'POST',
       body: JSON.stringify({
@@ -1703,6 +1720,7 @@ const createCentralBackendAdapter = (options = {}) => {
         installmentId,
         amount,
         method,
+        paymentMethodDetail: normalizedPaymentMethodDetail,
         paidAt,
         metadata,
       }),
