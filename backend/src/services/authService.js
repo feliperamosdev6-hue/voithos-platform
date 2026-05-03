@@ -669,8 +669,6 @@ const ensureSuperAdminUser = async () => {
   if (!SUPER_ADMIN_EMAIL || !SUPER_ADMIN_PASSWORD) return null;
 
   const existing = await userRepository.findByEmail(SUPER_ADMIN_EMAIL);
-  if (existing) return existing;
-
   let clinic = await clinicRepository.findByEmail(SUPER_ADMIN_CLINIC_EMAIL);
   if (!clinic) {
     clinic = await clinicRepository.create({
@@ -684,15 +682,34 @@ const ensureSuperAdminUser = async () => {
   }
 
   const passwordHash = await hashPassword(SUPER_ADMIN_PASSWORD);
-  return userRepository.create({
-    clinicId: clinic.id,
-    nome: 'Super Admin Voithos',
+  if (!existing) {
+    return userRepository.create({
+      clinicId: clinic.id,
+      nome: 'Super Admin Voithos',
+      email: SUPER_ADMIN_EMAIL,
+      passwordHash,
+      role: 'SUPER_ADMIN',
+      isClinicAdmin: true,
+      ativo: true,
+    });
+  }
+
+  await userRepository.updateByEmail({
     email: SUPER_ADMIN_EMAIL,
-    passwordHash,
-    role: 'SUPER_ADMIN',
-    isClinicAdmin: true,
-    ativo: true,
+    data: {
+      clinicId: clinic.id,
+      nome: 'Super Admin Voithos',
+      passwordHash,
+      role: 'SUPER_ADMIN',
+      isClinicAdmin: true,
+      ativo: true,
+      emailVerified: true,
+      emailVerificationCode: null,
+      emailVerificationExpiresAt: null,
+    },
   });
+
+  return userRepository.findByEmail(SUPER_ADMIN_EMAIL);
 };
 
 const createSession = async (userId) => {
