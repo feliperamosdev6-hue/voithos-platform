@@ -315,6 +315,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const templateFlowSearch = document.getElementById('template-flow-search');
   const templateFlowSearchWrap = document.getElementById('template-flow-search-wrap');
   const templateFlowSearchPicker = document.getElementById('template-flow-search-picker');
+  const templateFlowManualSearch = document.getElementById('template-flow-manual-search');
+  const templateFlowManualSearchWrap = document.getElementById('template-flow-manual-search-wrap');
+  const templateFlowManualSearchPicker = document.getElementById('template-flow-manual-search-picker');
+  const templateFlowManualSelectVisibleBtn = document.getElementById('template-flow-manual-select-visible');
+  const templateFlowManualClearBtn = document.getElementById('template-flow-manual-clear');
+  const templateFlowManualSelected = document.getElementById('template-flow-manual-selected');
+  const templateFlowManualMeta = document.getElementById('template-flow-manual-meta');
   const templateFlowSelectVisibleBtn = document.getElementById('template-flow-select-visible');
   const templateFlowSelectAllBtn = document.getElementById('template-flow-select-all');
   const templateFlowClearBtn = document.getElementById('template-flow-clear-selection');
@@ -376,9 +383,12 @@ document.addEventListener('DOMContentLoaded', () => {
     source: '',
     audience: null,
     selectedPatientIds: new Set(),
+    manualSelectedPatientIds: new Set(),
     filter: 'all',
     search: '',
     searchPickerOpen: false,
+    manualSearch: '',
+    manualSearchPickerOpen: false,
     confirmOpen: false,
     confirmPayload: null,
     loading: false,
@@ -511,8 +521,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     try {
       const list = await patientsApi.list();
+      const activeClinicId = String(currentUser?.clinicId || '').trim();
       campaignPatients = (Array.isArray(list) ? list : [])
         .filter((patient) => getCampaignPatientId(patient))
+        .filter((patient) => {
+          if (!activeClinicId) return true;
+          const patientClinicId = String(patient?.clinicId || '').trim();
+          return !patientClinicId || patientClinicId === activeClinicId;
+        })
         .sort((left, right) => getCampaignPatientLabel(left).localeCompare(getCampaignPatientLabel(right), 'pt-BR'));
       campaignPatientLookup = buildCampaignPatientLookup();
     } catch (err) {
@@ -894,10 +910,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const handleTemplatePatientAction = async (action, patientId) => {
     const member = getTemplateAudienceMemberById(patientId);
-    if (!member) return;
-    const message = buildTemplateMessageForMember(templateFlowState.template || {}, member);
+    const patient = campaignPatientLookup.get(String(patientId || '').trim()) || null;
+    if (!member && !patient) return;
+    const target = {
+      patientId: String(patientId || '').trim(),
+      patientName: member?.patientName || getCampaignPatientLabel(patient),
+      phone: member?.phone || getPatientPhone(patient),
+    };
+    const message = buildTemplateMessageForMember(templateFlowState.template || {}, target);
     if (action === 'whatsapp') {
-      const url = buildWaLink(member?.phone, message);
+      const url = buildWaLink(target?.phone, message);
       if (!url) {
         alert('Paciente sem telefone valido para WhatsApp.');
         return;
@@ -915,13 +937,13 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (action === 'prontuario') {
-      openManualPatientProntuario(member);
+      openManualPatientProntuario(target);
     }
   };
 
   const getTemplatePreviewMember = (audience = null) => {
-    const selectedMembers = getSelectedTemplateMembers();
-    if (selectedMembers.length) return selectedMembers[0];
+    const entries = getTemplateSelectionEntries();
+    if (entries.length) return entries[0];
     const members = Array.isArray(audience?.members) ? audience.members : [];
     return members.find((member) => isTemplateMemberSelectable(member)) || members[0] || null;
   };
@@ -1030,6 +1052,87 @@ document.addEventListener('DOMContentLoaded', () => {
       .trim() || 'Selecione um template para ver a mensagem.';
   };
 
+  const getTemplateManualSelectedPatients = () => campaignPatients
+    .filter((patient) => templateFlowState.manualSelectedPatientIds.has(getCampaignPatientId(patient)));
+
+  const getTemplateSelectionEntries = () => {
+    const entries = new Map();
+
+    getSelectedTemplateMembers().forEach((member) => {
+      const patientId = getTemplateMemberId(member);
+      if (!patientId || entries.has(patientId)) return;
+      const storedPatient = campaignPatientLookup.get(patientId) || null;
+      entries.set(patientId, {
+        patientId,
+        patientName: member?.patientName || getCampaignPatientLabel(storedPatient) || 'Paciente',
+        phone: member?.phone || getPatientPhone(storedPatient),
+        source: 'suggested',
+        sourceLabel: member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido',
+        reasonLabel: member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido',
+        reasonExplanation: member?.suggestionExplanation || '',
+        member,
+        patient: storedPatient,
+        blocked: isTemplateMemberBlocked(member),
+        manualSelected: false,
+      });
+    });
+
+    getTemplateManualSelectedPatients().forEach((patient) => {
+      const patientId = getCampaignPatientId(patient);
+      if (!patientId) return;
+      const existing = entries.get(patientId);
+      if (existing) {
+        existing.manualSelected = true;
+        if (existing.source === 'suggested') {
+          existing.sourceLabel = `${existing.sourceLabel} | escolhido manualmente`;
+        }
+        return;
+      }
+      entries.set(patientId, {
+        patientId,
+        patientName: getCampaignPatientLabel(patient),
+        phone: getPatientPhone(patient),
+        source: 'manual',
+        sourceLabel: 'Escolhido manualmente',
+        reasonLabel: 'Paciente escolhido manualmente',
+        reasonExplanation: 'Selecionado diretamente do prontuario da clinica.',
+        member: null,
+        patient,
+        blocked: false,
+        manualSelected: true,
+      });
+    });
+
+    return Array.from(entries.values());
+  };
+
+  const getTemplateSelectionCount = () => getTemplateSelectionEntries().length;
+
+  const matchesTemplateManualSearch = (patient = {}) => {
+    const term = String(templateFlowState.manualSearch || '').trim().toLowerCase();
+    if (!term) return true;
+    return [
+      getCampaignPatientLabel(patient),
+      getPatientPhone(patient),
+      patient?.cpf,
+      patient?.prontuario,
+      patient?.email,
+      patient?.id,
+    ].some((value) => String(value || '').toLowerCase().includes(term));
+  };
+
+  const getVisibleManualPatients = () => {
+    const queryMatches = campaignPatients.filter((patient) => matchesTemplateManualSearch(patient));
+    return queryMatches.sort((left, right) => {
+      const leftId = getCampaignPatientId(left);
+      const rightId = getCampaignPatientId(right);
+      const leftSelected = templateFlowState.manualSelectedPatientIds.has(leftId) ? 1 : 0;
+      const rightSelected = templateFlowState.manualSelectedPatientIds.has(rightId) ? 1 : 0;
+      if (leftSelected !== rightSelected) return rightSelected - leftSelected;
+      return getCampaignPatientLabel(left).localeCompare(getCampaignPatientLabel(right), 'pt-BR');
+    });
+  };
+
   const resetTemplateFlowState = () => {
     templateFlowState = {
       open: false,
@@ -1037,9 +1140,12 @@ document.addEventListener('DOMContentLoaded', () => {
       source: '',
       audience: null,
       selectedPatientIds: new Set(),
+      manualSelectedPatientIds: new Set(),
       filter: 'all',
       search: '',
       searchPickerOpen: false,
+      manualSearch: '',
+      manualSearchPickerOpen: false,
       confirmOpen: false,
       confirmPayload: null,
       loading: false,
@@ -1201,10 +1307,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const visibleBlockedCount = visibleMembers.filter((member) => isTemplateMemberBlocked(member)).length;
     const visibleIds = new Set(visibleMembers.map((member) => getTemplateMemberId(member)));
     const hiddenSelectedCount = Array.from(templateFlowState.selectedPatientIds).filter((patientId) => !visibleIds.has(patientId)).length;
+    const manualSelectedCount = templateFlowState.manualSelectedPatientIds.size;
     const hasSearch = Boolean(String(templateFlowState.search || '').trim());
     const hasNonDefaultFilter = String(templateFlowState.filter || 'all') !== 'all';
 
-    if (!visibleMembers.length && !hiddenSelectedCount && !hasSearch && !hasNonDefaultFilter) {
+    if (!visibleMembers.length && !hiddenSelectedCount && !manualSelectedCount && !hasSearch && !hasNonDefaultFilter) {
       templateFlowSelectionHint.innerHTML = '';
       return;
     }
@@ -1213,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (visibleEligibleCount) messages.push(`${visibleEligibleCount} elegiveis nesta visao`);
     if (visibleBlockedCount) messages.push(`${visibleBlockedCount} bloqueados nesta visao`);
     if (hiddenSelectedCount) messages.push(`${hiddenSelectedCount} selecionados fora da visao atual`);
+    if (manualSelectedCount) messages.push(`${manualSelectedCount} escolhidos manualmente`);
     if (!messages.length && hasSearch) messages.push('Refine a busca para localizar pacientes sugeridos');
 
     templateFlowSelectionHint.innerHTML = `
@@ -1312,10 +1420,7 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    const selectedPatientIds = Array.from(templateFlowState.selectedPatientIds);
-    const selectedEligibleMembers = (Array.isArray(audience?.members) ? audience.members : [])
-      .filter((member) => selectedPatientIds.includes(String(member?.patientId || '').trim()))
-      .filter((member) => member?.included === true);
+    const selectedEligibleMembers = getTemplateSelectionEntries();
     const draftMessage = String(templateFlowMessage?.value || getTemplateBaseMessage(template) || '').trim();
     const messageDiagnostics = analyzeTemplateMessageDraft(draftMessage);
 
@@ -1362,7 +1467,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (templateSendConfirmTitle) templateSendConfirmTitle.textContent = `Contato manual: ${getTemplateTitle(payload.template)}`;
     if (templateSendConfirmCopy) {
-      templateSendConfirmCopy.textContent = `${payload.selectedEligibleMembers.length} pacientes da clinica atual foram sugeridos para contato manual.`;
+      templateSendConfirmCopy.textContent = `${payload.selectedEligibleMembers.length} pacientes da clinica atual foram escolhidos para contato manual.`;
     }
     if (templateSendConfirmSelected) templateSendConfirmSelected.textContent = String(payload.selectedEligibleMembers.length);
     if (templateSendConfirmBlocked) templateSendConfirmBlocked.textContent = String(payload.blockedMembers.length);
@@ -1374,10 +1479,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ${displayedMembers.map((member) => `
           <article class="template-review-item">
             <strong>${escapeHtml(member?.patientName || 'Paciente')}</strong>
-            <span>${escapeHtml(member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente elegivel')}</span>
+            <span>${escapeHtml(member?.sourceLabel || member?.reasonLabel || member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente elegivel')}</span>
           </article>
         `).join('')}
-        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes sugeridos alem dos exibidos.</p>` : ''}
+        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes escolhidos alem dos exibidos.</p>` : ''}
       `;
     }
     if (templateSendConfirmBlockedList) {
@@ -1764,14 +1869,104 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   };
 
+  const renderTemplateManualSearchPicker = () => {
+    if (!templateFlowManualSearchPicker || !templateFlowManualSearchWrap) return;
+    const shouldOpen = Boolean(templateFlowState.open && templateFlowState.manualSearchPickerOpen);
+    templateFlowManualSearchWrap.classList.toggle('is-open', shouldOpen);
+    if (!shouldOpen) {
+      templateFlowManualSearchPicker.hidden = true;
+      templateFlowManualSearchPicker.innerHTML = '';
+      return;
+    }
+
+    templateFlowManualSearchPicker.hidden = false;
+    if (templateFlowState.loading) {
+      templateFlowManualSearchPicker.innerHTML = '<div class="empty-state">Carregando pacientes da clinica...</div>';
+      return;
+    }
+
+    if (!campaignPatients.length) {
+      templateFlowManualSearchPicker.innerHTML = '<div class="empty-state">Nenhum paciente cadastrado nesta clinica.</div>';
+      return;
+    }
+
+    const visiblePatients = getVisibleManualPatients();
+    if (!visiblePatients.length) {
+      templateFlowManualSearchPicker.innerHTML = '<div class="empty-state">Nenhum paciente encontrado com essa busca.</div>';
+      return;
+    }
+
+    const displayedPatients = visiblePatients.slice(0, 12);
+    const selectedCount = templateFlowState.manualSelectedPatientIds.size;
+    templateFlowManualSearchPicker.innerHTML = `
+      <p class="template-search-picker-meta">${displayedPatients.length} de ${visiblePatients.length} pacientes da clinica</p>
+      ${displayedPatients.map((patient) => {
+        const patientId = getCampaignPatientId(patient);
+        const selected = templateFlowState.manualSelectedPatientIds.has(patientId);
+        const phone = getPatientPhone(patient);
+        const helperLabel = phone
+          ? `${phone} | Prontuario ${String(patient?.prontuario || patientId)}`
+          : `Prontuario ${String(patient?.prontuario || patientId)}`;
+        return `
+          <button type="button" class="campaign-patient-option${selected ? ' selected' : ''}" data-template-manual-patient-id="${escapeHtml(patientId)}">
+            <span>
+              <strong>${escapeHtml(getCampaignPatientLabel(patient))}</strong>
+              <small>${escapeHtml(helperLabel)}</small>
+            </span>
+            <em>${selected ? 'Selecionado' : 'Adicionar'}</em>
+          </button>
+        `;
+      }).join('')}
+      ${visiblePatients.length > displayedPatients.length ? `<p class="template-search-picker-more">Continue digitando para refinar os ${visiblePatients.length} pacientes da clinica.</p>` : ''}
+      ${selectedCount > 0 ? `<p class="template-search-picker-more">${selectedCount} paciente(s) ja escolhidos manualmente.</p>` : ''}
+    `;
+  };
+
+  const renderTemplateManualSelectedPatients = () => {
+    if (!templateFlowManualSelected) return;
+    const selectedPatients = getTemplateManualSelectedPatients();
+    if (!selectedPatients.length) {
+      templateFlowManualSelected.innerHTML = '<span class="campaign-selected-empty">Nenhum paciente escolhido manualmente.</span>';
+      return;
+    }
+
+    templateFlowManualSelected.innerHTML = selectedPatients.map((patient) => {
+      const patientId = getCampaignPatientId(patient);
+      return `
+        <button type="button" class="campaign-patient-chip" data-remove-template-manual-patient="${escapeHtml(patientId)}">
+          <span>${escapeHtml(getCampaignPatientLabel(patient))}</span>
+          <strong aria-hidden="true">&times;</strong>
+        </button>
+      `;
+    }).join('');
+  };
+
+  const renderTemplateManualSelection = () => {
+    const selectedCount = templateFlowState.manualSelectedPatientIds.size;
+    const visiblePatients = getVisibleManualPatients();
+    if (templateFlowManualMeta) {
+      templateFlowManualMeta.textContent = selectedCount
+        ? `${selectedCount} paciente(s) escolhidos manualmente | ${getTemplateSelectionCount()} na campanha`
+        : 'Busque e marque pacientes especificos da sua clinica.';
+    }
+    if (templateFlowManualSelectVisibleBtn) {
+      templateFlowManualSelectVisibleBtn.disabled = templateFlowState.loading || visiblePatients.length === 0;
+    }
+    if (templateFlowManualClearBtn) {
+      templateFlowManualClearBtn.disabled = templateFlowState.loading || selectedCount === 0;
+    }
+    renderTemplateManualSearchPicker();
+    renderTemplateManualSelectedPatients();
+  };
+
   const renderTemplateSummaryPanel = () => {
     const template = templateFlowState.template || {};
     const audience = templateFlowState.audience;
-    const selectedCount = templateFlowState.selectedPatientIds.size;
+    const selectedCount = getTemplateSelectionCount();
     const messageDiagnostics = analyzeTemplateMessageDraft(templateFlowMessage?.value || getTemplateBaseMessage(template) || '');
     if (templateFlowCategory) templateFlowCategory.textContent = `${template.category || 'Campanha'} | Impacto ${getTemplateImpact(template)}`;
     if (templateFlowTitle) templateFlowTitle.textContent = getTemplateTitle(template);
-    if (templateFlowDescription) templateFlowDescription.textContent = getTemplateDescription(template) || 'Campanha estrategica com contato manual por paciente.';
+    if (templateFlowDescription) templateFlowDescription.textContent = getTemplateDescription(template) || 'Campanha estrategica com escolha manual de pacientes.';
     if (templateFlowTotal) templateFlowTotal.textContent = String(audience?.total || 0);
     if (templateFlowEligible) templateFlowEligible.textContent = String(audience?.includedCount || 0);
     if (templateFlowBlocked) templateFlowBlocked.textContent = String(audience?.blockedCount || 0);
@@ -1801,35 +1996,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const renderTemplateReviewPanel = () => {
     if (!templateFlowReviewTitle || !templateFlowReviewCount || !templateFlowReviewList || !templateFlowBlockedSummary) return;
-    const selectedMembers = getSelectedTemplateMembers();
+    const selectedEntries = getTemplateSelectionEntries();
     const blockedMembers = (Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [])
       .filter((member) => isTemplateMemberBlocked(member));
 
     if (templateFlowState.loading) {
-      templateFlowReviewTitle.textContent = 'Pacientes sugeridos agora';
+      templateFlowReviewTitle.textContent = 'Pacientes escolhidos';
       templateFlowReviewCount.textContent = 'Carregando revisao final...';
       templateFlowReviewList.innerHTML = '';
       templateFlowBlockedSummary.innerHTML = '';
       return;
     }
 
-    templateFlowReviewTitle.textContent = selectedMembers.length ? 'Pacientes sugeridos agora' : 'Revise a audiencia final';
+    templateFlowReviewTitle.textContent = selectedEntries.length ? 'Pacientes escolhidos' : 'Revise a audiencia final';
 
-    if (!selectedMembers.length) {
-      templateFlowReviewCount.textContent = 'Nenhum paciente elegivel nesta revisao.';
-      templateFlowReviewList.innerHTML = '<p class="template-review-empty">Use a busca e os filtros para revisar quem faz sentido abordar nesta campanha.</p>';
+    if (!selectedEntries.length) {
+      templateFlowReviewCount.textContent = 'Nenhum paciente escolhido ainda.';
+      templateFlowReviewList.innerHTML = '<p class="template-review-empty">Use a busca dos pacientes da clinica para adicionar contatos especificos alem das sugestoes.</p>';
     } else {
-      const displayedMembers = selectedMembers.slice(0, 6);
-      const hiddenCount = selectedMembers.length - displayedMembers.length;
-      templateFlowReviewCount.textContent = `${selectedMembers.length} pacientes sugeridos para contato manual.`;
+      const displayedEntries = selectedEntries.slice(0, 6);
+      const hiddenCount = selectedEntries.length - displayedEntries.length;
+      templateFlowReviewCount.textContent = `${selectedEntries.length} pacientes escolhidos para contato manual.`;
       templateFlowReviewList.innerHTML = `
-        ${displayedMembers.map((member) => `
+        ${displayedEntries.map((entry) => `
           <article class="template-review-item">
-            <strong>${escapeHtml(member?.patientName || 'Paciente')}</strong>
-            <span>${escapeHtml(member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido')}</span>
+            <strong>${escapeHtml(entry?.patientName || 'Paciente')}</strong>
+            <span>${escapeHtml(entry?.sourceLabel || entry?.reasonLabel || 'Paciente escolhido')}</span>
+            <small class="template-review-help">${escapeHtml(entry?.phone ? `WhatsApp: ${entry.phone}` : 'Sem telefone valido')}</small>
+            <div class="template-member-actions">
+              <button type="button" class="btn-small ghost" data-template-patient-action="whatsapp" data-template-patient-id="${escapeHtml(entry?.patientId || '')}" ${entry?.phone ? '' : 'disabled'}>Abrir WhatsApp</button>
+              <button type="button" class="btn-small ghost" data-template-patient-action="copy" data-template-patient-id="${escapeHtml(entry?.patientId || '')}">Copiar mensagem</button>
+              <button type="button" class="btn-small ghost" data-template-patient-action="prontuario" data-template-patient-id="${escapeHtml(entry?.patientId || '')}">Abrir prontuario</button>
+            </div>
           </article>
         `).join('')}
-        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes selecionados alem dos exibidos.</p>` : ''}
+        ${hiddenCount > 0 ? `<p class="template-review-more">+ ${hiddenCount} pacientes escolhidos alem dos exibidos.</p>` : ''}
       `;
     }
 
@@ -1862,6 +2063,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderTemplateSearchPicker();
     renderTemplateSelectionHint();
     renderTemplateAudienceCards();
+    renderTemplateManualSelection();
     renderTemplateMessageAssist();
     renderTemplateReviewPanel();
     renderTemplateSendConfirmation();
@@ -1869,7 +2071,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const setTemplateSearchPickerOpen = (open) => {
     templateFlowState.searchPickerOpen = Boolean(open);
-    renderTemplateSearchPicker();
+    if (open) templateFlowState.manualSearchPickerOpen = false;
+    renderTemplateFlow();
+  };
+
+  const setTemplateManualSearchPickerOpen = (open) => {
+    templateFlowState.manualSearchPickerOpen = Boolean(open);
+    if (open) templateFlowState.searchPickerOpen = false;
+    renderTemplateFlow();
   };
 
   const closeTemplateFlowModal = () => {
@@ -1879,6 +2088,7 @@ document.addEventListener('DOMContentLoaded', () => {
     templateFlowModal.setAttribute('aria-hidden', 'true');
     closeTemplateSendConfirmModal();
     if (templateFlowSearch) templateFlowSearch.value = '';
+    if (templateFlowManualSearch) templateFlowManualSearch.value = '';
     if (templateFlowCampaignName) templateFlowCampaignName.value = '';
     if (templateFlowMessage) templateFlowMessage.value = '';
     resetTemplateFlowState();
@@ -1893,6 +2103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     templateFlowState.loading = true;
     templateFlowState.audience = null;
     templateFlowState.selectedPatientIds = new Set();
+    templateFlowState.manualSelectedPatientIds = new Set();
     renderTemplateFlow();
     const templateId = String(template?.id || '').trim();
     const startedAt = Date.now();
@@ -1957,6 +2168,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ? options.message
       : getTemplateBaseMessage(template);
     if (templateFlowSearch) templateFlowSearch.value = '';
+    if (templateFlowManualSearch) templateFlowManualSearch.value = '';
     if (templateFlowModal) {
       templateFlowModal.classList.add('open');
       templateFlowModal.setAttribute('aria-hidden', 'false');
@@ -2794,6 +3006,19 @@ document.addEventListener('DOMContentLoaded', () => {
   templateFlowSelectAllBtn?.addEventListener('click', selectAllTemplateAudience);
   templateFlowClearBtn?.addEventListener('click', () => {
     templateFlowState.selectedPatientIds = new Set();
+    templateFlowState.manualSelectedPatientIds = new Set();
+    renderTemplateFlow();
+  });
+  templateFlowManualSelectVisibleBtn?.addEventListener('click', () => {
+    const visiblePatients = getVisibleManualPatients().slice(0, 12);
+    visiblePatients.forEach((patient) => {
+      const patientId = getCampaignPatientId(patient);
+      if (patientId) templateFlowState.manualSelectedPatientIds.add(patientId);
+    });
+    renderTemplateFlow();
+  });
+  templateFlowManualClearBtn?.addEventListener('click', () => {
+    templateFlowState.manualSelectedPatientIds = new Set();
     renderTemplateFlow();
   });
   templateFlowSearch?.addEventListener('focus', () => {
@@ -2804,8 +3029,17 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   templateFlowSearch?.addEventListener('input', (ev) => {
     templateFlowState.search = ev.target?.value || '';
-    templateFlowState.searchPickerOpen = true;
-    renderTemplateFlow();
+    setTemplateSearchPickerOpen(true);
+  });
+  templateFlowManualSearch?.addEventListener('focus', () => {
+    setTemplateManualSearchPickerOpen(true);
+  });
+  templateFlowManualSearch?.addEventListener('click', () => {
+    setTemplateManualSearchPickerOpen(true);
+  });
+  templateFlowManualSearch?.addEventListener('input', (ev) => {
+    templateFlowState.manualSearch = ev.target?.value || '';
+    setTemplateManualSearchPickerOpen(true);
   });
   templateFlowMessage?.addEventListener('input', renderTemplateFlow);
   templateFlowMessageTools?.addEventListener('click', (ev) => {
@@ -2873,6 +3107,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const patientId = input.dataset.templatePickerPatientId || '';
     toggleTemplatePatientSelection(patientId, input.checked);
   });
+  templateFlowManualSearchPicker?.addEventListener('click', (ev) => {
+    const target = ev.target instanceof HTMLElement ? ev.target : null;
+    if (!target) return;
+    const button = target.closest('[data-template-manual-patient-id]');
+    if (!(button instanceof HTMLElement)) return;
+    const patientId = String(button.dataset.templateManualPatientId || '').trim();
+    if (!patientId) return;
+    const selected = templateFlowState.manualSelectedPatientIds.has(patientId);
+    if (selected) templateFlowState.manualSelectedPatientIds.delete(patientId);
+    else templateFlowState.manualSelectedPatientIds.add(patientId);
+    renderTemplateFlow();
+  });
+  templateFlowManualSelected?.addEventListener('click', (ev) => {
+    const target = ev.target instanceof HTMLElement ? ev.target : null;
+    if (!target) return;
+    const button = target.closest('[data-remove-template-manual-patient]');
+    if (!(button instanceof HTMLElement)) return;
+    const patientId = String(button.dataset.removeTemplateManualPatient || '').trim();
+    if (!patientId) return;
+    templateFlowState.manualSelectedPatientIds.delete(patientId);
+    renderTemplateFlow();
+  });
+  templateFlowReviewList?.addEventListener('click', (ev) => {
+    const target = ev.target instanceof HTMLElement ? ev.target : null;
+    if (!target) return;
+    const patientActionButton = target.closest('[data-template-patient-action]');
+    if (!(patientActionButton instanceof HTMLElement)) return;
+    const action = patientActionButton.dataset.templatePatientAction || '';
+    const patientId = patientActionButton.dataset.templatePatientId || '';
+    handleTemplatePatientAction(action, patientId);
+  });
   templateFlowAudienceList?.addEventListener('click', (ev) => {
     const target = ev.target instanceof HTMLElement ? ev.target : null;
     if (!target) return;
@@ -2929,17 +3194,24 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('click', (ev) => {
-    if (!templateFlowState.searchPickerOpen) return;
     const target = ev.target instanceof Node ? ev.target : null;
     if (!target) return;
-    if (templateFlowSearchWrap?.contains(target)) return;
-    setTemplateSearchPickerOpen(false);
+    if (templateFlowState.searchPickerOpen && !templateFlowSearchWrap?.contains(target)) {
+      setTemplateSearchPickerOpen(false);
+    }
+    if (templateFlowState.manualSearchPickerOpen && !templateFlowManualSearchWrap?.contains(target)) {
+      setTemplateManualSearchPickerOpen(false);
+    }
   });
 
   document.addEventListener('keydown', (ev) => {
     if (ev.key === 'Escape' && modal?.classList.contains('open')) closeModal();
     if (ev.key === 'Escape' && globalsModal?.classList.contains('open')) closeGlobalsModal();
     if (ev.key === 'Escape' && logsModal?.classList.contains('open')) closeLogsModal();
+    if (ev.key === 'Escape' && templateFlowState.manualSearchPickerOpen) {
+      setTemplateManualSearchPickerOpen(false);
+      return;
+    }
     if (ev.key === 'Escape' && templateFlowState.searchPickerOpen) {
       setTemplateSearchPickerOpen(false);
       return;

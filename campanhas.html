@@ -313,7 +313,7 @@
       </div>
       <div class="template-flow-body">
         <section class="template-flow-summary">
-          <p class="template-flow-description" id="template-flow-description">Revise a mensagem sugerida e os pacientes elegiveis da sua clinica.</p>
+          <p class="template-flow-description" id="template-flow-description">Revise a mensagem sugerida e combine os pacientes do template com pacientes especificos da sua clinica.</p>
           <div class="template-flow-stats">
             <article class="template-stat">
               <span>Audiencia sugerida</span>
@@ -384,6 +384,26 @@
 
           <aside class="template-preview-panel">
             <article class="template-preview-card">
+              <p class="muted">Escolha manual</p>
+              <h4>Pacientes da clinica</h4>
+              <p class="template-preview-copy" id="template-flow-manual-meta">Busque e marque pacientes especificos da sua clinica.</p>
+              <div class="template-flow-search">
+                <label class="template-flow-search-label" for="template-flow-manual-search">Buscar paciente no prontuario</label>
+                <div class="template-flow-search-control" id="template-flow-manual-search-wrap">
+                  <input type="search" id="template-flow-manual-search" placeholder="Nome, telefone, CPF ou prontuario">
+                  <div class="campaign-patient-picker" id="template-flow-manual-search-picker" hidden>
+                    <div class="empty-state">Carregando pacientes da clinica...</div>
+                  </div>
+                </div>
+                <p class="template-flow-search-helper">Adicione pacientes especificos alem das sugestoes do template.</p>
+              </div>
+              <div class="template-flow-selection-actions">
+                <button type="button" class="btn-small ghost" id="template-flow-manual-select-visible">Selecionar visiveis</button>
+                <button type="button" class="btn-small ghost" id="template-flow-manual-clear">Limpar escolhidos</button>
+              </div>
+              <div class="campaign-selected-patients" id="template-flow-manual-selected"></div>
+            </article>
+            <article class="template-preview-card">
               <p class="muted">Resumo da campanha</p>
               <h4 id="template-flow-objective">Objetivo do template</h4>
               <div class="template-preview-tags" id="template-flow-tags"></div>
@@ -396,13 +416,8 @@
               <pre class="template-message-preview" id="template-flow-message-preview">Selecione um template para ver a mensagem.</pre>
             </article>
             <article class="template-preview-card">
-              <p class="muted">Qualidade da mensagem</p>
-              <div class="template-preview-tags" id="template-flow-message-health"></div>
-              <p class="template-preview-copy" id="template-flow-message-guidance">Ajuste a copy para ficar clara e pessoal.</p>
-            </article>
-            <article class="template-preview-card">
               <p class="muted">Resumo da revisao</p>
-              <h4 id="template-flow-review-title">Pacientes sugeridos agora</h4>
+              <h4 id="template-flow-review-title">Pacientes escolhidos</h4>
               <p class="template-preview-copy" id="template-flow-review-count">Nenhum paciente selecionado.</p>
               <div class="template-review-list" id="template-flow-review-list"></div>
               <div class="template-review-blocked" id="template-flow-blocked-summary"></div>
