@@ -207,6 +207,7 @@ const inboundMessageService = {
       const patient = outbound.patientId
         ? await patientRepository.findByIdAndClinic(outbound.patientId, normalizedClinicId).catch(() => null)
         : null;
+      const patientName = String(patient?.nome || '').trim();
 
       const updateResult = await appointmentRepository.updateStatus({
         id: appointment.id,
@@ -243,6 +244,7 @@ const inboundMessageService = {
           outboundMessageId: outbound.id,
           intent,
           nextStatus,
+          patientName,
         },
       });
 

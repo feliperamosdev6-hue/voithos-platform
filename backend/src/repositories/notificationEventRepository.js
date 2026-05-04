@@ -103,6 +103,14 @@ const notificationEventRepository = {
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        patient: {
+          select: {
+            id: true,
+            nome: true,
+          },
+        },
+      },
       take: Math.min(Math.max(Number(limit) || 50, 1), 100),
     });
 
@@ -128,6 +136,7 @@ const notificationEventRepository = {
     return events.map((event) => ({
       ...event,
       payload: normalizePayload(event.payload),
+      patientName: String(event?.patient?.nome || event?.payload?.patientName || '').trim(),
       readAt: String(event?.payload?.readAt || '').trim() || null,
     }));
   },

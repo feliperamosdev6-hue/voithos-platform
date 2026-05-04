@@ -211,6 +211,7 @@ const appointmentActionTokenService = {
     }
 
     const patient = await patientRepository.findById(refreshedToken.patientId).catch(() => null);
+    const patientName = String(patient?.nome || '').trim();
     const currentStatus = String(appointment.status || '').trim().toUpperCase();
 
     if (isImmutableAppointmentStatus({
@@ -241,7 +242,10 @@ const appointmentActionTokenService = {
           patientId: refreshedToken.patientId,
           phone: patient?.telefone || null,
           type: 'APPOINTMENT_CONFIRMED',
-          payload: buildNotificationPayload({ tokenRecord: refreshedToken, requestMeta, result }),
+          payload: {
+            ...buildNotificationPayload({ tokenRecord: refreshedToken, requestMeta, result }),
+            patientName,
+          },
         });
       }
 
@@ -269,7 +273,10 @@ const appointmentActionTokenService = {
         patientId: refreshedToken.patientId,
         phone: patient?.telefone || null,
         type: 'APPOINTMENT_ACTION_LINK_USED',
-        payload: buildNotificationPayload({ tokenRecord: refreshedToken, requestMeta, result }),
+        payload: {
+          ...buildNotificationPayload({ tokenRecord: refreshedToken, requestMeta, result }),
+          patientName,
+        },
       });
 
       return {
@@ -312,11 +319,14 @@ const appointmentActionTokenService = {
       patientId: refreshedToken.patientId,
       phone: patient?.telefone || null,
       type: 'APPOINTMENT_RESCHEDULE_REQUESTED',
-      payload: buildNotificationPayload({
-        tokenRecord: refreshedToken,
-        requestMeta,
-        result: ACTION_RESULT.RESCHEDULE_REQUESTED,
-      }),
+      payload: {
+        ...buildNotificationPayload({
+          tokenRecord: refreshedToken,
+          requestMeta,
+          result: ACTION_RESULT.RESCHEDULE_REQUESTED,
+        }),
+        patientName,
+      },
     });
     await notificationEventService.create({
       clinicId: refreshedToken.clinicId,
@@ -324,11 +334,14 @@ const appointmentActionTokenService = {
       patientId: refreshedToken.patientId,
       phone: patient?.telefone || null,
       type: 'APPOINTMENT_ACTION_LINK_USED',
-      payload: buildNotificationPayload({
-        tokenRecord: refreshedToken,
-        requestMeta,
-        result: ACTION_RESULT.RESCHEDULE_REQUESTED,
-      }),
+      payload: {
+        ...buildNotificationPayload({
+          tokenRecord: refreshedToken,
+          requestMeta,
+          result: ACTION_RESULT.RESCHEDULE_REQUESTED,
+        }),
+        patientName,
+      },
     });
 
     return {

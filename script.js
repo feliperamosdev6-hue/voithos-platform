@@ -985,18 +985,33 @@ document.addEventListener('DOMContentLoaded', () => {
         return items;
     };
 
+    const resolveNotificationPatientLabel = (event = {}) => {
+        const payload = event?.payload || {};
+        const candidate = [
+            event?.patientName,
+            payload?.patientName,
+            event?.patient?.nome,
+            payload?.patient?.nome,
+        ]
+            .map((value) => String(value || '').trim())
+            .find(Boolean);
+
+        if (candidate) return candidate;
+        return 'Paciente';
+    };
+
     const buildCentralNotifications = (events) => {
         return (Array.isArray(events) ? events : []).map((event) => {
             const type = String(event?.type || '').trim().toUpperCase();
             const createdAt = String(event?.createdAt || '').trim();
-            const phone = String(event?.phone || '').trim();
             const payload = event?.payload || {};
+            const patientLabel = resolveNotificationPatientLabel(event);
             const patientId = String(event?.patientId || payload?.patientId || '').trim();
             const appointmentId = String(event?.appointmentId || payload?.appointmentId || '').trim();
             const planId = String(event?.planId || payload?.planId || '').trim();
             const accountId = String(payload?.financialAccountId || payload?.accountId || event?.accountId || '').trim();
             let title = 'Atualizacao via WhatsApp';
-            let description = `${phone ? `Paciente ${phone}` : 'Paciente'} respondeu pelo WhatsApp.`;
+            let description = `${patientLabel} respondeu pelo WhatsApp.`;
             let tag = 'WhatsApp';
             let destination = 'geral';
             let category = 'geral';
@@ -1011,31 +1026,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (type === 'APPOINTMENT_CONFIRMED') {
                 title = 'Consulta confirmada no WhatsApp';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} confirmou a consulta.`;
+                description = `${patientLabel} confirmou a consulta.`;
                 tag = 'Confirmado';
             } else if (type === 'APPOINTMENT_RESCHEDULE_REQUESTED') {
                 title = 'Remarcacao solicitada no WhatsApp';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} pediu remarcacao.`;
+                description = `${patientLabel} pediu remarcacao.`;
                 tag = 'Remarcar';
             } else if (type === 'APPOINTMENT_REMINDER_SENT') {
                 title = 'Lembrete enviado no WhatsApp';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} recebeu lembrete de consulta.`;
+                description = `${patientLabel} recebeu lembrete de consulta.`;
                 tag = 'Lembrete';
             } else if (type === 'PLAN_MESSAGE_DISPATCH_STARTED') {
                 title = 'Envio de plano iniciado';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} recebeu disparo de parcela.`;
+                description = `${patientLabel} recebeu disparo de parcela.`;
                 tag = 'Plano';
             } else if (type === 'PLAN_MESSAGE_DISPATCH_COMPLETED') {
                 title = 'Parcela enviada no WhatsApp';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} recebeu mensagem da parcela.`;
+                description = `${patientLabel} recebeu mensagem da parcela.`;
                 tag = 'Plano';
             } else if (type === 'PLAN_MESSAGE_DISPATCH_BLOCKED') {
                 title = 'Disparo de plano bloqueado';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} ficou sem envio da parcela.`;
+                description = `${patientLabel} ficou sem envio da parcela.`;
                 tag = 'Plano';
             } else if (type === 'PLAN_MESSAGE_DISPATCH_FAILED') {
                 title = 'Falha no disparo de plano';
-                description = `${phone ? `Paciente ${phone}` : 'Paciente'} nao recebeu mensagem da parcela.`;
+                description = `${patientLabel} nao recebeu mensagem da parcela.`;
                 tag = 'Plano';
             }
 
@@ -1060,7 +1075,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     kind: type.startsWith('PLAN_MESSAGE_') ? 'financial' : (type.startsWith('APPOINTMENT_') ? 'appointment' : 'general'),
                     appointmentId,
                     patientId,
-                    patientName: phone ? `Paciente ${phone}` : 'Paciente',
+                    patientName: patientLabel,
                     planId,
                     accountId,
                     status: String(payload?.nextStatus || payload?.status || '').trim(),

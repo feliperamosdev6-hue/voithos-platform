@@ -385,6 +385,7 @@ const outboundMessageService = {
         outboundMessageId: sent?.id || outbound.id,
         appointmentStatus: appointment.status,
         actionTokenIds: smartLinks?.tokens || null,
+        patientName: String(patient?.nome || '').trim(),
       },
     });
 
