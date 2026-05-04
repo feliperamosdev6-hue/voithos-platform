@@ -1061,12 +1061,9 @@ if (drawerSendConfirmacao) {
             : 'Confirmacao enviada por WhatsApp.',
           'success'
         );
-      } else {
-        showToast(result?.error || 'Falha ao enviar confirmacao por WhatsApp.', 'error');
       }
     } catch (err) {
       console.warn('[AGENDA] erro ao enviar confirmacao manual', err);
-      showToast(formatWhatsAppErrorMessage(err), 'error');
     } finally {
       const patientAfter = findPatientForAppointment(currentDrawerAppt) || {};
       const phoneAfter = patientAfter?.telefone || patientAfter?.phone || patientAfter?.celular || patientAfter?.whatsapp || '';
