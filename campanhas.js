@@ -223,21 +223,18 @@ const createCard = (camp, audienceStats = null) => {
   viewButton.setAttribute('data-id', camp.id || '');
   meta.appendChild(viewButton);
 
-  card.appendChild(info);
-  card.appendChild(meta);
-
-  if (canManage && !camp.somenteLeitura && !card.querySelector('.campanha-actions')) {
-    const actions = document.createElement('div');
-    actions.className = 'campanha-actions';
+  if (canManage && !camp.somenteLeitura) {
     const btnExcluir = document.createElement('button');
     btnExcluir.className = 'btn-small danger';
     btnExcluir.type = 'button';
     btnExcluir.textContent = 'Excluir';
     btnExcluir.setAttribute('data-action', 'delete');
     btnExcluir.setAttribute('data-id', camp.id || '');
-    actions.appendChild(btnExcluir);
-    card.appendChild(actions);
+    meta.appendChild(btnExcluir);
   }
+
+  card.appendChild(info);
+  card.appendChild(meta);
   return card;
 };
 
@@ -1108,6 +1105,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getTemplateSelectionCount = () => getTemplateSelectionEntries().length;
 
+  const getTemplateClinicFallbackMembers = () => campaignPatients.map((patient) => ({
+    patientId: getCampaignPatientId(patient),
+    patientName: getCampaignPatientLabel(patient),
+    phone: getPatientPhone(patient),
+    suggestionReasonLabel: 'Paciente da clinica',
+    suggestionExplanation: 'Disponivel para revisao manual da campanha.',
+    responsibleDentistName: patient?.responsibleDentistName || '',
+    lastAttendanceAt: patient?.lastAttendanceAt || patient?.updatedAt || '',
+    included: true,
+    status: 'ELIGIBLE',
+    badges: [],
+    flags: {},
+  }));
+
+  const getTemplateSourceMembers = () => {
+    const members = Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [];
+    return members.length ? members : getTemplateClinicFallbackMembers();
+  };
+
   const matchesTemplateManualSearch = (patient = {}) => {
     const term = String(templateFlowState.manualSearch || '').trim().toLowerCase();
     if (!term) return true;
@@ -1201,21 +1217,21 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const getVisibleTemplateMembers = () => {
-    const members = Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [];
+    const members = getTemplateSourceMembers();
     return sortTemplateMembers(members.filter((member) => matchesTemplateFlowFilter(member) && matchesTemplateFlowSearch(member)));
   };
 
   const getVisibleEligibleTemplateMembers = () => getVisibleTemplateMembers().filter((member) => isTemplateMemberSelectable(member));
 
   const getSelectedTemplateMembers = () => {
-    const members = Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [];
+    const members = getTemplateSourceMembers();
     return sortTemplateMembers(
       members.filter((member) => templateFlowState.selectedPatientIds.has(getTemplateMemberId(member))),
     );
   };
 
   const getSearchPickerMembers = () => {
-    const members = Array.isArray(templateFlowState.audience?.members) ? templateFlowState.audience.members : [];
+    const members = getTemplateSourceMembers();
     return sortTemplateMembers(members.filter((member) => matchesTemplateFlowSearch(member)));
   };
 
@@ -1697,14 +1713,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const members = getVisibleTemplateMembers();
     const selectedCount = templateFlowState.selectedPatientIds.size;
     templateFlowListMeta.textContent = `${members.length} pacientes exibidos • ${selectedCount} selecionados`;
-    if (!audience || !Array.isArray(audience.members) || !audience.members.length) {
-      templateFlowAudienceList.innerHTML = '<div class="empty-state">Nenhum paciente sugerido para este template.</div>';
-      return;
-    }
     if (!members.length) {
       templateFlowAudienceList.innerHTML = '<div class="empty-state">Nenhum paciente encontrado com esse filtro.</div>';
       return;
     }
+    const usingClinicFallback = !audience || !Array.isArray(audience.members) || !audience.members.length;
     templateFlowAudienceList.innerHTML = members.map((member) => {
       const patientId = getTemplateMemberId(member);
       const selected = templateFlowState.selectedPatientIds.has(patientId);
@@ -1720,6 +1733,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const phoneLabel = blocked
         ? (member?.reasonLabel || 'Bloqueado para envio')
         : (member?.phone ? `WhatsApp elegivel: ${member.phone}` : 'WhatsApp elegivel');
+      const reasonLabel = usingClinicFallback
+        ? 'Paciente da clinica'
+        : (member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido');
       return `
         <article
           class="template-member ${selected ? 'is-selected' : ''} ${blocked ? 'is-blocked' : ''}"
@@ -1734,7 +1750,7 @@ document.addEventListener('DOMContentLoaded', () => {
               ${blocked ? 'disabled' : ''}>
             <div class="template-member-heading">
               <strong>${escapeHtml(member?.patientName || 'Paciente')}</strong>
-              <span class="template-member-reason">${escapeHtml(member?.suggestionReasonLabel || member?.suggestionExplanation || 'Paciente sugerido')}</span>
+              <span class="template-member-reason">${escapeHtml(reasonLabel)}</span>
               <div class="template-member-meta">
                 <span>${escapeHtml(lastAttendance)}</span>
                 <span>${escapeHtml(dentist)}</span>
