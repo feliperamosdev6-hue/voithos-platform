@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const paymentStatusTitle = document.getElementById('payment-status-title');
   const paymentStatusCopy = document.getElementById('payment-status-copy');
   const paymentMessage = document.getElementById('payment-message');
+  const paymentLinkButton = document.getElementById('payment-link-button');
   const preparePaymentButton = document.getElementById('prepare-payment-button');
   const backToProfileFromPayment = document.getElementById('back-to-profile-from-payment');
   const authApi = window.appApi?.auth || window.auth;
@@ -105,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     operationType: '',
     subscriptionOverview: null,
     onboardingState: null,
+    paymentLink: '',
   };
   const initialFlowState = {
     requestedMode: 'login',
@@ -153,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
     onboardingFlowState.operationType = '';
     onboardingFlowState.subscriptionOverview = null;
     onboardingFlowState.onboardingState = null;
+    onboardingFlowState.paymentLink = '';
     setProfileSelectionMessage('');
     setPaymentMessage('');
   };
@@ -250,7 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
       overview?.plans || []
     );
     const effectiveStatus = String(overview?.effectiveStatus || '').trim().toUpperCase();
-    const paymentLink = String(overview?.subscription?.lastPayment?.paymentLink || '').trim();
+    const paymentLink = String(
+      overview?.paymentLink
+      || overview?.subscription?.lastPayment?.paymentLink
+      || onboardingFlowState.paymentLink
+      || ''
+    ).trim();
 
     if (paymentPlanName) paymentPlanName.textContent = planView.label || 'Plano nao definido';
     if (paymentPlanDescription) paymentPlanDescription.textContent = planView.description;
@@ -259,6 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!overview?.subscription) {
       if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ainda nao iniciada';
       if (paymentStatusCopy) paymentStatusCopy.textContent = 'Prepare a assinatura agora para seguir para a cobranca da conta.';
+      if (paymentLinkButton) paymentLinkButton.classList.add('hidden');
       if (preparePaymentButton) preparePaymentButton.textContent = 'Preparar assinatura';
       return;
     }
@@ -266,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (effectiveStatus === 'ACTIVE' || effectiveStatus === 'GRACE_PERIOD') {
       if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ativa';
       if (paymentStatusCopy) paymentStatusCopy.textContent = 'Pagamento confirmado. O acesso completo ao webapp ja pode ser liberado.';
+      if (paymentLinkButton) paymentLinkButton.classList.add('hidden');
       if (preparePaymentButton) preparePaymentButton.textContent = 'Entrar no sistema';
       return;
     }
@@ -273,10 +283,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentStatusTitle) paymentStatusTitle.textContent = 'Pagamento pendente';
     if (paymentStatusCopy) {
       paymentStatusCopy.textContent = paymentLink
-        ? `Assinatura preparada. Link tecnico atual: ${paymentLink}. A tela de cobranca sera conectada na proxima etapa.`
+        ? 'Assinatura preparada. Abra o pagamento no Asaas pelo botao abaixo.'
         : 'Assinatura preparada. A cobranca desta conta ainda sera conectada ao gateway na proxima etapa.';
     }
-    if (preparePaymentButton) preparePaymentButton.textContent = 'Atualizar status do pagamento';
+    if (paymentLinkButton) {
+      paymentLinkButton.classList.toggle('hidden', !paymentLink);
+      paymentLinkButton.disabled = !paymentLink;
+      paymentLinkButton.textContent = paymentLink ? 'Abrir pagamento no Asaas' : 'Aguardando link de pagamento';
+    }
+    if (preparePaymentButton) preparePaymentButton.textContent = paymentLink ? 'Recarregar status do pagamento' : 'Preparar assinatura';
   };
 
   const shouldKeepUserInOnboarding = () => {
@@ -297,6 +312,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     onboardingFlowState.onboardingState = onboardingState && typeof onboardingState === 'object' ? onboardingState : null;
     onboardingFlowState.subscriptionOverview = subscriptionOverview && typeof subscriptionOverview === 'object' ? subscriptionOverview : null;
+    onboardingFlowState.paymentLink = String(
+      onboardingFlowState.subscriptionOverview?.paymentLink
+      || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
+      || ''
+    ).trim();
     onboardingFlowState.selectedPlanType = normalizePlanType(
       onboardingFlowState.onboardingState?.selectedPlan
       || onboardingFlowState.selectedPlanType
@@ -752,6 +772,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   backToProfileFromPayment?.addEventListener('click', goToOnboardingProfile);
+  paymentLinkButton?.addEventListener('click', () => {
+    const paymentLink = String(
+      onboardingFlowState.subscriptionOverview?.paymentLink
+      || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
+      || onboardingFlowState.paymentLink
+      || ''
+    ).trim();
+    if (!paymentLink) {
+      setPaymentMessage('Ainda nao ha link de pagamento disponivel.');
+      return;
+    }
+    window.open(paymentLink, '_blank', 'noopener,noreferrer');
+  });
 
   resendVerificationPlaceholder?.addEventListener('click', async () => {
     const email = verificationFlowState.email || String(emailInput?.value || '').trim().toLowerCase();
@@ -1128,14 +1161,28 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       setPaymentMessage('Preparando assinatura...');
       if (!onboardingFlowState.subscriptionOverview?.subscription) {
-        await subscriptionApi.create({
+        const created = await subscriptionApi.create({
           planType: onboardingFlowState.selectedPlanType,
           provider: 'MANUAL',
         });
+        onboardingFlowState.paymentLink = String(created?.paymentLink || '').trim();
+        if (onboardingFlowState.paymentLink) {
+          setPaymentMessage('Cobrança criada no Asaas. Abra o pagamento no botao abaixo.');
+        }
       }
       await syncOnboardingState();
       renderPaymentSummary();
-      setPaymentMessage('Assinatura preparada. A cobranca sera conectada ao gateway na proxima etapa.');
+      const paymentLink = String(
+        onboardingFlowState.subscriptionOverview?.paymentLink
+        || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
+        || onboardingFlowState.paymentLink
+        || ''
+      ).trim();
+      if (paymentLink) {
+        setPaymentMessage('Cobrança criada no Asaas. Abra o pagamento no botao abaixo.');
+      } else {
+        setPaymentMessage('Assinatura preparada. A cobranca sera conectada ao gateway na proxima etapa.');
+      }
     } catch (error) {
       console.error('Erro ao preparar assinatura', error);
       setPaymentMessage(error?.message || 'Nao foi possivel preparar a assinatura agora.');

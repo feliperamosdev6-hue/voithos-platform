@@ -110,6 +110,10 @@ body {
     opacity: 0.9;
 }
 
+.payment-link-button {
+    margin-top: 12px;
+}
+
 .error-message {
     color: #ef4444;
     margin-top: 15px;
