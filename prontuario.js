@@ -217,8 +217,78 @@ document.addEventListener('DOMContentLoaded', () => {
   let editingPatientPaymentId = '';
   let proceduresCatalogLoadedAt = 0;
   let proceduresCatalogLoading = null;
+  let procedimentosDataLoading = false;
+  let patientFinanceDataLoading = false;
+  let lastProcedimentosPatientKey = '';
+  let lastPatientFinanceKey = '';
   let patientAvatarLoadToken = 0;
   let consultaStatusUpdating = false;
+
+  const ensureLoadingStyles = (() => {
+    let injected = false;
+    return () => {
+      if (injected || document.getElementById('voithos-loading-styles')) return;
+      injected = true;
+      const style = document.createElement('style');
+      style.id = 'voithos-loading-styles';
+      style.textContent = `
+        @keyframes voithos-loading-pulse {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 1; }
+        }
+        .voithos-loading-panel {
+          display: grid;
+          gap: 12px;
+          align-items: center;
+          justify-items: start;
+          min-height: 180px;
+          padding: 16px 12px;
+        }
+        .voithos-loading-line,
+        .voithos-loading-pill {
+          background: linear-gradient(90deg, rgba(226, 232, 240, 0.92) 25%, rgba(203, 213, 225, 0.92) 50%, rgba(226, 232, 240, 0.92) 75%);
+          background-size: 200% 100%;
+          animation: voithos-loading-pulse 1.25s ease-in-out infinite;
+          border-radius: 999px;
+        }
+        .voithos-loading-line {
+          height: 12px;
+          width: 100%;
+        }
+        .voithos-loading-line.w-80 { width: 80%; }
+        .voithos-loading-line.w-65 { width: 65%; }
+        .voithos-loading-line.w-50 { width: 50%; }
+        .voithos-loading-pill {
+          width: 112px;
+          height: 34px;
+          border-radius: 999px;
+        }
+      `;
+      document.head.appendChild(style);
+    };
+  })();
+
+  const buildLoadingStateHtml = (title, subtitle, rows = 3) => {
+    ensureLoadingStyles();
+    const safeRows = Math.max(2, Math.min(Number(rows) || 3, 5));
+    const lines = Array.from({ length: safeRows }, (_, index) => {
+      const widths = ['w-80', 'w-65', 'w-50'];
+      return `<div class="voithos-loading-line ${widths[index % widths.length]}"></div>`;
+    }).join('');
+    return `
+      <div class="voithos-loading-panel" role="status" aria-live="polite" aria-busy="true">
+        <div class="voithos-loading-pill"></div>
+        <p class="empty-state-title">${title}</p>
+        <p class="empty-state-subtitle">${subtitle}</p>
+        ${lines}
+      </div>
+    `;
+  };
+
+  const getCurrentPatientKey = () => {
+    if (!currentPatient) return '';
+    return String(currentPatient?.id || currentPatient?._id || currentPatient?.prontuario || '').trim();
+  };
 
   const setAnotacaoStatus = (text = '', isError = false) => {
     if (!anotacaoStatus) return;
@@ -1310,11 +1380,34 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!paid && procPaymentPaidAt) procPaymentPaidAt.value = '';
     }
   };
-  const renderPatientFinance = (rows = []) => {
+  const renderPatientFinance = (rows = [], options = {}) => {
     if (!patientFinanceBody || !patientFinanceEmpty) return;
     const list = Array.isArray(rows) ? rows : [];
     patientFinanceRows = list;
     patientFinanceBody.innerHTML = '';
+
+    if (options.loading) {
+      patientFinanceEmpty.innerHTML = buildLoadingStateHtml(
+        'Carregando financeiro do paciente...',
+        'Buscando valores, parcelas e formas de pagamento da clínica.',
+        4
+      );
+      patientFinanceEmpty.classList.add('show');
+      updateFinanceMetrics([], { loading: true });
+      return;
+    }
+
+    if (options.error) {
+      patientFinanceEmpty.innerHTML = `
+        <div class="voithos-loading-panel" role="alert">
+          <p class="empty-state-title">Nao foi possivel carregar o financeiro</p>
+          <p class="empty-state-subtitle">${options.error}</p>
+        </div>
+      `;
+      patientFinanceEmpty.classList.add('show');
+      updateFinanceMetrics([], { loading: false });
+      return;
+    }
 
     const totalPaid = list
       .filter((item) => normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pago')
@@ -1332,6 +1425,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (patientFinanceTotalOverdue) patientFinanceTotalOverdue.textContent = formatCurrency(totalOverdue);
 
     if (!list.length) {
+      patientFinanceEmpty.innerHTML = `
+        <div class="empty-state">
+          <p class="empty-state-title">Nenhum lancamento financeiro encontrado</p>
+          <p class="empty-state-subtitle">O paciente ainda nao possui valores vinculados neste prontuario.</p>
+        </div>
+      `;
       patientFinanceEmpty.classList.add('show');
       return;
     }
@@ -1389,19 +1488,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const refreshPatientFinance = async () => {
     if (!financeApi.listByPatient || !currentPatient) {
-      renderPatientFinance([]);
+      renderPatientFinance([], {
+        error: 'Nao ha paciente selecionado para carregar o financeiro.',
+      });
       return;
+    }
+    const patientKey = getCurrentPatientKey();
+    if (patientKey && patientKey !== lastPatientFinanceKey) {
+      patientFinanceDataLoading = true;
+      renderPatientFinance([], { loading: true });
     }
     try {
       const rows = await financeApi.listByPatient({
         patientId: currentPatient.id || currentPatient._id || '',
         prontuario: currentPatient.prontuario || '',
       });
+      lastPatientFinanceKey = patientKey;
+      patientFinanceDataLoading = false;
       renderPatientFinance(rows || []);
       updateFinanceMetrics(currentPatient?.servicos || []);
     } catch (err) {
       console.warn('[PRONTUARIO] falha ao carregar financeiro do paciente', err);
-      renderPatientFinance([]);
+      patientFinanceDataLoading = false;
+      renderPatientFinance([], {
+        error: err?.message || 'Nao foi possivel carregar o financeiro do paciente.',
+      });
       updateFinanceMetrics(currentPatient?.servicos || []);
     }
   };
@@ -1546,8 +1657,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   };
 
-  const updateFinanceMetrics = (services = []) => {
+  const updateFinanceMetrics = (services = [], options = {}) => {
     if (!financeTotalPrevisto || !financeTotalRecebido || !financeSaldo) return;
+    if (options.loading) {
+      financeTotalPrevisto.textContent = 'Carregando...';
+      financeTotalRecebido.textContent = 'Carregando...';
+      financeSaldo.textContent = 'Carregando...';
+      return;
+    }
     if (Array.isArray(patientFinanceRows) && patientFinanceRows.length) {
       const totalPrevisto = patientFinanceRows.reduce((acc, row) => acc + (Number(row.valor) || 0), 0);
       const totalRecebido = patientFinanceRows
@@ -1779,9 +1896,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (timerRunningBanner) timerRunningBanner.classList.add('hidden');
   };
 
-  const renderProcedimentos = (services = [], filter = 'ficha') => {
+  const renderProcedimentos = (services = [], filter = 'ficha', options = {}) => {
     if (!procedimentosBody || !procedimentosEmpty) return;
     let list = Array.isArray(services) ? [...services] : [];
+
+    if (options.loading) {
+      procedimentosBody.innerHTML = '';
+      procedimentosEmpty.innerHTML = buildLoadingStateHtml(
+        'Carregando procedimentos...',
+        'Sincronizando ficha, financeiro e odontograma da clínica.',
+        4
+      );
+      procedimentosEmpty.classList.add('show');
+      updateFinanceMetrics([], { loading: true });
+      syncTrackedTimers();
+      return;
+    }
+
+    if (options.error) {
+      procedimentosBody.innerHTML = '';
+      procedimentosEmpty.innerHTML = `
+        <div class="voithos-loading-panel" role="alert">
+          <p class="empty-state-title">Nao foi possivel carregar os procedimentos</p>
+          <p class="empty-state-subtitle">${options.error}</p>
+        </div>
+      `;
+      procedimentosEmpty.classList.add('show');
+      updateFinanceMetrics([], { loading: false });
+      syncTrackedTimers();
+      return;
+    }
 
     if (filter && filter !== 'ficha') {
       list = list.filter((svc) => {
@@ -1795,6 +1939,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!list.length) {
       procedimentosBody.innerHTML = '';
+      procedimentosEmpty.innerHTML = `
+        <div class="empty-state">
+          <p class="empty-state-title">Nenhum procedimento encontrado</p>
+          <p class="empty-state-subtitle">Ajuste os filtros ou cadastre o primeiro procedimento.</p>
+        </div>
+      `;
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([]);
       syncTrackedTimers();
@@ -1974,9 +2124,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = Date.now();
     if (financeSyncRefreshInFlight || (now - financeSyncLastRefreshAt) < 250) return;
     financeSyncRefreshInFlight = true;
+    const patientKey = getCurrentPatientKey();
+    if (patientKey && patientKey !== lastProcedimentosPatientKey) {
+      procedimentosDataLoading = true;
+      renderProcedimentos(currentPatient.servicos || [], getActiveProcedimentosFilter(), { loading: true });
+    }
     try {
       const resp = await servicesApi.listForPatient(currentPatient.prontuario);
       currentPatient.servicos = resp?.servicos || [];
+      lastProcedimentosPatientKey = patientKey;
+      procedimentosDataLoading = false;
       renderProcedimentos(currentPatient.servicos, getActiveProcedimentosFilter());
       updateFinanceMetrics(currentPatient.servicos);
       applyOdontogramaSelections(currentPatient.servicos);
@@ -1984,6 +2141,10 @@ document.addEventListener('DOMContentLoaded', () => {
       financeSyncLastRefreshAt = Date.now();
     } catch (err) {
       console.warn('[PRONTUARIO] nao foi possivel atualizar procedimentos', err);
+      procedimentosDataLoading = false;
+      renderProcedimentos(currentPatient.servicos || [], getActiveProcedimentosFilter(), {
+        error: err?.message || 'Nao foi possivel carregar os procedimentos do paciente.',
+      });
     } finally {
       financeSyncRefreshInFlight = false;
     }

@@ -486,11 +486,17 @@
     const mesEl = document.getElementById('resumo-mes');
     const anoEl = document.getElementById('resumo-ano');
     if (!mesEl || !anoEl) return;
-    const filtrados = filtrarLancamentosPorMesAno(lancamentos, mesEl.value, anoEl.value);
-    const totaisMes = calcularTotais(filtrados);
     const entradasEl = document.getElementById('resumo-total-entradas');
     const saidasEl = document.getElementById('resumo-total-saidas');
     const saldoEl = document.getElementById('resumo-total-saldo');
+    if (gestaoDashboardLoading && !lancamentos.length) {
+      if (entradasEl) entradasEl.textContent = 'Carregando...';
+      if (saidasEl) saidasEl.textContent = 'Carregando...';
+      if (saldoEl) saldoEl.textContent = 'Carregando...';
+      return;
+    }
+    const filtrados = filtrarLancamentosPorMesAno(lancamentos, mesEl.value, anoEl.value);
+    const totaisMes = calcularTotais(filtrados);
     if (entradasEl) entradasEl.textContent = formatCurrency(totaisMes.entradas);
     if (saidasEl) saidasEl.textContent = formatCurrency(totaisMes.saidas);
     if (saldoEl) saldoEl.textContent = formatCurrency(totaisMes.saldo);
@@ -508,6 +514,14 @@
     const pendentesEl = document.getElementById('gestao-resumo-pendentes');
     const despesasEl = document.getElementById('gestao-resumo-despesas');
     const resultadoEl = document.getElementById('gestao-resumo-resultado');
+    if (gestaoDashboardLoading && !lancamentos.length) {
+      if (labelEl) labelEl.textContent = getPeriodoGerencialLabel();
+      if (recebidasEl) recebidasEl.textContent = 'Carregando...';
+      if (pendentesEl) pendentesEl.textContent = 'Carregando...';
+      if (despesasEl) despesasEl.textContent = 'Carregando...';
+      if (resultadoEl) resultadoEl.textContent = 'Carregando...';
+      return;
+    }
     if (labelEl) labelEl.textContent = getPeriodoGerencialLabel();
     if (recebidasEl) recebidasEl.textContent = formatCurrency(Number(resumo.receitas) || 0);
     if (pendentesEl) pendentesEl.textContent = formatCurrency(Number(resumo.pendentes) || 0);
@@ -705,6 +719,82 @@
   let estoqueMovimentoHistorico = [];
   let estoqueMovimentoTipo = 'ajuste';
   let activeRowMenu = null;
+  let gestaoLancamentosLoading = false;
+  let gestaoDashboardLoading = false;
+  let gestaoLucratividadeLoading = false;
+
+  const ensureGestaoLoadingStyles = (() => {
+    let injected = false;
+    return () => {
+      if (injected || document.getElementById('gestao-loading-styles')) return;
+      injected = true;
+      const style = document.createElement('style');
+      style.id = 'gestao-loading-styles';
+      style.textContent = `
+        @keyframes gestao-loading-pulse {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 1; }
+        }
+        .gestao-loading-panel {
+          display: grid;
+          gap: 10px;
+          min-height: 140px;
+          padding: 16px 12px;
+          align-items: center;
+          justify-items: start;
+        }
+        .gestao-loading-line,
+        .gestao-loading-pill {
+          background: linear-gradient(90deg, rgba(226, 232, 240, 0.92) 25%, rgba(203, 213, 225, 0.92) 50%, rgba(226, 232, 240, 0.92) 75%);
+          background-size: 200% 100%;
+          animation: gestao-loading-pulse 1.25s ease-in-out infinite;
+          border-radius: 999px;
+        }
+        .gestao-loading-line {
+          width: 100%;
+          height: 12px;
+        }
+        .gestao-loading-line.w-80 { width: 80%; }
+        .gestao-loading-line.w-65 { width: 65%; }
+        .gestao-loading-line.w-50 { width: 50%; }
+        .gestao-loading-pill {
+          width: 108px;
+          height: 34px;
+        }
+        .gestao-loading-table-row td {
+          padding: 20px 12px;
+          border: 0;
+        }
+      `;
+      document.head.appendChild(style);
+    };
+  })();
+
+  const buildGestaoLoadingHtml = (title, subtitle, rows = 3) => {
+    ensureGestaoLoadingStyles();
+    const widths = ['w-80', 'w-65', 'w-50'];
+    const safeRows = Math.max(2, Math.min(Number(rows) || 3, 5));
+    const lines = Array.from({ length: safeRows }, (_, index) => `<div class="gestao-loading-line ${widths[index % widths.length]}"></div>`).join('');
+    return `
+      <div class="gestao-loading-panel" role="status" aria-live="polite" aria-busy="true">
+        <div class="gestao-loading-pill"></div>
+        <p class="empty-state-title">${title}</p>
+        <p class="empty-state-subtitle">${subtitle}</p>
+        ${lines}
+      </div>
+    `;
+  };
+
+  const renderLoadingRow = (tbody, colSpan, title, subtitle) => {
+    if (!tbody) return;
+    tbody.innerHTML = `
+      <tr class="gestao-loading-table-row">
+        <td colspan="${colSpan}">
+          ${buildGestaoLoadingHtml(title, subtitle, 3)}
+        </td>
+      </tr>
+    `;
+  };
   const getEstoqueStorageKey = () => {
     const clinicId = String(usuarioLogado?.clinicId || '').trim();
     return clinicId ? `voithos_estoque_produtos_v1:${clinicId}` : 'voithos_estoque_produtos_v1:global';
@@ -1337,6 +1427,12 @@
       stockSourceEl.textContent = estoqueSource === 'backend' ? 'Salvo no sistema central' : 'Modo local';
     }
 
+    if (estoqueLoadInFlight && !activeItems.length) {
+      if (totalEl) totalEl.textContent = 'Carregando...';
+      if (criticosEl) criticosEl.textContent = 'Carregando...';
+      if (baixosEl) baixosEl.textContent = 'Carregando...';
+    }
+
     if (categorySelect) {
       const categories = Array.from(new Set(activeItems.map((item) => String(item.category || item.categoria || '').trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
       const currentValue = String(estoqueCategoriaFilter || 'all');
@@ -1354,9 +1450,26 @@
     const lista = getFilteredEstoque();
     tbody.innerHTML = '';
 
+    if (estoqueLoadInFlight && !activeItems.length) {
+      tableWrap.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+      emptyState.innerHTML = buildGestaoLoadingHtml(
+        'Carregando estoque...',
+        'Sincronizando itens, quantidades e alertas de reposição.',
+        4
+      );
+      return;
+    }
+
     if (!lista.length) {
       tableWrap.classList.add('hidden');
       emptyState.classList.remove('hidden');
+      emptyState.innerHTML = `
+        <div class="empty-state">
+          <p class="empty-state-title">Nenhum item encontrado</p>
+          <p class="empty-state-subtitle">Ajuste os filtros para localizar o produto desejado.</p>
+        </div>
+      `;
       return;
     }
 
@@ -1624,6 +1737,9 @@
   };
 
   async function carregarDashboard() {
+    gestaoDashboardLoading = true;
+    atualizarResumoDashboard();
+    atualizarResumoGerencialPeriodo();
     try {
       const isAdmin = await ensureAdmin();
       if (!isAdmin) return;
@@ -1763,6 +1879,10 @@
       preencherTabelaColaboradores(dash.despesasFuncionarios || []);
     } catch (err) {
       console.error('Erro ao carregar dashboard financeiro:', err);
+    } finally {
+      gestaoDashboardLoading = false;
+      atualizarResumoDashboard();
+      atualizarResumoGerencialPeriodo();
     }
   }
 
@@ -1876,6 +1996,18 @@
     if (tbodyRecPreview) tbodyRecPreview.innerHTML = '';
     if (tbodyDespPreview) tbodyDespPreview.innerHTML = '';
 
+    if (gestaoLancamentosLoading && !lancamentos.length) {
+      renderLoadingRow(tbodyRec, 7, 'Carregando receitas...', 'Buscando entradas e parcelas da clínica.');
+      renderLoadingRow(tbodyDesp, 7, 'Carregando despesas...', 'Buscando despesas e custos da clínica.');
+      if (tbodyRecPreview) renderLoadingRow(tbodyRecPreview, 6, 'Carregando resumo...', 'Preparando o panorama financeiro.');
+      if (tbodyDespPreview) renderLoadingRow(tbodyDespPreview, 6, 'Carregando resumo...', 'Preparando o panorama financeiro.');
+      const emptyReceitas = document.getElementById('empty-receitas');
+      const emptyDespesas = document.getElementById('empty-despesas');
+      if (emptyReceitas) emptyReceitas.classList.add('hidden');
+      if (emptyDespesas) emptyDespesas.classList.add('hidden');
+      return;
+    }
+
     const receitasFiltradas = getReceitasFiltradas();
     const despesasFiltradas = getDespesasFiltradas();
     const receitasDisplay = getPlanDisplayRows(receitasFiltradas);
@@ -1985,6 +2117,9 @@
   }
 
   async function carregarLancamentos() {
+    gestaoLancamentosLoading = true;
+    preencherTabelas();
+    atualizarRelatorioAtual();
     try {
       const isAdmin = await ensureAdmin();
       if (!isAdmin) return;
@@ -1997,6 +2132,10 @@
       await carregarProcedimentosLucratividade();
     } catch (err) {
       console.error('Erro ao carregar lancamentos financeiros:', err);
+    } finally {
+      gestaoLancamentosLoading = false;
+      preencherTabelas();
+      atualizarRelatorioAtual();
     }
   }
 
@@ -2627,6 +2766,20 @@
     const empty = document.getElementById('empty-lucratividade');
     if (!tbody) return;
 
+    if ((gestaoDashboardLoading || gestaoLucratividadeLoading) && !procedimentosLucratividade.length) {
+      renderLoadingRow(tbody, 7, 'Carregando lucratividade...', 'Ajustando custos, receitas e margens.');
+      const lucroEl = document.getElementById('lucratividade-lucro-periodo');
+      const custoEl = document.getElementById('lucratividade-custo-periodo');
+      const mediaEl = document.getElementById('lucratividade-lucro-medio');
+      const totalEl = document.getElementById('lucratividade-total-procedimentos');
+      if (lucroEl) lucroEl.textContent = 'Carregando...';
+      if (custoEl) custoEl.textContent = 'Carregando...';
+      if (mediaEl) mediaEl.textContent = 'Carregando...';
+      if (totalEl) totalEl.textContent = 'Carregando...';
+      if (empty) empty.classList.add('hidden');
+      return;
+    }
+
     const lista = getLucratividadeFiltrada();
     tbody.innerHTML = '';
 
@@ -2664,6 +2817,8 @@
   };
 
   const carregarProcedimentosLucratividade = async () => {
+    gestaoLucratividadeLoading = true;
+    preencherTabelaLucratividade();
     try {
       if (!servicesApi.listAll) {
         procedimentosLucratividade = [];
@@ -2679,6 +2834,9 @@
       console.warn('Falha ao carregar lucratividade por procedimento.', err);
       procedimentosLucratividade = [];
       procedimentosById = new Map();
+      preencherTabelaLucratividade();
+    } finally {
+      gestaoLucratividadeLoading = false;
       preencherTabelaLucratividade();
     }
   };
@@ -3313,8 +3471,3 @@
 
   window.addEventListener('DOMContentLoaded', initGestao);
 })();
-
-
-
-
-
