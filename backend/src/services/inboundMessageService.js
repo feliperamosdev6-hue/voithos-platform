@@ -1,9 +1,9 @@
 const { AppError } = require('../errors/AppError');
+const { prisma } = require('../db/prisma');
 const { appointmentRepository } = require('../repositories/appointmentRepository');
 const { inboundMessageRepository } = require('../repositories/inboundMessageRepository');
 const { outboundMessageRepository } = require('../repositories/outboundMessageRepository');
 const { patientRepository } = require('../repositories/patientRepository');
-const { notificationEventService } = require('./notificationEventService');
 
 const INBOUND_STATUS = {
   RECEIVED: 'RECEIVED',
@@ -27,6 +27,9 @@ const normalizePhone = (value) => {
 };
 
 const normalizeBody = (value) => String(value || '').trim().toUpperCase();
+
+const ACTIVE_REPLY_CONTEXT_TYPES = ['APPOINTMENT_CONFIRMATION', 'APPOINTMENT_REMINDER'];
+const ACTIVE_REPLY_CONTEXT_STATUSES = ['PENDING', 'QUEUED', 'SENT'];
 
 const buildReplyText = ({ intent, status, appointment }) => {
   if (intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION && status === INBOUND_STATUS.PROCESSED) {
@@ -68,6 +71,75 @@ const parseIntent = (normalizedBody) => {
   }
   return INBOUND_INTENT.UNKNOWN;
 };
+
+const isConfirmationResolved = (appointment = {}) => {
+  const normalizedStatus = String(appointment?.status || '').trim().toUpperCase();
+  return appointment?.confirmado === true
+    || ['CONFIRMADO', 'REMARCAR', 'CANCELADO', 'CONCLUIDO', 'NAO_COMPARECEU'].includes(normalizedStatus);
+};
+
+const unwrapRawPayloadMessage = (rawPayload) => {
+  let current = rawPayload?.message;
+
+  for (let depth = 0; depth < 8 && current && typeof current === 'object'; depth += 1) {
+    const next = current?.ephemeralMessage?.message
+      || current?.viewOnceMessage?.message
+      || current?.viewOnceMessageV2?.message
+      || current?.viewOnceMessageV2Extension?.message
+      || current?.documentWithCaptionMessage?.message
+      || current?.editedMessage?.message
+      || current?.deviceSentMessage?.message;
+
+    if (!next || next === current) break;
+    current = next;
+  }
+
+  return current;
+};
+
+const extractReferencedOutboundProviderMessageId = (rawPayload) => {
+  const message = unwrapRawPayloadMessage(rawPayload);
+  const candidates = [
+    message?.extendedTextMessage?.contextInfo?.stanzaId,
+    message?.buttonsResponseMessage?.contextInfo?.stanzaId,
+    message?.templateButtonReplyMessage?.contextInfo?.stanzaId,
+    message?.listResponseMessage?.contextInfo?.stanzaId,
+    message?.interactiveResponseMessage?.contextInfo?.stanzaId,
+  ];
+
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim();
+    if (normalized) return normalized;
+  }
+
+  return '';
+};
+
+const maskPhone = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length <= 4 ? digits : `***${digits.slice(-4)}`;
+};
+
+const logInboundState = (event, payload = {}) => {
+  console.info('[WHATSAPP_INBOUND]', JSON.stringify({
+    event,
+    ...payload,
+  }));
+};
+
+const buildReplyContextWhere = ({ clinicId, phone, appointmentId }) => ({
+  clinicId: String(clinicId || '').trim(),
+  phone: String(phone || '').trim(),
+  appointmentId: String(appointmentId || '').trim(),
+  channel: 'WHATSAPP',
+  type: {
+    in: ACTIVE_REPLY_CONTEXT_TYPES,
+  },
+  status: {
+    in: ACTIVE_REPLY_CONTEXT_STATUSES,
+  },
+});
 
 const TENANT_SENSITIVE_KEYS = new Set([
   'clinicId',
@@ -121,9 +193,56 @@ const inboundMessageService = {
         providerMessageId: String(providerMessageId || '').trim(),
       });
       if (existing) {
+        logInboundState('duplicate_provider_message_ignored', {
+          clinicId: normalizedClinicId,
+          phone: maskPhone(normalizedPhone),
+          providerMessageId: String(providerMessageId || '').trim(),
+          inboundMessageId: existing.id,
+        });
         return existing;
       }
     }
+
+    const intent = parseIntent(normalizedBody);
+    const referencedOutboundProviderMessageId = extractReferencedOutboundProviderMessageId(rawPayload);
+    const outbound = referencedOutboundProviderMessageId
+      ? await outboundMessageRepository.findActiveReplyContextByClinicAndProviderMessageId({
+        clinicId: normalizedClinicId,
+        providerMessageId: referencedOutboundProviderMessageId,
+      })
+      : null;
+    const activeReplyContext = outbound || await outboundMessageRepository.findLatestReplyEnabledByClinicAndPhone({
+      clinicId: normalizedClinicId,
+      phone: normalizedPhone,
+    });
+
+    if (!activeReplyContext?.appointmentId) {
+      logInboundState('ignored_without_active_context', {
+        clinicId: normalizedClinicId,
+        phone: maskPhone(normalizedPhone),
+        providerMessageId: providerMessageId ? String(providerMessageId || '').trim() : null,
+        intent,
+      });
+      return {
+        clinicId: normalizedClinicId,
+        fromPhone: normalizedPhone,
+        providerMessageId: providerMessageId ? String(providerMessageId || '').trim() : null,
+        status: INBOUND_STATUS.IGNORED,
+        intent,
+        processingNotes: 'No active outbound reply context was found for this phone.',
+        persisted: false,
+        replyText: null,
+      };
+    }
+
+    logInboundState('active_context_found', {
+      clinicId: normalizedClinicId,
+      phone: maskPhone(normalizedPhone),
+      outboundMessageId: activeReplyContext.id,
+      appointmentId: activeReplyContext.appointmentId,
+      lookup: outbound ? 'provider_message_reference' : 'latest_phone_context',
+      intent,
+    });
 
     const inbound = await inboundMessageRepository.create({
       clinicId: normalizedClinicId,
@@ -138,19 +257,30 @@ const inboundMessageService = {
     });
 
     try {
-      const intent = parseIntent(normalizedBody);
-      const outbound = await outboundMessageRepository.findLatestReplyEnabledByClinicAndPhone({
-        clinicId: normalizedClinicId,
-        phone: normalizedPhone,
-      });
-
-      if (!outbound?.appointmentId) {
+      const appointment = await appointmentRepository.findByIdAndClinic(activeReplyContext.appointmentId, normalizedClinicId);
+      if (!appointment) {
+        const closeResult = await outboundMessageRepository.closeActiveReplyContexts({
+          clinicId: normalizedClinicId,
+          phone: normalizedPhone,
+          appointmentId: activeReplyContext.appointmentId,
+          lastError: 'WhatsApp reply context closed because the appointment no longer exists.',
+        });
         await inboundMessageRepository.updateProcessing({
           id: inbound.id,
           clinicId: normalizedClinicId,
+          outboundMessageId: activeReplyContext.id,
+          patientId: activeReplyContext.patientId,
+          appointmentId: activeReplyContext.appointmentId,
           status: INBOUND_STATUS.IGNORED,
           intent,
-          processingNotes: 'No matching outbound confirmation was found for this phone.',
+          processingNotes: 'Matching outbound exists, but appointment is no longer available for this clinic. Reply context closed.',
+        });
+        logInboundState('active_context_closed_missing_appointment', {
+          clinicId: normalizedClinicId,
+          phone: maskPhone(normalizedPhone),
+          appointmentId: activeReplyContext.appointmentId,
+          outboundMessageId: activeReplyContext.id,
+          closedContexts: Number(closeResult?.count || 0),
         });
         const stored = await inboundMessageRepository.findByIdAndClinic({
           id: inbound.id,
@@ -158,21 +288,33 @@ const inboundMessageService = {
         });
         return {
           ...stored,
-          replyText: buildReplyText({ intent, status: INBOUND_STATUS.IGNORED }),
+          replyText: null,
         };
       }
 
-      const appointment = await appointmentRepository.findByIdAndClinic(outbound.appointmentId, normalizedClinicId);
-      if (!appointment) {
+      if (isConfirmationResolved(appointment)) {
+        const closeResult = await outboundMessageRepository.closeActiveReplyContexts({
+          clinicId: normalizedClinicId,
+          phone: normalizedPhone,
+          appointmentId: appointment.id,
+          lastError: 'WhatsApp reply context closed because the appointment was already resolved.',
+        });
         await inboundMessageRepository.updateProcessing({
           id: inbound.id,
           clinicId: normalizedClinicId,
-          outboundMessageId: outbound.id,
-          patientId: outbound.patientId,
-          appointmentId: outbound.appointmentId,
+          outboundMessageId: activeReplyContext.id,
+          patientId: activeReplyContext.patientId,
+          appointmentId: appointment.id,
           status: INBOUND_STATUS.IGNORED,
           intent,
-          processingNotes: 'Matching outbound exists, but appointment is no longer available for this clinic.',
+          processingNotes: 'Appointment was already resolved. Reply context closed and inbound ignored.',
+        });
+        logInboundState('active_context_closed_already_resolved', {
+          clinicId: normalizedClinicId,
+          phone: maskPhone(normalizedPhone),
+          appointmentId: appointment.id,
+          outboundMessageId: activeReplyContext.id,
+          closedContexts: Number(closeResult?.count || 0),
         });
         const stored = await inboundMessageRepository.findByIdAndClinic({
           id: inbound.id,
@@ -180,7 +322,7 @@ const inboundMessageService = {
         });
         return {
           ...stored,
-          replyText: buildReplyText({ intent, status: INBOUND_STATUS.IGNORED }),
+          replyText: null,
         };
       }
 
@@ -188,12 +330,18 @@ const inboundMessageService = {
         await inboundMessageRepository.updateProcessing({
           id: inbound.id,
           clinicId: normalizedClinicId,
-          outboundMessageId: outbound.id,
-          patientId: outbound.patientId,
-          appointmentId: outbound.appointmentId,
+          outboundMessageId: activeReplyContext.id,
+          patientId: activeReplyContext.patientId,
+          appointmentId: activeReplyContext.appointmentId,
           status: INBOUND_STATUS.IGNORED,
           intent,
           processingNotes: 'Inbound message did not match a supported confirmation intent.',
+        });
+        logInboundState('ignored_unsupported_intent', {
+          clinicId: normalizedClinicId,
+          phone: maskPhone(normalizedPhone),
+          appointmentId: activeReplyContext.appointmentId,
+          outboundMessageId: activeReplyContext.id,
         });
         return inboundMessageRepository.findByIdAndClinic({
           id: inbound.id,
@@ -204,48 +352,121 @@ const inboundMessageService = {
       const nextStatus = intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION ? 'CONFIRMADO' : 'REMARCAR';
       const confirmado = intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION;
 
-      const patient = outbound.patientId
-        ? await patientRepository.findByIdAndClinic(outbound.patientId, normalizedClinicId).catch(() => null)
+      const patient = activeReplyContext.patientId
+        ? await patientRepository.findByIdAndClinic(activeReplyContext.patientId, normalizedClinicId).catch(() => null)
         : null;
       const patientName = String(patient?.nome || '').trim();
 
-      const updateResult = await appointmentRepository.updateStatus({
-        id: appointment.id,
-        clinicId: normalizedClinicId,
-        status: nextStatus,
-        confirmado,
+      const transactionResult = await prisma.$transaction(async (tx) => {
+        const claimResult = await tx.outboundMessage.updateMany({
+          where: buildReplyContextWhere({
+            clinicId: normalizedClinicId,
+            phone: normalizedPhone,
+            appointmentId: appointment.id,
+          }),
+          data: {
+            status: 'FAILED',
+            lastError: `WhatsApp reply context closed after ${intent}.`,
+          },
+        });
+
+        if (!claimResult.count) {
+          return {
+            processed: false,
+            closedContexts: 0,
+          };
+        }
+
+        const updateResult = await tx.appointment.updateMany({
+          where: {
+            id: appointment.id,
+            clinicId: normalizedClinicId,
+          },
+          data: {
+            status: nextStatus,
+            confirmado,
+          },
+        });
+
+        if (!updateResult.count) {
+          throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+        }
+
+        await tx.inboundMessage.updateMany({
+          where: {
+            id: inbound.id,
+            clinicId: normalizedClinicId,
+          },
+          data: {
+            outboundMessageId: activeReplyContext.id,
+            patientId: patient?.id || activeReplyContext.patientId || null,
+            appointmentId: appointment.id,
+            status: INBOUND_STATUS.PROCESSED,
+            intent,
+            processingNotes: `Appointment updated to ${nextStatus} from inbound WhatsApp reply.`,
+          },
+        });
+
+        await tx.notificationEvent.create({
+          data: {
+            clinicId: normalizedClinicId,
+            appointmentId: appointment.id,
+            patientId: patient?.id || activeReplyContext.patientId || null,
+            phone: normalizedPhone,
+            type: intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION
+              ? 'APPOINTMENT_CONFIRMED'
+              : 'APPOINTMENT_RESCHEDULE_REQUESTED',
+            payload: {
+              inboundMessageId: inbound.id,
+              outboundMessageId: activeReplyContext.id,
+              intent,
+              nextStatus,
+              patientName,
+            },
+          },
+        });
+
+        return {
+          processed: true,
+          closedContexts: Number(claimResult.count || 0),
+        };
       });
 
-      if (!updateResult.count) {
-        throw new AppError(404, 'APPOINTMENT_NOT_FOUND', 'Appointment not found.');
+      if (!transactionResult.processed) {
+        await inboundMessageRepository.updateProcessing({
+          id: inbound.id,
+          clinicId: normalizedClinicId,
+          outboundMessageId: activeReplyContext.id,
+          patientId: patient?.id || activeReplyContext.patientId,
+          appointmentId: appointment.id,
+          status: INBOUND_STATUS.IGNORED,
+          intent,
+          processingNotes: 'Reply context was already closed by a previous inbound event.',
+        });
+        logInboundState('ignored_already_closed_context', {
+          clinicId: normalizedClinicId,
+          phone: maskPhone(normalizedPhone),
+          appointmentId: appointment.id,
+          outboundMessageId: activeReplyContext.id,
+        });
+        const stored = await inboundMessageRepository.findByIdAndClinic({
+          id: inbound.id,
+          clinicId: normalizedClinicId,
+        });
+        return {
+          ...stored,
+          replyText: null,
+        };
       }
 
-      await inboundMessageRepository.updateProcessing({
-        id: inbound.id,
+      logInboundState('reply_processed_and_context_closed', {
         clinicId: normalizedClinicId,
-        outboundMessageId: outbound.id,
-        patientId: patient?.id || outbound.patientId,
+        phone: maskPhone(normalizedPhone),
         appointmentId: appointment.id,
-        status: INBOUND_STATUS.PROCESSED,
+        outboundMessageId: activeReplyContext.id,
         intent,
-        processingNotes: `Appointment updated to ${nextStatus} from inbound WhatsApp reply.`,
-      });
-
-      await notificationEventService.create({
-        clinicId: normalizedClinicId,
-        appointmentId: appointment.id,
-        patientId: patient?.id || outbound.patientId,
-        phone: normalizedPhone,
-        type: intent === INBOUND_INTENT.APPOINTMENT_CONFIRMATION
-          ? 'APPOINTMENT_CONFIRMED'
-          : 'APPOINTMENT_RESCHEDULE_REQUESTED',
-        payload: {
-          inboundMessageId: inbound.id,
-          outboundMessageId: outbound.id,
-          intent,
-          nextStatus,
-          patientName,
-        },
+        nextStatus,
+        closedContexts: transactionResult.closedContexts,
       });
 
       const stored = await inboundMessageRepository.findByIdAndClinic({

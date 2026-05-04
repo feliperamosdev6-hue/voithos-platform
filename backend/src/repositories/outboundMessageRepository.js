@@ -1,5 +1,14 @@
 const { prisma } = require('../db/prisma');
+const { appEnv } = require('../config/appEnv');
 const { toNullableString, toRequiredString } = require('../types/repositoryTypes');
+
+const ACTIVE_REPLY_CONTEXT_TYPES = ['APPOINTMENT_CONFIRMATION', 'APPOINTMENT_REMINDER'];
+const ACTIVE_REPLY_CONTEXT_STATUSES = ['PENDING', 'QUEUED', 'SENT'];
+
+const getReplyContextCutoff = () => {
+  const ttlHours = Math.max(1, Number(appEnv?.appointmentReplyContextTtlHours) || 24);
+  return new Date(Date.now() - (ttlHours * 60 * 60 * 1000));
+};
 
 const outboundMessageRepository = {
   create: async (input) => prisma.outboundMessage.create({
@@ -60,7 +69,10 @@ const outboundMessageRepository = {
       appointmentId: toRequiredString(appointmentId, 'appointmentId'),
       type: 'APPOINTMENT_CONFIRMATION',
       status: {
-        in: ['PENDING', 'QUEUED', 'SENT'],
+        in: ACTIVE_REPLY_CONTEXT_STATUSES,
+      },
+      createdAt: {
+        gte: getReplyContextCutoff(),
       },
     },
     orderBy: {
@@ -85,7 +97,10 @@ const outboundMessageRepository = {
         },
         type: 'APPOINTMENT_CONFIRMATION',
         status: {
-          in: ['PENDING', 'QUEUED', 'SENT'],
+          in: ACTIVE_REPLY_CONTEXT_STATUSES,
+        },
+        createdAt: {
+          gte: getReplyContextCutoff(),
         },
       },
       orderBy: {
@@ -102,10 +117,35 @@ const outboundMessageRepository = {
         not: null,
       },
       type: {
-        in: ['APPOINTMENT_CONFIRMATION', 'APPOINTMENT_REMINDER'],
+        in: ACTIVE_REPLY_CONTEXT_TYPES,
       },
       status: {
-        in: ['QUEUED', 'SENT'],
+        in: ACTIVE_REPLY_CONTEXT_STATUSES,
+      },
+      createdAt: {
+        gte: getReplyContextCutoff(),
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  }),
+
+  findActiveReplyContextByClinicAndProviderMessageId: async ({ clinicId, providerMessageId }) => prisma.outboundMessage.findFirst({
+    where: {
+      clinicId: toRequiredString(clinicId, 'clinicId'),
+      providerMessageId: toRequiredString(providerMessageId, 'providerMessageId'),
+      appointmentId: {
+        not: null,
+      },
+      type: {
+        in: ACTIVE_REPLY_CONTEXT_TYPES,
+      },
+      status: {
+        in: ACTIVE_REPLY_CONTEXT_STATUSES,
+      },
+      createdAt: {
+        gte: getReplyContextCutoff(),
       },
     },
     orderBy: {
@@ -140,15 +180,34 @@ const outboundMessageRepository = {
       clinicId: toRequiredString(clinicId, 'clinicId'),
       channel: 'WHATSAPP',
       type: {
-        in: ['APPOINTMENT_CONFIRMATION', 'APPOINTMENT_REMINDER'],
+        in: ACTIVE_REPLY_CONTEXT_TYPES,
       },
       status: {
-        in: ['PENDING', 'QUEUED', 'SENT'],
+        in: ACTIVE_REPLY_CONTEXT_STATUSES,
       },
     },
     data: {
       status: 'FAILED',
       lastError: toNullableString(lastError) || 'WhatsApp clinic context reset by operator.',
+    },
+  }),
+
+  closeActiveReplyContexts: async ({ clinicId, appointmentId, phone, lastError }) => prisma.outboundMessage.updateMany({
+    where: {
+      clinicId: toRequiredString(clinicId, 'clinicId'),
+      appointmentId: appointmentId ? toRequiredString(appointmentId, 'appointmentId') : undefined,
+      phone: phone ? toRequiredString(phone, 'phone') : undefined,
+      channel: 'WHATSAPP',
+      type: {
+        in: ACTIVE_REPLY_CONTEXT_TYPES,
+      },
+      status: {
+        in: ACTIVE_REPLY_CONTEXT_STATUSES,
+      },
+    },
+    data: {
+      status: 'FAILED',
+      lastError: toNullableString(lastError) || 'WhatsApp reply context closed.',
     },
   }),
 };
