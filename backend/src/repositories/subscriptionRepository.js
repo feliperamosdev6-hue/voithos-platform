@@ -161,6 +161,22 @@ const subscriptionRepository = {
     include: subscriptionInclude,
   }),
 
+  updatePaymentGatewayData: async ({
+    paymentId,
+    provider,
+    externalPaymentId,
+    paymentLink,
+  }) => prisma.subscriptionPayment.update({
+    where: {
+      id: toRequiredString(paymentId, 'paymentId'),
+    },
+    data: {
+      provider: toRequiredString(provider, 'provider'),
+      externalPaymentId: toNullableString(externalPaymentId),
+      paymentLink: toNullableString(paymentLink),
+    },
+  }),
+
   confirmPaymentAndActivateSubscription: async ({
     clinicId,
     paymentId,

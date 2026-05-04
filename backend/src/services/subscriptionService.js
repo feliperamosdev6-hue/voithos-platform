@@ -2,6 +2,7 @@ const { AppError } = require('../errors/AppError');
 const { appEnv } = require('../config/appEnv');
 const { clinicRepository } = require('../repositories/clinicRepository');
 const { subscriptionRepository } = require('../repositories/subscriptionRepository');
+const { asaasService } = require('./payment/asaasService');
 
 const GRACE_PERIOD_DAYS = 3;
 const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
@@ -270,7 +271,7 @@ const subscriptionService = {
     }
 
     const plan = getPlanDefinition(planType);
-    return subscriptionRepository.createSubscriptionWithPayment({
+    const createdSubscription = await subscriptionRepository.createSubscriptionWithPayment({
       clinicId,
       planType: plan.planType,
       amount: roundMoney(plan.amount),
@@ -278,6 +279,41 @@ const subscriptionService = {
       externalPaymentId: normalizeText(externalPaymentId) || null,
       paymentLink: normalizeText(paymentLink) || null,
     });
+
+    let finalSubscription = createdSubscription;
+    if (asaasService.isConfigured()) {
+      try {
+        const clinic = await clinicRepository.findById(clinicId);
+        const customer = await asaasService.createCustomer({
+          name: clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos',
+          email: clinic?.email || '',
+          cpfCnpj: clinic?.cnpjCpf || '',
+          phone: clinic?.telefoneComercial || '',
+        });
+        const asaasPayment = await asaasService.createPayment({
+          customerId: customer?.id,
+          value: roundMoney(plan.amount),
+          description: `Assinatura Voithos ${plan.planType}`,
+        });
+
+        if (createdSubscription?.lastPayment?.id) {
+          await subscriptionRepository.updatePaymentGatewayData({
+            paymentId: createdSubscription.lastPayment.id,
+            provider: 'ASAAS',
+            externalPaymentId: asaasPayment?.id || null,
+            paymentLink: asaasPayment?.invoiceUrl || null,
+          });
+          finalSubscription = await subscriptionRepository.findByClinicId({ clinicId });
+        }
+      } catch (_error) {
+        finalSubscription = createdSubscription;
+      }
+    }
+
+    return {
+      ...finalSubscription,
+      paymentLink: finalSubscription?.lastPayment?.paymentLink || null,
+    };
   },
 
   confirmPayment: async ({ clinicId, paymentId, provider, externalPaymentId, paidAt }) => {
