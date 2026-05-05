@@ -72,6 +72,10 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
+      - key: WHATSAPP_QUEUE_ENABLED
+        value: "false"
+      - key: WHATSAPP_REDIS_WORKERS_ENABLED
+        value: "false"
       - key: INTERNAL_API_TOKEN
         sync: false
       - key: SERVICE_INTERNAL_API_TOKEN

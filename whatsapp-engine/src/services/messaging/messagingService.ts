@@ -318,6 +318,34 @@ export const messagingService = {
     if (!normalizedTo) throw new HttpError(400, 'toPhone is invalid.');
     if (!body) throw new HttpError(400, 'body is required.');
 
+    const scheduledFor = payload.scheduledFor || null;
+    const delayMs = scheduledFor ? Math.max(0, new Date(scheduledFor).getTime() - Date.now()) : 0;
+    if (!env.whatsappQueueEnabled) {
+      if (delayMs > 0) {
+        throw new HttpError(503, 'WhatsApp queue is disabled; scheduled sends require Redis queue workers.');
+      }
+      logger.warn({ clinicId, appointmentId: appointmentId || null }, 'whatsapp queue disabled; dispatching message synchronously');
+      const dispatched = await messagingService.createAndDispatchJob({
+        clinicId,
+        toPhone: normalizedTo,
+        body,
+        auditBody,
+        appointmentId,
+      });
+      return {
+        id: dispatched.jobId,
+        clinicId: dispatched.clinicId,
+        instanceId: dispatched.instanceId,
+        appointmentId: appointmentId || null,
+        toPhone: normalizedTo,
+        status: dispatched.status,
+        scheduledFor: null,
+        createdAt: dispatched.createdAt,
+        updatedAt: dispatched.updatedAt,
+        deduped: dispatched.deduped === true,
+      };
+    }
+
     const instance = await instanceRepository.findByClinicId(clinicId);
     if (!instance) throw new HttpError(404, 'No WhatsApp instance for this clinic.');
     try {
@@ -381,10 +409,9 @@ export const messagingService = {
       toPhone: normalizedTo,
       body,
       auditBody,
-      scheduledFor: payload.scheduledFor || null,
+      scheduledFor,
     });
 
-    const delayMs = payload.scheduledFor ? Math.max(0, new Date(payload.scheduledFor).getTime() - Date.now()) : 0;
     await enqueueMessageJob({ jobId: created.id }, { delayMs });
 
     return {

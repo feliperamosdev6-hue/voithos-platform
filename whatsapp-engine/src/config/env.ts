@@ -9,12 +9,26 @@ const asNumber = (value: string | undefined, fallback: number): number => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const asBoolean = (value: string | undefined, fallback: boolean): boolean => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['1', 'true', 'yes', 'on', 'enabled'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'off', 'disabled'].includes(raw)) return false;
+  return fallback;
+};
+
 const normalizeBaseUrl = (value: string | undefined, fallback = ''): string => {
   const raw = String(value || fallback || '').trim().replace(/\/+$/, '');
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
   return `http://${raw}`;
 };
+
+const whatsappQueueEnabled = asBoolean(process.env.WHATSAPP_QUEUE_ENABLED, !isProductionEnv);
+const whatsappRedisWorkersEnabled = asBoolean(
+  process.env.WHATSAPP_REDIS_WORKERS_ENABLED,
+  whatsappQueueEnabled,
+);
 
 const parseRedisConfig = (): { host: string; port: number; password: string; tls: boolean } => {
   const redisUrl = String(process.env.REDIS_URL || process.env.REDIS_CONNECTION_STRING || '').trim();
@@ -31,7 +45,7 @@ const parseRedisConfig = (): { host: string; port: number; password: string; tls
         tls: parsed.protocol === 'rediss:',
       };
     } catch (error) {
-      if (isProductionEnv) {
+      if (isProductionEnv && whatsappQueueEnabled) {
         const message = error instanceof Error ? error.message : 'Invalid REDIS_URL.';
         throw new Error(`Invalid REDIS_URL/REDIS_CONNECTION_STRING for production: ${message}`);
       }
@@ -49,7 +63,7 @@ const parseRedisConfig = (): { host: string; port: number; password: string; tls
     };
   }
 
-  if (isProductionEnv) {
+  if (isProductionEnv && whatsappQueueEnabled) {
     throw new Error('REDIS_URL or REDIS_CONNECTION_STRING is required in production.');
   }
 
@@ -82,9 +96,12 @@ export const env = {
   authEncryptionKeyBase64: process.env.AUTH_ENCRYPTION_KEY_BASE64 || '',
   adminSessionSecret: process.env.ADMIN_SESSION_SECRET || '',
   sessionsDir: process.env.SESSIONS_DIR || '.sessions',
-  workerConcurrency: asNumber(process.env.WORKER_CONCURRENCY, 4),
+  whatsappQueueEnabled,
+  whatsappRedisWorkersEnabled,
+  workerConcurrency: asNumber(process.env.WORKER_CONCURRENCY, isProductionEnv ? 1 : 4),
   workerLockDurationMs: asNumber(process.env.WORKER_LOCK_DURATION_MS, 120000),
-  workerStalledIntervalMs: asNumber(process.env.WORKER_STALLED_INTERVAL_MS, 60000),
+  workerStalledIntervalMs: asNumber(process.env.WORKER_STALLED_INTERVAL_MS, isProductionEnv ? 300000 : 60000),
+  workerDrainDelaySeconds: asNumber(process.env.WORKER_DRAIN_DELAY_SECONDS, isProductionEnv ? 60 : 5),
   messageMaxAttempts: asNumber(process.env.MESSAGE_MAX_ATTEMPTS, 3),
   messageBackoffMs: asNumber(process.env.MESSAGE_BACKOFF_MS, 4000),
   serverMaxActiveJobsGlobal: asNumber(process.env.SERVER_MAX_ACTIVE_JOBS_GLOBAL, 5000),

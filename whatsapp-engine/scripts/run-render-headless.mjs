@@ -8,16 +8,32 @@ const bootMode = 'headless';
 const processes = [];
 let shuttingDown = false;
 
+const parseBoolean = (value, fallback) => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['1', 'true', 'yes', 'on', 'enabled'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'off', 'disabled'].includes(raw)) return false;
+  return fallback;
+};
+
+const whatsappQueueEnabled = parseBoolean(process.env.WHATSAPP_QUEUE_ENABLED, false);
+const whatsappRedisWorkersEnabled = parseBoolean(process.env.WHATSAPP_REDIS_WORKERS_ENABLED, whatsappQueueEnabled);
+
 const processSpecs = [
   {
     name: 'api',
     entry: resolve(rootDir, 'dist', 'server.js'),
   },
-  {
+];
+
+if (whatsappQueueEnabled && whatsappRedisWorkersEnabled) {
+  processSpecs.push({
     name: 'worker',
     entry: resolve(rootDir, 'dist', 'workers', 'messageWorker.js'),
-  },
-];
+  });
+} else {
+  console.warn('[render-runner] WhatsApp Redis worker disabled by WHATSAPP_QUEUE_ENABLED/WHATSAPP_REDIS_WORKERS_ENABLED.');
+}
 
 const envSnapshot = {
   node: process.version,
@@ -29,6 +45,8 @@ const envSnapshot = {
   hasCentralBackendServiceToken: Boolean(process.env.CENTRAL_BACKEND_SERVICE_TOKEN),
   hasAdminPanelToken: Boolean(process.env.ADMIN_PANEL_TOKEN),
   hasAuthEncryptionKeyHex: Boolean(process.env.AUTH_ENCRYPTION_KEY_HEX),
+  whatsappQueueEnabled,
+  whatsappRedisWorkersEnabled,
 };
 
 for (const spec of processSpecs) {
@@ -100,4 +118,3 @@ console.log(`[render-runner] env ${JSON.stringify(envSnapshot)}`);
 for (const spec of processSpecs) {
   spawnNodeEntry(spec.name, spec.entry);
 }
-

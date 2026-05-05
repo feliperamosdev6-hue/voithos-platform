@@ -12,6 +12,18 @@ const scriptNames = packageJson.scripts || {};
 const uiScriptName = process.env.WHATSAPP_ENGINE_UI_SCRIPT || `${mode}:ui`;
 const skipDockerBootstrap = process.env.WHATSAPP_ENGINE_SKIP_DOCKER === '1';
 const bootMode = process.env.WHATSAPP_ENGINE_BOOT_MODE || (mode === 'start' ? 'headless' : 'ui');
+const isProduction = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+
+const parseBoolean = (value, fallback) => {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (!raw) return fallback;
+  if (['1', 'true', 'yes', 'on', 'enabled'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'off', 'disabled'].includes(raw)) return false;
+  return fallback;
+};
+
+const whatsappQueueEnabled = parseBoolean(process.env.WHATSAPP_QUEUE_ENABLED, !isProduction);
+const whatsappRedisWorkersEnabled = parseBoolean(process.env.WHATSAPP_REDIS_WORKERS_ENABLED, whatsappQueueEnabled);
 
 const isWindows = process.platform === 'win32';
 const npmCommand = isWindows ? 'npm.cmd' : 'npm';
@@ -23,8 +35,13 @@ let shuttingDown = false;
 const buildEntries = () => {
   const entries = [
     { name: 'api', script: mode },
-    { name: 'worker', script: `${mode}:worker` },
   ];
+
+  if (whatsappQueueEnabled && whatsappRedisWorkersEnabled) {
+    entries.push({ name: 'worker', script: `${mode}:worker` });
+  } else {
+    console.warn('[runner] WhatsApp Redis worker desativado por WHATSAPP_QUEUE_ENABLED/WHATSAPP_REDIS_WORKERS_ENABLED.');
+  }
 
   if (bootMode === 'ui' && scriptNames[uiScriptName]) {
     entries.push({ name: 'ui', script: uiScriptName });

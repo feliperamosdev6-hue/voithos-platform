@@ -4,6 +4,18 @@ import { logger } from '../config/logger';
 import { MESSAGE_QUEUE_NAME, redisConnection } from '../queues/messageQueue';
 import { messagingService } from '../services/messaging/messagingService';
 
+if (!env.whatsappQueueEnabled || !env.whatsappRedisWorkersEnabled) {
+  logger.warn(
+    {
+      queue: MESSAGE_QUEUE_NAME,
+      whatsappQueueEnabled: env.whatsappQueueEnabled,
+      whatsappRedisWorkersEnabled: env.whatsappRedisWorkersEnabled,
+    },
+    'whatsapp redis worker disabled by kill switch',
+  );
+  process.exit(0);
+}
+
 const worker = new Worker(
   MESSAGE_QUEUE_NAME,
   async (job) => {
@@ -15,6 +27,7 @@ const worker = new Worker(
     concurrency: env.workerConcurrency,
     lockDuration: env.workerLockDurationMs,
     stalledInterval: env.workerStalledIntervalMs,
+    drainDelay: env.workerDrainDelaySeconds,
   },
 );
 
@@ -32,6 +45,7 @@ logger.info(
     concurrency: env.workerConcurrency,
     lockDuration: env.workerLockDurationMs,
     stalledInterval: env.workerStalledIntervalMs,
+    drainDelay: env.workerDrainDelaySeconds,
   },
   'message worker started',
 );
