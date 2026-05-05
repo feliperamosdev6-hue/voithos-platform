@@ -76,15 +76,47 @@ const buildCheckoutUrl = (checkoutId) => {
   return `${host}/checkoutSession/show?id=${normalizedCheckoutId}`;
 };
 
-const createCustomer = async ({ name, email, cpfCnpj, phone }) => {
+const createCustomer = async ({
+  name,
+  email,
+  cpfCnpj,
+  phone,
+  address,
+  addressNumber,
+  complement,
+  postalCode,
+  province,
+  city,
+}) => {
   try {
     const client = createClient();
-    const response = await client.post('/customers', {
+    const payload = {
       name: String(name || '').trim(),
-      email: String(email || '').trim() || null,
-      cpfCnpj: String(cpfCnpj || '').replace(/\D/g, '') || null,
-      phone: String(phone || '').replace(/\D/g, '') || null,
-    });
+    };
+
+    const emailValue = String(email || '').trim();
+    const cpfCnpjValue = String(cpfCnpj || '').replace(/\D/g, '');
+    const phoneValue = String(phone || '').replace(/\D/g, '');
+    const addressValue = String(address || '').trim();
+    const addressNumberValue = String(addressNumber || '').trim();
+    const complementValue = String(complement || '').trim();
+    const postalCodeValue = String(postalCode || '').replace(/\D/g, '');
+    const provinceValue = String(province || '').trim();
+
+    if (emailValue) payload.email = emailValue;
+    if (cpfCnpjValue) payload.cpfCnpj = cpfCnpjValue;
+    if (phoneValue) payload.phone = phoneValue;
+    if (addressValue) payload.address = addressValue;
+    if (addressNumberValue) payload.addressNumber = addressNumberValue;
+    if (complementValue) payload.complement = complementValue;
+    if (postalCodeValue) payload.postalCode = postalCodeValue;
+    if (provinceValue) payload.province = provinceValue;
+
+    if (Number.isFinite(Number(city)) && String(city || '').trim() !== '') {
+      payload.city = Number(city);
+    }
+
+    const response = await client.post('/customers', payload);
     return response.data;
   } catch (error) {
     const message = error?.response?.data?.errors?.[0]?.description

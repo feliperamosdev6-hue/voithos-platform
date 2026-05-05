@@ -120,7 +120,53 @@ const buildCheckoutCallback = () => {
   };
 };
 
-const buildCheckoutPayload = ({ clinic, paymentMethod, installmentCount, plan }) => {
+const buildCheckoutCustomerData = (clinic) => {
+  const clinicProfile = clinic?.operationalSettings?.clinicProfile || {};
+  const clinicAddress = clinicProfile?.endereco || {};
+  const customerData = {
+    name: clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos',
+    cpfCnpj: normalizeText(clinic?.cnpjCpf || '').replace(/\D/g, '') || undefined,
+    email: normalizeText(clinic?.email || '') || undefined,
+    phone: normalizeText(clinic?.telefoneComercial || '').replace(/\D/g, '') || undefined,
+  };
+
+  const address = normalizeText(clinicAddress?.rua || clinic?.endereco || '');
+  const addressNumber = normalizeText(clinicAddress?.numero || '');
+  const complement = normalizeText(clinicAddress?.complemento || '');
+  const postalCode = normalizeText(clinicAddress?.cep || '').replace(/\D/g, '');
+  const province = normalizeText(clinicAddress?.bairro || '');
+  const city = normalizeText(clinicAddress?.cidade || '');
+
+  if (address) customerData.address = address;
+  if (addressNumber) customerData.addressNumber = addressNumber;
+  if (complement) customerData.complement = complement;
+  if (postalCode) customerData.postalCode = postalCode;
+  if (province) customerData.province = province;
+  if (Number.isFinite(Number(city)) && city !== '') customerData.city = Number(city);
+
+  return customerData;
+};
+
+const buildCheckoutCustomerContext = async ({ clinic, paymentMethod }) => {
+  const customerData = buildCheckoutCustomerData(clinic);
+  if (paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX) {
+    return { customerData };
+  }
+
+  try {
+    const customer = await asaasService.createCustomer(customerData);
+    const customerId = normalizeText(customer?.id);
+    if (customerId) {
+      return { customer: customerId };
+    }
+  } catch (_error) {
+    // Fall back to manual data below.
+  }
+
+  return { customerData };
+};
+
+const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerContext = {} }) => {
   const billingTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX ? ['PIX'] : ['CREDIT_CARD'];
   const chargeTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT
     ? ['DETACHED', 'INSTALLMENT']
@@ -138,12 +184,7 @@ const buildCheckoutPayload = ({ clinic, paymentMethod, installmentCount, plan })
         value: roundMoney(plan.amount),
       },
     ],
-    customerData: {
-      name: clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos',
-      cpfCnpj: normalizeText(clinic?.cnpjCpf || '').replace(/\D/g, '') || undefined,
-      email: normalizeText(clinic?.email || '') || undefined,
-      phone: normalizeText(clinic?.telefoneComercial || '').replace(/\D/g, '') || undefined,
-    },
+    ...customerContext,
   };
 
   if (paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT) {
@@ -428,11 +469,15 @@ const subscriptionService = {
 
     const plan = getPlanDefinition(subscription.planType || normalizedPlanType);
     const clinic = await clinicRepository.findById(clinicId);
-    const checkoutPayload = buildCheckoutPayload({
+    const customerContext = await buildCheckoutCustomerContext({
       clinic,
+      paymentMethod: normalizedPaymentMethod,
+    });
+    const checkoutPayload = buildCheckoutPayload({
       paymentMethod: normalizedPaymentMethod,
       installmentCount: normalizedInstallmentCount,
       plan,
+      customerContext,
     });
     let checkout = null;
     try {
