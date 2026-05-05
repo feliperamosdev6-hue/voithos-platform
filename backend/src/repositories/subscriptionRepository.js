@@ -55,6 +55,18 @@ const subscriptionRepository = {
     },
   }),
 
+  findPaymentByProviderAndExternalPaymentId: async ({ provider, externalPaymentId }) => prisma.subscriptionPayment.findFirst({
+    where: {
+      provider: toRequiredString(provider, 'provider'),
+      externalPaymentId: toRequiredString(externalPaymentId, 'externalPaymentId'),
+    },
+    include: {
+      subscription: {
+        include: subscriptionInclude,
+      },
+    },
+  }),
+
   createSubscriptionWithPayment: async ({
     clinicId,
     planType,

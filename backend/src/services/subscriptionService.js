@@ -149,20 +149,6 @@ const buildCheckoutCustomerData = (clinic) => {
 
 const buildCheckoutCustomerContext = async ({ clinic, paymentMethod }) => {
   const customerData = buildCheckoutCustomerData(clinic);
-  if (paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX) {
-    return { customerData };
-  }
-
-  try {
-    const customer = await asaasService.createCustomer(customerData);
-    const customerId = normalizeText(customer?.id);
-    if (customerId) {
-      return { customer: customerId };
-    }
-  } catch (_error) {
-    // Fall back to manual data below.
-  }
-
   return { customerData };
 };
 
@@ -210,6 +196,28 @@ const resolvePaidAtFromAsaasPayment = (payment) => {
   ];
   const match = candidates.find((value) => normalizeText(value));
   return match || new Date().toISOString();
+};
+
+const resolveWebhookPaymentExternalId = (payment = {}) => {
+  const candidates = [
+    payment?.checkoutSession?.id,
+    payment?.checkoutSessionId,
+    payment?.checkoutSession,
+    payment?.paymentLink?.id,
+    payment?.paymentLinkId,
+    payment?.paymentLink,
+    payment?.subscription?.id,
+    payment?.subscriptionId,
+    payment?.id,
+  ];
+
+  const match = candidates.find((value) => normalizeText(value));
+  return normalizeText(match);
+};
+
+const isWebhookPaymentConfirmationEvent = (eventType) => {
+  const normalized = normalizeText(eventType).toUpperCase();
+  return ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'CHECKOUT_PAID'].includes(normalized);
 };
 
 const getPlanDefinition = (planType) => SUBSCRIPTION_PLANS[normalizePlanType(planType)];
@@ -638,6 +646,47 @@ const subscriptionService = {
     } catch (_error) {
       return overview;
     }
+  },
+
+  handleAsaasWebhookEvent: async ({ eventType, payment }) => {
+    if (!isWebhookPaymentConfirmationEvent(eventType)) {
+      return { handled: false };
+    }
+
+    const externalPaymentId = resolveWebhookPaymentExternalId(payment);
+    if (!externalPaymentId) {
+      return { handled: false };
+    }
+
+    const paymentStatus = normalizeText(payment?.status).toUpperCase();
+    if (paymentStatus && !['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAID', 'RECEIVED', 'CONFIRMED'].includes(paymentStatus)) {
+      return { handled: false };
+    }
+
+    const paymentRecord = await subscriptionRepository.findPaymentByProviderAndExternalPaymentId({
+      provider: ASAAS_CHECKOUT_PROVIDER,
+      externalPaymentId,
+    }).catch(() => null);
+
+    if (!paymentRecord) {
+      return { handled: false };
+    }
+
+    const paidAt = resolvePaidAtFromAsaasPayment(payment);
+    const currentStatus = normalizeText(paymentRecord?.subscription?.status).toUpperCase();
+    if (currentStatus === 'ACTIVE') {
+      return { handled: true, alreadyActive: true };
+    }
+
+    await subscriptionService.confirmPayment({
+      clinicId: paymentRecord.clinicId,
+      paymentId: paymentRecord.id,
+      provider: ASAAS_CHECKOUT_PROVIDER,
+      externalPaymentId,
+      paidAt,
+    });
+
+    return { handled: true };
   },
 
   ensureAccess: async ({ clinicId, role }) => {
