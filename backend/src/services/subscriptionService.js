@@ -155,6 +155,20 @@ const buildCheckoutCustomerData = (clinic) => {
 
 const buildCheckoutCustomerContext = async ({ clinic, paymentMethod }) => {
   const customerData = buildCheckoutCustomerData(clinic);
+  if (paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX) {
+    return { customerData };
+  }
+
+  try {
+    const customer = await asaasService.createCustomer(customerData);
+    const customerId = normalizeText(customer?.id);
+    if (customerId) {
+      return { customer: customerId };
+    }
+  } catch (_error) {
+    // Fall back to manual data below.
+  }
+
   return { customerData };
 };
 
