@@ -122,7 +122,9 @@ const buildCheckoutCallback = () => {
 
 const buildCheckoutPayload = ({ clinic, paymentMethod, installmentCount, plan }) => {
   const billingTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX ? ['PIX'] : ['CREDIT_CARD'];
-  const chargeTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT ? ['INSTALLMENT'] : ['DETACHED'];
+  const chargeTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT
+    ? ['DETACHED', 'INSTALLMENT']
+    : ['DETACHED'];
   const payload = {
     billingTypes,
     chargeTypes,
