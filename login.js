@@ -52,6 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const paymentStatusTitle = document.getElementById('payment-status-title');
   const paymentStatusCopy = document.getElementById('payment-status-copy');
   const paymentMessage = document.getElementById('payment-message');
+  const paymentChoiceGrid = document.getElementById('payment-choice-grid');
+  const paymentChoiceButtons = Array.from(document.querySelectorAll('[data-payment-method]'));
+  const paymentInstallmentCard = document.getElementById('payment-installment-card');
+  const paymentInstallmentPanel = document.getElementById('payment-installment-panel');
+  const paymentInstallmentCount = document.getElementById('payment-installment-count');
+  const paymentInstallmentCopy = document.getElementById('payment-installment-copy');
+  const paymentReadyCard = document.getElementById('payment-ready-card');
+  const paymentReadyCopy = document.getElementById('payment-ready-copy');
   const paymentLinkButton = document.getElementById('payment-link-button');
   const preparePaymentButton = document.getElementById('prepare-payment-button');
   const backToProfileFromPayment = document.getElementById('back-to-profile-from-payment');
@@ -81,6 +89,26 @@ document.addEventListener('DOMContentLoaded', () => {
     CLINIC: 'Clinica',
     OTHER: 'Outros',
   };
+  const PAYMENT_METHOD_DEFINITIONS = {
+    PIX: {
+      label: 'Pix',
+      shortLabel: 'Pix',
+      actionLabel: 'Gerar checkout Pix',
+      readyLabel: 'Checkout Pix pronto. Abra o link para concluir o pagamento imediato.',
+    },
+    CREDIT_CARD: {
+      label: 'Cartao a vista',
+      shortLabel: 'Cartao a vista',
+      actionLabel: 'Gerar checkout seguro',
+      readyLabel: 'Checkout seguro pronto. Informe o cartao no Asaas para concluir a assinatura.',
+    },
+    INSTALLMENT: {
+      label: 'Cartao parcelado',
+      shortLabel: 'Cartao parcelado',
+      actionLabel: 'Gerar checkout parcelado',
+      readyLabel: 'Checkout parcelado pronto. Escolha e confirme as parcelas no Asaas.',
+    },
+  };
   const getUiBaseUrl = () => {
     try {
       return String(window.__APP_API_BASE__ || localStorage.getItem('apiBase') || '').trim();
@@ -107,10 +135,14 @@ document.addEventListener('DOMContentLoaded', () => {
     subscriptionOverview: null,
     onboardingState: null,
     paymentLink: '',
+    checkoutPaymentMethod: 'CREDIT_CARD',
+    installmentCount: 6,
+    paymentReturnStatus: '',
   };
   const initialFlowState = {
     requestedMode: 'login',
     allowAutoSessionResume: false,
+    returnPaymentStatus: '',
   };
 
   const setError = (message) => {
@@ -156,6 +188,9 @@ document.addEventListener('DOMContentLoaded', () => {
     onboardingFlowState.subscriptionOverview = null;
     onboardingFlowState.onboardingState = null;
     onboardingFlowState.paymentLink = '';
+    onboardingFlowState.checkoutPaymentMethod = 'CREDIT_CARD';
+    onboardingFlowState.installmentCount = 6;
+    onboardingFlowState.paymentReturnStatus = '';
     setProfileSelectionMessage('');
     setPaymentMessage('');
   };
@@ -246,6 +281,86 @@ document.addEventListener('DOMContentLoaded', () => {
     if (profileSelectionMessage) profileSelectionMessage.textContent = message || '';
   };
 
+  const getIsAnnualPlan = () => normalizePlanType(
+    onboardingFlowState.selectedPlanType
+    || onboardingFlowState.onboardingState?.selectedPlan
+    || onboardingFlowState.subscriptionOverview?.subscription?.planType
+  ) === 'ANNUAL';
+
+  const getSelectedPaymentMethodDefinition = () => PAYMENT_METHOD_DEFINITIONS[onboardingFlowState.checkoutPaymentMethod] || PAYMENT_METHOD_DEFINITIONS.CREDIT_CARD;
+
+  const applyPaymentMethodAvailability = () => {
+    const isAnnualPlan = getIsAnnualPlan();
+    if (onboardingFlowState.checkoutPaymentMethod === 'INSTALLMENT' && !isAnnualPlan) {
+      onboardingFlowState.checkoutPaymentMethod = 'CREDIT_CARD';
+    }
+
+    paymentChoiceButtons.forEach((button) => {
+      const method = String(button?.getAttribute('data-payment-method') || '').trim().toUpperCase();
+      const isInstallmentMethod = method === 'INSTALLMENT';
+      const isDisabled = isInstallmentMethod && !isAnnualPlan;
+      button.classList.toggle('is-disabled', isDisabled);
+      button.classList.toggle('is-selected', onboardingFlowState.checkoutPaymentMethod === method && !isDisabled);
+      button.setAttribute('aria-pressed', onboardingFlowState.checkoutPaymentMethod === method && !isDisabled ? 'true' : 'false');
+      button.disabled = isDisabled;
+    });
+
+    if (paymentInstallmentPanel) {
+      paymentInstallmentPanel.classList.toggle('hidden', !(isAnnualPlan && onboardingFlowState.checkoutPaymentMethod === 'INSTALLMENT'));
+    }
+    if (paymentInstallmentCopy) {
+      paymentInstallmentCopy.textContent = isAnnualPlan
+        ? 'O total anual sera parcelado no checkout seguro do Asaas.'
+        : 'Parcelamento no cartao e reservado ao plano anual.';
+    }
+    if (paymentInstallmentCard && !isAnnualPlan) {
+      paymentInstallmentCard.title = 'Parcelamento disponivel apenas no plano anual.';
+    }
+  };
+
+  const renderPaymentReturnMessage = () => {
+    if (!initialFlowState.returnPaymentStatus) return false;
+    if (initialFlowState.returnPaymentStatus === 'success') {
+      setPaymentMessage('Voce retornou do checkout. Clique em atualizar status para conferir a confirmacao do pagamento.');
+      return true;
+    }
+    if (initialFlowState.returnPaymentStatus === 'cancelled') {
+      clearLocalPaymentLink();
+      setPaymentMessage('Pagamento cancelado no checkout. Ajuste a forma de pagamento ou gere um novo checkout.');
+      return true;
+    }
+    if (initialFlowState.returnPaymentStatus === 'expired') {
+      clearLocalPaymentLink();
+      setPaymentMessage('O checkout expirou. Gere um novo checkout para continuar.');
+      return true;
+    }
+    return false;
+  };
+
+  const clearLocalPaymentLink = () => {
+    onboardingFlowState.paymentLink = '';
+    if (onboardingFlowState.subscriptionOverview && typeof onboardingFlowState.subscriptionOverview === 'object') {
+      const currentOverview = onboardingFlowState.subscriptionOverview;
+      const currentSubscription = currentOverview.subscription && typeof currentOverview.subscription === 'object'
+        ? currentOverview.subscription
+        : null;
+      const currentLastPayment = currentSubscription?.lastPayment && typeof currentSubscription.lastPayment === 'object'
+        ? currentSubscription.lastPayment
+        : null;
+      onboardingFlowState.subscriptionOverview = {
+        ...currentOverview,
+        paymentLink: '',
+        subscription: currentSubscription ? {
+          ...currentSubscription,
+          lastPayment: currentLastPayment ? {
+            ...currentLastPayment,
+            paymentLink: '',
+          } : currentLastPayment,
+        } : currentSubscription,
+      };
+    }
+  };
+
   const renderPaymentSummary = () => {
     const overview = onboardingFlowState.subscriptionOverview || null;
     const planView = buildPlanView(
@@ -264,17 +379,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentPlanDescription) paymentPlanDescription.textContent = planView.description;
     if (paymentPlanPrice) paymentPlanPrice.textContent = planView.price || '--';
 
+    applyPaymentMethodAvailability();
+
     if (!overview?.subscription) {
       if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ainda nao iniciada';
-      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Prepare a assinatura agora para seguir para a cobranca da conta.';
+      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Escolha a forma de pagamento e gere um checkout seguro para concluir a ativacao.';
+      if (paymentReadyCard) paymentReadyCard.classList.add('hidden');
       if (paymentLinkButton) paymentLinkButton.classList.add('hidden');
-      if (preparePaymentButton) preparePaymentButton.textContent = 'Preparar assinatura';
+      if (preparePaymentButton) preparePaymentButton.textContent = getSelectedPaymentMethodDefinition().actionLabel;
       return;
     }
 
     if (effectiveStatus === 'ACTIVE' || effectiveStatus === 'GRACE_PERIOD') {
       if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ativa';
       if (paymentStatusCopy) paymentStatusCopy.textContent = 'Pagamento confirmado. O acesso completo ao webapp ja pode ser liberado.';
+      if (paymentReadyCard) paymentReadyCard.classList.add('hidden');
       if (paymentLinkButton) paymentLinkButton.classList.add('hidden');
       if (preparePaymentButton) preparePaymentButton.textContent = 'Entrar no sistema';
       return;
@@ -283,15 +402,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentStatusTitle) paymentStatusTitle.textContent = 'Pagamento pendente';
     if (paymentStatusCopy) {
       paymentStatusCopy.textContent = paymentLink
-        ? 'Assinatura preparada. Abra o pagamento no Asaas pelo botao abaixo.'
-        : 'Assinatura preparada. A cobranca desta conta ainda sera conectada ao gateway na proxima etapa.';
+        ? 'Sua assinatura esta pendente. Abra o checkout seguro para concluir o pagamento e depois atualize o status.'
+        : 'Sua assinatura esta pendente. Gere um checkout seguro para concluir o pagamento.';
+    }
+    if (paymentReadyCard) {
+      paymentReadyCard.classList.toggle('hidden', !paymentLink);
+    }
+    if (paymentReadyCopy) {
+      const selectedMethod = getSelectedPaymentMethodDefinition();
+      paymentReadyCopy.textContent = paymentLink
+        ? `${selectedMethod.readyLabel} Se voce ja voltou do pagamento, atualize o status para validar a liberacao.`
+        : 'Depois de gerar o checkout, voce seguira para o pagamento seguro do Asaas com os dados da clinica pre-preenchidos.';
     }
     if (paymentLinkButton) {
       paymentLinkButton.classList.toggle('hidden', !paymentLink);
       paymentLinkButton.disabled = !paymentLink;
-      paymentLinkButton.textContent = paymentLink ? 'Abrir pagamento no Asaas' : 'Aguardando link de pagamento';
+      paymentLinkButton.textContent = paymentLink ? 'Continuar para o checkout seguro' : 'Aguardando checkout';
     }
-    if (preparePaymentButton) preparePaymentButton.textContent = paymentLink ? 'Recarregar status do pagamento' : 'Preparar assinatura';
+    if (preparePaymentButton) preparePaymentButton.textContent = paymentLink ? 'Atualizar status do pagamento' : getSelectedPaymentMethodDefinition().actionLabel;
   };
 
   const shouldKeepUserInOnboarding = () => {
@@ -322,6 +450,9 @@ document.addEventListener('DOMContentLoaded', () => {
       || onboardingFlowState.selectedPlanType
       || onboardingFlowState.subscriptionOverview?.subscription?.planType
     );
+    if (getIsAnnualPlan() && !onboardingFlowState.paymentLink && onboardingFlowState.checkoutPaymentMethod === 'CREDIT_CARD') {
+      onboardingFlowState.checkoutPaymentMethod = 'INSTALLMENT';
+    }
     onboardingFlowState.operationType = normalizeOperationType(
       onboardingFlowState.onboardingState?.operationType || onboardingFlowState.operationType
     );
@@ -376,18 +507,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const email = String(params.get('email') || '').trim().toLowerCase();
     const plan = String(params.get('plan') || '').trim();
     const resume = String(params.get('resume') || params.get('resumeSession') || '').trim().toLowerCase();
+    const payment = String(params.get('payment') || '').trim().toLowerCase();
     return {
       mode: normalizeRequestedMode(rawMode),
       email,
       plan: normalizePlanType(plan),
       resume: ['1', 'true', 'yes', 'on'].includes(resume),
+      payment,
     };
   };
 
   const clearInitialFlowUrl = () => {
     try {
       const url = new URL(window.location.href);
-      ['mode', 'screen', 'plan', 'email'].forEach((key) => url.searchParams.delete(key));
+      ['mode', 'screen', 'plan', 'email', 'payment', 'resume', 'resumeSession'].forEach((key) => url.searchParams.delete(key));
       url.hash = '';
       const normalizedPath = `${url.pathname}${url.search}${url.hash}`;
       window.history.replaceState({}, document.title, normalizedPath);
@@ -400,6 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const request = readInitialFlowRequest();
     initialFlowState.requestedMode = request.mode;
     initialFlowState.allowAutoSessionResume = request.resume === true;
+    initialFlowState.returnPaymentStatus = request.payment;
 
     if (request.mode === 'signup' && authApi?.clearSession) {
       await authApi.clearSession({ remote: false }).catch(() => null);
@@ -656,6 +790,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Prepare a ativacao da assinatura');
     setPaymentMessage('');
     renderPaymentSummary();
+    renderPaymentReturnMessage();
   };
 
   const routePrivilegedAuthenticatedUser = (user) => {
@@ -772,6 +907,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   backToProfileFromPayment?.addEventListener('click', goToOnboardingProfile);
+  paymentChoiceButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      const method = String(button.getAttribute('data-payment-method') || '').trim().toUpperCase();
+      if (!method || button.disabled) return;
+      onboardingFlowState.checkoutPaymentMethod = method;
+      clearLocalPaymentLink();
+      applyPaymentMethodAvailability();
+      renderPaymentSummary();
+      setPaymentMessage('');
+    });
+  });
+  paymentInstallmentCount?.addEventListener('change', () => {
+    onboardingFlowState.installmentCount = Number(paymentInstallmentCount.value || 6) || 6;
+    clearLocalPaymentLink();
+    renderPaymentSummary();
+  });
   paymentLinkButton?.addEventListener('click', () => {
     const paymentLink = String(
       onboardingFlowState.subscriptionOverview?.paymentLink
@@ -1153,35 +1304,60 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!subscriptionApi?.create || !subscriptionApi?.getMySubscription) {
+    if (!subscriptionApi?.create || !subscriptionApi?.getMySubscription || !subscriptionApi?.createCheckout || !subscriptionApi?.refreshPaymentStatus) {
       setPaymentMessage('Pagamento indisponivel neste ambiente.');
       return;
     }
 
     try {
-      setPaymentMessage('Preparando assinatura...');
-      if (!onboardingFlowState.subscriptionOverview?.subscription) {
-        const created = await subscriptionApi.create({
-          planType: onboardingFlowState.selectedPlanType,
-          provider: 'MANUAL',
-        });
-        onboardingFlowState.paymentLink = String(created?.paymentLink || '').trim();
-        if (onboardingFlowState.paymentLink) {
-          setPaymentMessage('Cobrança criada no Asaas. Abra o pagamento no botao abaixo.');
-        }
-      }
-      await syncOnboardingState();
-      renderPaymentSummary();
       const paymentLink = String(
         onboardingFlowState.subscriptionOverview?.paymentLink
         || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
         || onboardingFlowState.paymentLink
         || ''
       ).trim();
+      const selectedMethod = onboardingFlowState.checkoutPaymentMethod;
+
       if (paymentLink) {
-        setPaymentMessage('Cobrança criada no Asaas. Abra o pagamento no botao abaixo.');
+        setPaymentMessage('Atualizando status do pagamento...');
+        const refreshed = await subscriptionApi.refreshPaymentStatus();
+        onboardingFlowState.subscriptionOverview = refreshed && typeof refreshed === 'object' ? refreshed : onboardingFlowState.subscriptionOverview;
+        onboardingFlowState.paymentLink = String(
+          refreshed?.paymentLink
+          || refreshed?.subscription?.lastPayment?.paymentLink
+          || onboardingFlowState.paymentLink
+          || ''
+        ).trim();
+        renderPaymentSummary();
+        if (String(refreshed?.effectiveStatus || '').trim().toUpperCase() === 'ACTIVE') {
+          setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
+        } else {
+          setPaymentMessage('Ainda nao encontramos confirmacao final do pagamento. Se voce acabou de pagar, aguarde alguns instantes e atualize novamente.');
+        }
+        return;
+      }
+
+      setPaymentMessage('Preparando assinatura e checkout seguro...');
+      if (!onboardingFlowState.subscriptionOverview?.subscription) {
+        await subscriptionApi.create({
+          planType: onboardingFlowState.selectedPlanType,
+          provider: 'MANUAL',
+          gatewayMode: 'CHECKOUT',
+        });
+      }
+
+      const checkout = await subscriptionApi.createCheckout({
+        planType: onboardingFlowState.selectedPlanType,
+        paymentMethod: selectedMethod,
+        installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
+      });
+      onboardingFlowState.paymentLink = String(checkout?.paymentLink || '').trim();
+      await syncOnboardingState();
+      renderPaymentSummary();
+      if (onboardingFlowState.paymentLink) {
+        setPaymentMessage('Checkout seguro gerado. Continue para o Asaas e finalize o pagamento.');
       } else {
-        setPaymentMessage('Assinatura preparada. A cobranca sera conectada ao gateway na proxima etapa.');
+        setPaymentMessage('Assinatura preparada, mas o checkout nao foi retornado. Gere novamente para continuar.');
       }
     } catch (error) {
       console.error('Erro ao preparar assinatura', error);

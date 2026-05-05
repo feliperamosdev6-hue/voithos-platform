@@ -7,6 +7,12 @@ const { asaasService } = require('./payment/asaasService');
 const GRACE_PERIOD_DAYS = 3;
 const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
 const ENFORCEMENT_DISABLED_STATUS = 'ENFORCEMENT_DISABLED';
+const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
+const CHECKOUT_PAYMENT_METHODS = Object.freeze({
+  PIX: 'PIX',
+  CREDIT_CARD: 'CREDIT_CARD',
+  INSTALLMENT: 'INSTALLMENT',
+});
 
 const SUBSCRIPTION_PLANS = Object.freeze({
   LEGACY: Object.freeze({
@@ -86,6 +92,82 @@ const addDays = (date, days) => {
 };
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const resolveTodayIsoDate = () => new Date().toISOString().slice(0, 10);
+
+const normalizeCheckoutPaymentMethod = (value) => {
+  const normalized = normalizeText(value).toUpperCase();
+  if (!Object.prototype.hasOwnProperty.call(CHECKOUT_PAYMENT_METHODS, normalized)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'paymentMethod must be one of: PIX, CREDIT_CARD, INSTALLMENT.');
+  }
+  return normalized;
+};
+
+const normalizeInstallmentCount = (value) => {
+  const count = Number(value || 0);
+  if (!Number.isInteger(count)) return 0;
+  return count;
+};
+
+const resolveCheckoutCallbackBaseUrl = () => normalizeText(appEnv.publicAppBaseUrl || process.env.PUBLIC_APP_BASE_URL || 'http://127.0.0.1:4000');
+
+const buildCheckoutCallback = () => {
+  const baseUrl = resolveCheckoutCallbackBaseUrl().replace(/\/+$/, '');
+  const loginUrl = `${baseUrl}/login.html`;
+  return {
+    successUrl: `${loginUrl}?resume=true&payment=success`,
+    cancelUrl: `${loginUrl}?resume=true&payment=cancelled`,
+    expiredUrl: `${loginUrl}?resume=true&payment=expired`,
+  };
+};
+
+const buildCheckoutPayload = ({ clinic, paymentMethod, installmentCount, plan }) => {
+  const billingTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX ? ['PIX'] : ['CREDIT_CARD'];
+  const chargeTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT ? ['INSTALLMENT'] : ['DETACHED'];
+  const payload = {
+    billingTypes,
+    chargeTypes,
+    minutesToExpire: 120,
+    callback: buildCheckoutCallback(),
+    items: [
+      {
+        name: `Plano ${plan.planType}`,
+        description: `Assinatura Voithos ${plan.planType}`,
+        quantity: 1,
+        value: roundMoney(plan.amount),
+      },
+    ],
+    customerData: {
+      name: clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos',
+      cpfCnpj: normalizeText(clinic?.cnpjCpf || '').replace(/\D/g, '') || undefined,
+      email: normalizeText(clinic?.email || '') || undefined,
+      phone: normalizeText(clinic?.telefoneComercial || '').replace(/\D/g, '') || undefined,
+    },
+  };
+
+  if (paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT) {
+    payload.installment = {
+      maxInstallmentCount: installmentCount,
+    };
+  }
+
+  return payload;
+};
+
+const isCheckoutPaymentPaid = (payment) => {
+  const status = normalizeText(payment?.status).toUpperCase();
+  return ['PAID', 'RECEIVED', 'CONFIRMED'].includes(status);
+};
+
+const resolvePaidAtFromAsaasPayment = (payment) => {
+  const candidates = [
+    payment?.paymentDate,
+    payment?.clientPaymentDate,
+    payment?.confirmedDate,
+    payment?.dateCreated,
+  ];
+  const match = candidates.find((value) => normalizeText(value));
+  return match || new Date().toISOString();
+};
 
 const getPlanDefinition = (planType) => SUBSCRIPTION_PLANS[normalizePlanType(planType)];
 const getPublicPlanCatalog = () => Object.values(SUBSCRIPTION_PLANS).filter((plan) => plan.public === true);
@@ -160,6 +242,7 @@ const buildOverview = (subscription, now = new Date(), options = {}) => {
   const effectiveStatus = options.effectiveStatus || deriveSubscriptionStatus(subscription, now);
   return {
     subscription,
+    paymentLink: subscription?.lastPayment?.paymentLink || '',
     effectiveStatus,
     accessAllowed: typeof options.accessAllowed === 'boolean'
       ? options.accessAllowed
@@ -260,7 +343,7 @@ const subscriptionService = {
     return overview;
   },
 
-  createSubscription: async ({ clinicId, planType, provider, externalPaymentId, paymentLink }) => {
+  createSubscription: async ({ clinicId, planType, provider, externalPaymentId, paymentLink, gatewayMode }) => {
     if (!normalizeText(clinicId)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
     }
@@ -281,7 +364,7 @@ const subscriptionService = {
     });
 
     let finalSubscription = createdSubscription;
-    if (asaasService.isConfigured()) {
+    if (normalizeText(gatewayMode).toUpperCase() !== 'CHECKOUT' && asaasService.isConfigured()) {
       try {
         const clinic = await clinicRepository.findById(clinicId);
         const customer = await asaasService.createCustomer({
@@ -313,6 +396,60 @@ const subscriptionService = {
     return {
       ...finalSubscription,
       paymentLink: finalSubscription?.lastPayment?.paymentLink || null,
+    };
+  },
+
+  createCheckoutSession: async ({ clinicId, planType, paymentMethod, installmentCount }) => {
+    if (!normalizeText(clinicId)) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+    if (!asaasService.isConfigured()) {
+      throw new AppError(503, 'ASAAS_NOT_CONFIGURED', 'Asaas checkout is not configured.');
+    }
+
+    const normalizedPlanType = normalizePlanType(planType);
+    const normalizedPaymentMethod = normalizeCheckoutPaymentMethod(paymentMethod);
+    const normalizedInstallmentCount = normalizeInstallmentCount(installmentCount);
+    if (normalizedPaymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT && normalizedPlanType !== 'ANNUAL') {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Installments are only available for annual plan.');
+    }
+    if (normalizedPaymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT && (normalizedInstallmentCount < 2 || normalizedInstallmentCount > 12)) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'installmentCount must be between 2 and 12.');
+    }
+
+    const subscription = await subscriptionRepository.findByClinicId({ clinicId });
+    if (!subscription) {
+      throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
+    }
+
+    const plan = getPlanDefinition(subscription.planType || normalizedPlanType);
+    const clinic = await clinicRepository.findById(clinicId);
+    const checkoutPayload = buildCheckoutPayload({
+      clinic,
+      paymentMethod: normalizedPaymentMethod,
+      installmentCount: normalizedInstallmentCount,
+      plan,
+    });
+    const checkout = await asaasService.createCheckout(checkoutPayload);
+    const checkoutId = normalizeText(checkout?.id);
+    const checkoutUrl = asaasService.buildCheckoutUrl(checkoutId);
+
+    if (subscription?.lastPayment?.id) {
+      await subscriptionRepository.updatePaymentGatewayData({
+        paymentId: subscription.lastPayment.id,
+        provider: ASAAS_CHECKOUT_PROVIDER,
+        externalPaymentId: checkoutId,
+        paymentLink: checkoutUrl || null,
+      });
+    }
+
+    return {
+      checkoutId,
+      paymentLink: checkoutUrl || null,
+      paymentMethod: normalizedPaymentMethod,
+      installmentCount: normalizedPaymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT ? normalizedInstallmentCount : null,
+      nextDueDate: resolveTodayIsoDate(),
+      planType: plan.planType,
     };
   },
 
@@ -393,6 +530,47 @@ const subscriptionService = {
     });
 
     return buildOverview(renewed, new Date());
+  },
+
+  refreshPaymentStatus: async ({ clinicId, role }) => {
+    const overview = await subscriptionService.getMySubscription({ clinicId, role });
+    const subscription = overview?.subscription || null;
+    const lastPayment = subscription?.lastPayment || null;
+    if (!subscription || !lastPayment) {
+      return overview;
+    }
+
+    const effectiveStatus = normalizeText(overview.effectiveStatus).toUpperCase();
+    if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
+      return overview;
+    }
+
+    if (!asaasService.isConfigured()) {
+      return overview;
+    }
+
+    if (normalizeText(lastPayment.provider).toUpperCase() !== ASAAS_CHECKOUT_PROVIDER || !normalizeText(lastPayment.externalPaymentId)) {
+      return overview;
+    }
+
+    try {
+      const result = await asaasService.listPaymentsByCheckoutSession(lastPayment.externalPaymentId);
+      const paymentRows = Array.isArray(result?.data) ? result.data : [];
+      const paidPayment = paymentRows.find((payment) => isCheckoutPaymentPaid(payment));
+      if (!paidPayment) {
+        return overview;
+      }
+
+      return subscriptionService.confirmPayment({
+        clinicId,
+        paymentId: lastPayment.id,
+        provider: ASAAS_CHECKOUT_PROVIDER,
+        externalPaymentId: paidPayment.id || lastPayment.externalPaymentId,
+        paidAt: resolvePaidAtFromAsaasPayment(paidPayment),
+      });
+    } catch (_error) {
+      return overview;
+    }
   },
 
   ensureAccess: async ({ clinicId, role }) => {

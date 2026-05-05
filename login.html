@@ -153,8 +153,8 @@
             <section id="screen-onboarding-payment" class="auth-screen hidden">
                 <div class="flow-header">
                     <p class="flow-kicker">Pagamento</p>
-                    <h2 class="flow-title">Revise seu plano antes da cobranca</h2>
-                    <p class="flow-copy">A assinatura sera criada agora e o acesso completo ao webapp sera liberado assim que o pagamento for confirmado.</p>
+                    <h2 class="flow-title">Escolha como deseja pagar sua assinatura</h2>
+                    <p class="flow-copy">Vamos manter seu cadastro simples e direcionar o pagamento para um checkout seguro do Asaas, com os dados da sua clinica ja preenchidos.</p>
                 </div>
 
                 <div class="flow-card flow-card-wide">
@@ -172,7 +172,59 @@
                         <span id="payment-status-copy">Assim que voce continuar, vamos preparar a cobranca desta conta.</span>
                     </div>
 
-                    <button type="button" class="btn-login payment-link-button hidden" id="payment-link-button">Abrir pagamento no Asaas</button>
+                    <div class="payment-choice-block">
+                        <div class="payment-choice-header">
+                            <strong>Forma de pagamento</strong>
+                            <span>Escolha a opcao mais pratica para concluir a ativacao.</span>
+                        </div>
+                        <div class="payment-choice-grid" id="payment-choice-grid">
+                            <button type="button" class="payment-choice-card" data-payment-method="CREDIT_CARD">
+                                <span class="payment-choice-badge">Recomendado</span>
+                                <strong>Cartao a vista</strong>
+                                <span>Ideal para concluir agora e liberar a conta com menos atrito.</span>
+                            </button>
+                            <button type="button" class="payment-choice-card" data-payment-method="PIX">
+                                <span class="payment-choice-badge">Rapido</span>
+                                <strong>Pix</strong>
+                                <span>Pagamento imediato no checkout seguro, sem precisar informar cartao.</span>
+                            </button>
+                            <button type="button" class="payment-choice-card" data-payment-method="INSTALLMENT" id="payment-installment-card">
+                                <span class="payment-choice-badge">Plano anual</span>
+                                <strong>Parcelar no cartao</strong>
+                                <span>Disponivel apenas no plano anual, com escolha de parcelas antes do checkout.</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="payment-installment-panel hidden" id="payment-installment-panel">
+                        <label for="payment-installment-count">Parcelas do plano anual</label>
+                        <select id="payment-installment-count">
+                            <option value="2">2x no cartao</option>
+                            <option value="3">3x no cartao</option>
+                            <option value="4">4x no cartao</option>
+                            <option value="5">5x no cartao</option>
+                            <option value="6" selected>6x no cartao</option>
+                            <option value="7">7x no cartao</option>
+                            <option value="8">8x no cartao</option>
+                            <option value="9">9x no cartao</option>
+                            <option value="10">10x no cartao</option>
+                            <option value="11">11x no cartao</option>
+                            <option value="12">12x no cartao</option>
+                        </select>
+                        <small id="payment-installment-copy">O total sera parcelado no checkout seguro do Asaas.</small>
+                    </div>
+
+                    <div class="payment-secure-note">
+                        <strong>Checkout seguro</strong>
+                        <span>Os dados do cartao nao passam pelo Voithos. O pagamento e concluido no ambiente seguro do Asaas.</span>
+                    </div>
+
+                    <div class="payment-ready-card hidden" id="payment-ready-card">
+                        <strong>Checkout pronto para continuar</strong>
+                        <span id="payment-ready-copy">Seu link de pagamento foi preparado. Abra o checkout para concluir a assinatura.</span>
+                    </div>
+
+                    <button type="button" class="btn-login payment-link-button hidden" id="payment-link-button">Continuar para o checkout seguro</button>
 
                     <div class="payment-next-grid">
                         <article class="payment-next-card">
@@ -180,16 +232,16 @@
                             <span>Conta criada e e-mail validado.</span>
                         </article>
                         <article class="payment-next-card">
-                            <strong>2. Assinatura preparada</strong>
-                            <span>Vamos registrar a cobranca pendente com o plano escolhido.</span>
+                            <strong>2. Pagamento orientado</strong>
+                            <span>Voce escolhe Pix, cartao a vista ou parcelamento anual antes de sair da tela.</span>
                         </article>
                         <article class="payment-next-card">
                             <strong>3. Liberacao do acesso</strong>
-                            <span>O botao Entrar passa a levar voce direto ao sistema apos confirmacao do pagamento.</span>
+                            <span>Depois da confirmacao do pagamento, o acesso completo ao sistema pode ser liberado.</span>
                         </article>
                     </div>
 
-                    <button type="button" class="btn-login" id="prepare-payment-button">Preparar assinatura</button>
+                    <button type="button" class="btn-login" id="prepare-payment-button">Gerar checkout seguro</button>
                     <button type="button" class="btn-secondary" id="back-to-profile-from-payment">Voltar</button>
                     <p class="flow-message" id="payment-message"></p>
                 </div>

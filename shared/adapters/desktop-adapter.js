@@ -546,10 +546,20 @@
       if (window.__webAdapter?.subscription?.create) return window.__webAdapter.subscription.create(payload);
       return unavailable('subscription.create');
     },
+    createCheckout: async (payload) => {
+      if (window.api?.subscription?.createCheckout) return window.api.subscription.createCheckout(payload);
+      if (window.__webAdapter?.subscription?.createCheckout) return window.__webAdapter.subscription.createCheckout(payload);
+      return unavailable('subscription.createCheckout');
+    },
     confirmPayment: async (payload) => {
       if (window.api?.subscription?.confirmPayment) return window.api.subscription.confirmPayment(payload);
       if (window.__webAdapter?.subscription?.confirmPayment) return window.__webAdapter.subscription.confirmPayment(payload);
       return unavailable('subscription.confirmPayment');
+    },
+    refreshPaymentStatus: async () => {
+      if (window.api?.subscription?.refreshPaymentStatus) return window.api.subscription.refreshPaymentStatus();
+      if (window.__webAdapter?.subscription?.refreshPaymentStatus) return window.__webAdapter.subscription.refreshPaymentStatus();
+      return unavailable('subscription.refreshPaymentStatus');
     },
     renew: async (payload) => {
       if (window.api?.subscription?.renew) return window.api.subscription.renew(payload);

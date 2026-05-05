@@ -21,6 +21,21 @@ const createSubscription = async (req, res, next) => {
       provider: req.body?.provider,
       externalPaymentId: req.body?.externalPaymentId,
       paymentLink: req.body?.paymentLink,
+      gatewayMode: req.body?.gatewayMode,
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createSubscriptionCheckout = async (req, res, next) => {
+  try {
+    const data = await subscriptionService.createCheckoutSession({
+      clinicId: getAuthenticatedClinicId(req),
+      planType: req.body?.planType,
+      paymentMethod: req.body?.paymentMethod,
+      installmentCount: req.body?.installmentCount,
     });
     return res.status(201).json({ ok: true, data });
   } catch (error) {
@@ -36,6 +51,18 @@ const confirmSubscriptionPayment = async (req, res, next) => {
       provider: req.body?.provider,
       externalPaymentId: req.body?.externalPaymentId,
       paidAt: req.body?.paidAt,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const refreshSubscriptionPaymentStatus = async (req, res, next) => {
+  try {
+    const data = await subscriptionService.refreshPaymentStatus({
+      clinicId: getAuthenticatedClinicId(req),
+      role: req.auth?.role || '',
     });
     return res.status(200).json({ ok: true, data });
   } catch (error) {
@@ -61,6 +88,8 @@ const renewSubscription = async (req, res, next) => {
 module.exports = {
   getMySubscription,
   createSubscription,
+  createSubscriptionCheckout,
   confirmSubscriptionPayment,
+  refreshSubscriptionPaymentStatus,
   renewSubscription,
 };

@@ -1820,7 +1820,9 @@
   const subscription = {
     getMySubscription: async () => request('GET', '/subscription/me', null, { auth: true }),
     create: async (payload = {}) => request('POST', '/subscription/create', payload || {}, { auth: true }),
+    createCheckout: async (payload = {}) => request('POST', '/subscription/checkout', payload || {}, { auth: true }),
     confirmPayment: async (payload = {}) => request('POST', '/subscription/confirm-payment', payload || {}, { auth: true }),
+    refreshPaymentStatus: async () => request('POST', '/subscription/refresh-payment-status', {}, { auth: true }),
     renew: async (payload = {}) => request('POST', '/subscription/renew', payload || {}, { auth: true }),
   };
 

@@ -51,6 +51,7 @@ const normalizeBaseUrl = (value, fallback = '') => {
 };
 
 const appEnv = {
+  publicAppBaseUrl: normalizeBaseUrl(readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000')),
   whatsappNgBaseUrl: normalizeBaseUrl(readValue('WHATSAPP_NG_BASE_URL', 'http://127.0.0.1:8099')),
   whatsappNgServiceToken: String(readValue('WHATSAPP_NG_SERVICE_TOKEN', '')).trim(),
   backendInternalApiToken: String(readValue('BACKEND_INTERNAL_API_TOKEN', '')).trim(),
