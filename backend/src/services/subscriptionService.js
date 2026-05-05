@@ -94,6 +94,12 @@ const addDays = (date, days) => {
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const resolveTodayIsoDate = () => new Date().toISOString().slice(0, 10);
 
+const normalizeCheckoutName = (value, fallback = 'Voithos') => {
+  const raw = String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!raw) return fallback;
+  return raw.slice(0, 80);
+};
+
 const normalizeCheckoutPaymentMethod = (value) => {
   const normalized = normalizeText(value).toUpperCase();
   if (!Object.prototype.hasOwnProperty.call(CHECKOUT_PAYMENT_METHODS, normalized)) {
@@ -124,7 +130,7 @@ const buildCheckoutCustomerData = (clinic) => {
   const clinicProfile = clinic?.operationalSettings?.clinicProfile || {};
   const clinicAddress = clinicProfile?.endereco || {};
   const customerData = {
-    name: clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos',
+    name: normalizeCheckoutName(clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos'),
     cpfCnpj: normalizeText(clinic?.cnpjCpf || '').replace(/\D/g, '') || undefined,
     email: normalizeText(clinic?.email || '') || undefined,
     phone: normalizeText(clinic?.telefoneComercial || '').replace(/\D/g, '') || undefined,
@@ -164,7 +170,7 @@ const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerC
     callback: buildCheckoutCallback(),
     items: [
       {
-        name: `Plano ${plan.planType}`,
+        name: normalizeCheckoutName(`Plano ${plan.planType}`, 'Plano Voithos'),
         description: `Assinatura Voithos ${plan.planType}`,
         quantity: 1,
         value: roundMoney(plan.amount),
