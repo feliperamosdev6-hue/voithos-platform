@@ -153,8 +153,8 @@
             <section id="screen-onboarding-payment" class="auth-screen hidden">
                 <div class="flow-header">
                     <p class="flow-kicker">Pagamento</p>
-                    <h2 class="flow-title">Escolha como deseja pagar sua assinatura</h2>
-                    <p class="flow-copy">Vamos manter seu cadastro simples e direcionar o pagamento para um checkout seguro do Asaas, com os dados da sua clinica ja preenchidos.</p>
+                    <h2 class="flow-title">Conclua sua assinatura com pagamento seguro</h2>
+                    <p class="flow-copy">Seu cadastro continua simples: a Voithos prepara a cobranca e voce finaliza o cartao em um checkout protegido, sem expor dados sensiveis dentro da plataforma.</p>
                 </div>
 
                 <div class="flow-card flow-card-wide">
@@ -174,24 +174,19 @@
 
                     <div class="payment-choice-block">
                         <div class="payment-choice-header">
-                            <strong>Forma de pagamento</strong>
-                            <span>Escolha a opcao mais pratica para concluir a ativacao.</span>
+                            <strong>Escolha a forma de cobranca</strong>
+                            <span>Use cartao para concluir a liberacao agora ou parcele o plano anual antes de seguir para o checkout.</span>
                         </div>
                         <div class="payment-choice-grid" id="payment-choice-grid">
                             <button type="button" class="payment-choice-card" data-payment-method="CREDIT_CARD">
                                 <span class="payment-choice-badge">Recomendado</span>
-                                <strong>Cartao a vista</strong>
-                                <span>Ideal para concluir agora e liberar a conta com menos atrito.</span>
-                            </button>
-                            <button type="button" class="payment-choice-card" data-payment-method="PIX">
-                                <span class="payment-choice-badge">Rapido</span>
-                                <strong>Pix</strong>
-                                <span>Pagamento imediato no checkout seguro, sem precisar informar cartao.</span>
+                                <strong>Cartao de credito</strong>
+                                <span>Opcao mais direta para concluir a assinatura com seguranca e seguir para a ativacao.</span>
                             </button>
                             <button type="button" class="payment-choice-card" data-payment-method="INSTALLMENT" id="payment-installment-card">
                                 <span class="payment-choice-badge">Plano anual</span>
-                                <strong>Parcelar no cartao</strong>
-                                <span>Disponivel apenas no plano anual, com escolha de parcelas antes do checkout.</span>
+                                <strong>Parcelar plano anual</strong>
+                                <span>Disponivel apenas no plano anual, com escolha de parcelas antes de abrir o checkout.</span>
                             </button>
                         </div>
                     </div>
@@ -216,7 +211,12 @@
 
                     <div class="payment-secure-note">
                         <strong>Checkout seguro</strong>
-                        <span>Os dados do cartao nao passam pelo Voithos. O pagamento e concluido no ambiente seguro do Asaas.</span>
+                        <span>Os dados do cartao nao passam pelo Voithos. O pagamento e concluido no ambiente protegido do Asaas.</span>
+                    </div>
+
+                    <div class="payment-guidance-note">
+                        <strong>Antes de continuar</strong>
+                        <span>O checkout usa os dados da clinica para pre-preencher a cobranca. Se o endereco da clinica estiver incompleto, a cobranca nao sera gerada.</span>
                     </div>
 
                     <div class="payment-ready-card hidden" id="payment-ready-card">
@@ -233,7 +233,7 @@
                         </article>
                         <article class="payment-next-card">
                             <strong>2. Pagamento orientado</strong>
-                            <span>Voce escolhe Pix, cartao a vista ou parcelamento anual antes de sair da tela.</span>
+                            <span>Voce escolhe entre cartao de credito ou parcelamento anual antes de abrir o checkout.</span>
                         </article>
                         <article class="payment-next-card">
                             <strong>3. Liberacao do acesso</strong>

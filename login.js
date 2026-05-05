@@ -90,21 +90,15 @@ document.addEventListener('DOMContentLoaded', () => {
     OTHER: 'Outros',
   };
   const PAYMENT_METHOD_DEFINITIONS = {
-    PIX: {
-      label: 'Pix',
-      shortLabel: 'Pix',
-      actionLabel: 'Gerar checkout Pix',
-      readyLabel: 'Checkout Pix pronto. Abra o link para concluir o pagamento imediato.',
-    },
     CREDIT_CARD: {
-      label: 'Cartao a vista',
-      shortLabel: 'Cartao a vista',
-      actionLabel: 'Gerar checkout seguro',
-      readyLabel: 'Checkout seguro pronto. Informe o cartao no Asaas para concluir a assinatura.',
+      label: 'Cartao de credito',
+      shortLabel: 'Cartao',
+      actionLabel: 'Gerar checkout do cartao',
+      readyLabel: 'Checkout do cartao pronto. Informe os dados no Asaas para concluir a assinatura.',
     },
     INSTALLMENT: {
-      label: 'Cartao parcelado',
-      shortLabel: 'Cartao parcelado',
+      label: 'Parcelamento anual',
+      shortLabel: 'Parcelado',
       actionLabel: 'Gerar checkout parcelado',
       readyLabel: 'Checkout parcelado pronto. Escolha e confirme as parcelas no Asaas.',
     },
@@ -329,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentInstallmentCopy) {
       paymentInstallmentCopy.textContent = isAnnualPlan
         ? 'O total anual sera parcelado no checkout seguro do Asaas.'
-        : 'Parcelamento no cartao e reservado ao plano anual.';
+        : 'O parcelamento fica disponivel somente no plano anual.';
     }
     if (paymentInstallmentCard && !isAnnualPlan) {
       paymentInstallmentCard.title = 'Parcelamento disponivel apenas no plano anual.';
@@ -400,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!overview?.subscription) {
       if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ainda nao iniciada';
-      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Escolha a forma de pagamento e gere um checkout seguro para concluir a ativacao.';
+      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Escolha a forma de cobranca e gere um checkout seguro para concluir a ativacao.';
       if (paymentReadyCard) paymentReadyCard.classList.add('hidden');
       if (paymentLinkButton) paymentLinkButton.classList.add('hidden');
       if (preparePaymentButton) preparePaymentButton.textContent = getSelectedPaymentMethodDefinition().actionLabel;
@@ -419,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentStatusTitle) paymentStatusTitle.textContent = 'Pagamento pendente';
     if (paymentStatusCopy) {
       paymentStatusCopy.textContent = paymentLink
-        ? 'Sua assinatura esta pendente. Abra o checkout seguro para concluir o pagamento e depois atualize o status.'
+        ? 'Sua assinatura esta pendente. Abra o checkout para concluir o pagamento no cartao e depois atualize o status.'
         : 'Sua assinatura esta pendente. Gere um checkout seguro para concluir o pagamento.';
     }
     if (paymentReadyCard) {
@@ -466,9 +460,6 @@ document.addEventListener('DOMContentLoaded', () => {
       || onboardingFlowState.selectedPlanType
       || onboardingFlowState.subscriptionOverview?.subscription?.planType
     );
-    if (getIsAnnualPlan() && !onboardingFlowState.paymentLink && onboardingFlowState.checkoutPaymentMethod === 'CREDIT_CARD') {
-      onboardingFlowState.checkoutPaymentMethod = 'INSTALLMENT';
-    }
     onboardingFlowState.operationType = normalizeOperationType(
       onboardingFlowState.onboardingState?.operationType || onboardingFlowState.operationType
     );

@@ -9,7 +9,6 @@ const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
 const ENFORCEMENT_DISABLED_STATUS = 'ENFORCEMENT_DISABLED';
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
 const CHECKOUT_PAYMENT_METHODS = Object.freeze({
-  PIX: 'PIX',
   CREDIT_CARD: 'CREDIT_CARD',
   INSTALLMENT: 'INSTALLMENT',
 });
@@ -103,7 +102,7 @@ const normalizeCheckoutName = (value, fallback = 'Voithos') => {
 const normalizeCheckoutPaymentMethod = (value) => {
   const normalized = normalizeText(value).toUpperCase();
   if (!Object.prototype.hasOwnProperty.call(CHECKOUT_PAYMENT_METHODS, normalized)) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'paymentMethod must be one of: PIX, CREDIT_CARD, INSTALLMENT.');
+    throw new AppError(400, 'VALIDATION_ERROR', 'paymentMethod must be one of: CREDIT_CARD, INSTALLMENT.');
   }
   return normalized;
 };
@@ -136,44 +135,41 @@ const buildCheckoutCustomerData = (clinic) => {
     phone: normalizeText(clinic?.telefoneComercial || '').replace(/\D/g, '') || undefined,
   };
 
-  const address = normalizeText(clinicAddress?.rua || clinic?.endereco || '');
+  const address = normalizeText(clinicAddress?.rua || clinicAddress?.logradouro || clinic?.endereco || '');
   const addressNumber = normalizeText(clinicAddress?.numero || '');
   const complement = normalizeText(clinicAddress?.complemento || '');
   const postalCode = normalizeText(clinicAddress?.cep || '').replace(/\D/g, '');
   const province = normalizeText(clinicAddress?.bairro || '');
-  const city = normalizeText(clinicAddress?.cidade || '');
 
   if (address) customerData.address = address;
   if (addressNumber) customerData.addressNumber = addressNumber;
   if (complement) customerData.complement = complement;
   if (postalCode) customerData.postalCode = postalCode;
   if (province) customerData.province = province;
-  if (Number.isFinite(Number(city)) && city !== '') customerData.city = Number(city);
 
   return customerData;
 };
 
-const buildCheckoutCustomerContext = async ({ clinic, paymentMethod }) => {
+const validateCheckoutCustomerData = (customerData = {}) => {
+  if (normalizeText(customerData.address)) {
+    return;
+  }
+
+  throw new AppError(
+    400,
+    'CHECKOUT_ADDRESS_REQUIRED',
+    'Complete o endereco da clinica antes de gerar o checkout. Informe pelo menos a rua/endereco no cadastro da clinica.'
+  );
+};
+
+const buildCheckoutCustomerContext = ({ clinic }) => {
   const customerData = buildCheckoutCustomerData(clinic);
-  if (paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX) {
-    return { customerData };
-  }
-
-  try {
-    const customer = await asaasService.createCustomer(customerData);
-    const customerId = normalizeText(customer?.id);
-    if (customerId) {
-      return { customer: customerId };
-    }
-  } catch (_error) {
-    // Fall back to manual data below.
-  }
-
+  validateCheckoutCustomerData(customerData);
   return { customerData };
 };
 
 const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerContext = {} }) => {
-  const billingTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX ? ['PIX'] : ['CREDIT_CARD'];
+  const billingTypes = ['CREDIT_CARD'];
   const chargeTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT
     ? ['DETACHED', 'INSTALLMENT']
     : ['DETACHED'];
@@ -496,10 +492,12 @@ const subscriptionService = {
     }
 
     const plan = getPlanDefinition(subscription.planType || normalizedPlanType);
-    const clinic = await clinicRepository.findById(clinicId);
-    const customerContext = await buildCheckoutCustomerContext({
+    const clinic = await clinicRepository.findProfileById(clinicId);
+    if (!clinic) {
+      throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+    }
+    const customerContext = buildCheckoutCustomerContext({
       clinic,
-      paymentMethod: normalizedPaymentMethod,
     });
     const checkoutPayload = buildCheckoutPayload({
       paymentMethod: normalizedPaymentMethod,
