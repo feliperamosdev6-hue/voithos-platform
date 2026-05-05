@@ -354,11 +354,13 @@ const subscriptionService = {
     }
 
     const plan = getPlanDefinition(planType);
+    const isCheckoutGateway = normalizeText(gatewayMode).toUpperCase() === 'CHECKOUT';
+    const normalizedProvider = isCheckoutGateway ? ASAAS_CHECKOUT_PROVIDER : normalizeProvider(provider);
     const createdSubscription = await subscriptionRepository.createSubscriptionWithPayment({
       clinicId,
       planType: plan.planType,
       amount: roundMoney(plan.amount),
-      provider: normalizeProvider(provider),
+      provider: normalizedProvider,
       externalPaymentId: normalizeText(externalPaymentId) || null,
       paymentLink: normalizeText(paymentLink) || null,
     });
@@ -430,9 +432,27 @@ const subscriptionService = {
       installmentCount: normalizedInstallmentCount,
       plan,
     });
-    const checkout = await asaasService.createCheckout(checkoutPayload);
+    let checkout = null;
+    try {
+      checkout = await asaasService.createCheckout(checkoutPayload);
+    } catch (error) {
+      throw new AppError(
+        502,
+        'ASAAS_CHECKOUT_FAILED',
+        error instanceof AppError
+          ? error.message
+          : `Nao foi possivel gerar o checkout do Asaas: ${String(error?.message || error || 'erro desconhecido')}`
+      );
+    }
+
     const checkoutId = normalizeText(checkout?.id);
+    if (!checkoutId) {
+      throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout did not return an id.');
+    }
     const checkoutUrl = asaasService.buildCheckoutUrl(checkoutId);
+    if (!checkoutUrl) {
+      throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout link could not be generated.');
+    }
 
     if (subscription?.lastPayment?.id) {
       await subscriptionRepository.updatePaymentGatewayData({

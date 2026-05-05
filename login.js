@@ -289,6 +289,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getSelectedPaymentMethodDefinition = () => PAYMENT_METHOD_DEFINITIONS[onboardingFlowState.checkoutPaymentMethod] || PAYMENT_METHOD_DEFINITIONS.CREDIT_CARD;
 
+  const isLegacyPaymentLink = (value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized) return false;
+    try {
+      const parsed = new URL(normalized, window.location.origin);
+      return String(parsed.pathname || '').startsWith('/subscription/payments/');
+    } catch (_error) {
+      return normalized.startsWith('/subscription/payments/');
+    }
+  };
+
+  const resolveCheckoutPaymentLink = (...values) => {
+    const link = values
+      .map((value) => String(value || '').trim())
+      .find((value) => value && !isLegacyPaymentLink(value));
+    return link || '';
+  };
+
   const applyPaymentMethodAvailability = () => {
     const isAnnualPlan = getIsAnnualPlan();
     if (onboardingFlowState.checkoutPaymentMethod === 'INSTALLMENT' && !isAnnualPlan) {
@@ -368,12 +386,11 @@ document.addEventListener('DOMContentLoaded', () => {
       overview?.plans || []
     );
     const effectiveStatus = String(overview?.effectiveStatus || '').trim().toUpperCase();
-    const paymentLink = String(
-      overview?.paymentLink
-      || overview?.subscription?.lastPayment?.paymentLink
-      || onboardingFlowState.paymentLink
-      || ''
-    ).trim();
+    const paymentLink = resolveCheckoutPaymentLink(
+      overview?.paymentLink,
+      overview?.subscription?.lastPayment?.paymentLink,
+      onboardingFlowState.paymentLink
+    );
 
     if (paymentPlanName) paymentPlanName.textContent = planView.label || 'Plano nao definido';
     if (paymentPlanDescription) paymentPlanDescription.textContent = planView.description;
@@ -440,11 +457,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     onboardingFlowState.onboardingState = onboardingState && typeof onboardingState === 'object' ? onboardingState : null;
     onboardingFlowState.subscriptionOverview = subscriptionOverview && typeof subscriptionOverview === 'object' ? subscriptionOverview : null;
-    onboardingFlowState.paymentLink = String(
-      onboardingFlowState.subscriptionOverview?.paymentLink
-      || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
-      || ''
-    ).trim();
+    onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(
+      onboardingFlowState.subscriptionOverview?.paymentLink,
+      onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
+    );
     onboardingFlowState.selectedPlanType = normalizePlanType(
       onboardingFlowState.onboardingState?.selectedPlan
       || onboardingFlowState.selectedPlanType
@@ -924,14 +940,13 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPaymentSummary();
   });
   paymentLinkButton?.addEventListener('click', () => {
-    const paymentLink = String(
-      onboardingFlowState.subscriptionOverview?.paymentLink
-      || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
-      || onboardingFlowState.paymentLink
-      || ''
-    ).trim();
+    const paymentLink = resolveCheckoutPaymentLink(
+      onboardingFlowState.subscriptionOverview?.paymentLink,
+      onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink,
+      onboardingFlowState.paymentLink
+    );
     if (!paymentLink) {
-      setPaymentMessage('Ainda nao ha link de pagamento disponivel.');
+      setPaymentMessage('Ainda nao ha checkout valido disponivel. Gere um novo checkout para continuar.');
       return;
     }
     window.open(paymentLink, '_blank', 'noopener,noreferrer');
@@ -1310,12 +1325,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      const paymentLink = String(
-        onboardingFlowState.subscriptionOverview?.paymentLink
-        || onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink
-        || onboardingFlowState.paymentLink
-        || ''
-      ).trim();
+      const paymentLink = resolveCheckoutPaymentLink(
+        onboardingFlowState.subscriptionOverview?.paymentLink,
+        onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink,
+        onboardingFlowState.paymentLink
+      );
       const selectedMethod = onboardingFlowState.checkoutPaymentMethod;
 
       if (paymentLink) {
@@ -1351,7 +1365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         paymentMethod: selectedMethod,
         installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
       });
-      onboardingFlowState.paymentLink = String(checkout?.paymentLink || '').trim();
+      onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(checkout?.paymentLink);
       await syncOnboardingState();
       renderPaymentSummary();
       if (onboardingFlowState.paymentLink) {

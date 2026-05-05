@@ -8,21 +8,71 @@ const buildTodayDate = () => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeAsaasApiBaseUrl = (value) => {
+  const raw = String(value || '').trim().replace(/\/+$/, '');
+  if (!raw) return '';
+
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.toLowerCase();
+    const currentPath = String(url.pathname || '').replace(/\/+$/, '');
+
+    if (host === 'sandbox.asaas.com') {
+      url.hostname = 'api-sandbox.asaas.com';
+      url.pathname = '/v3';
+      return url.toString().replace(/\/+$/, '');
+    }
+
+    if (host === 'asaas.com') {
+      url.hostname = 'api.asaas.com';
+      url.pathname = '/v3';
+      return url.toString().replace(/\/+$/, '');
+    }
+
+    if (host === 'api-sandbox.asaas.com' || host === 'api.asaas.com') {
+      url.pathname = currentPath === '/api/v3' || currentPath === '/v3' ? '/v3' : '/v3';
+      return url.toString().replace(/\/+$/, '');
+    }
+
+    if (/\/api\/v3$/i.test(raw)) {
+      return raw.replace(/sandbox\.asaas\.com\/api\/v3$/i, 'api-sandbox.asaas.com/v3')
+        .replace(/asaas\.com\/api\/v3$/i, 'api.asaas.com/v3');
+    }
+
+    if (/\/v3$/i.test(raw)) {
+      return raw;
+    }
+  } catch (_error) {
+    // Fall through to string normalization.
+  }
+
+  return raw
+    .replace(/^https?:\/\/sandbox\.asaas\.com\/api\/v3\/?$/i, 'https://api-sandbox.asaas.com/v3')
+    .replace(/^https?:\/\/asaas\.com\/api\/v3\/?$/i, 'https://api.asaas.com/v3');
+};
+
+const resolveAsaasCheckoutBaseUrl = (apiBaseUrl) => {
+  const normalized = String(apiBaseUrl || '').trim().toLowerCase();
+  if (normalized.includes('api-sandbox.asaas.com')) {
+    return 'https://sandbox.asaas.com';
+  }
+  return 'https://asaas.com';
+};
+
 const createClient = () => axios.create({
-  baseURL: process.env.ASAAS_API_URL,
+  baseURL: normalizeAsaasApiBaseUrl(process.env.ASAAS_API_URL),
   headers: {
     'Content-Type': 'application/json',
     access_token: process.env.ASAAS_API_KEY,
   },
 });
 
-const isConfigured = () => Boolean(String(process.env.ASAAS_API_KEY || '').trim() && String(process.env.ASAAS_API_URL || '').trim());
+const isConfigured = () => Boolean(String(process.env.ASAAS_API_KEY || '').trim() && normalizeAsaasApiBaseUrl(process.env.ASAAS_API_URL));
 
 const buildCheckoutUrl = (checkoutId) => {
   const normalizedCheckoutId = String(checkoutId || '').trim();
   if (!normalizedCheckoutId) return '';
-  const apiUrl = String(process.env.ASAAS_API_URL || '').trim().toLowerCase();
-  const host = apiUrl.includes('sandbox') ? 'https://sandbox.asaas.com' : 'https://asaas.com';
+  const host = resolveAsaasCheckoutBaseUrl(normalizeAsaasApiBaseUrl(process.env.ASAAS_API_URL));
   return `${host}/checkoutSession/show?id=${normalizedCheckoutId}`;
 };
 
@@ -106,6 +156,7 @@ module.exports = {
   asaasService: {
     isConfigured,
     buildCheckoutUrl,
+    normalizeAsaasApiBaseUrl,
     createCustomer,
     createCheckout,
     createPayment,

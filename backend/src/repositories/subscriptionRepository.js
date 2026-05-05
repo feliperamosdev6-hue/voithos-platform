@@ -1,6 +1,8 @@
 const { prisma } = require('../db/prisma');
 const { toNullableString, toRequiredString } = require('../types/repositoryTypes');
 
+const normalizeText = (value) => String(value || '').trim();
+
 const subscriptionInclude = {
   lastPayment: true,
   payments: {
@@ -34,6 +36,7 @@ const buildPaymentLookupWhere = ({ clinicId, paymentId, provider, externalPaymen
 };
 
 const createPaymentLink = (paymentId) => `/subscription/payments/${paymentId}`;
+const shouldGenerateLegacyPaymentLink = (provider) => normalizeText(provider).toUpperCase() === 'MANUAL';
 
 const subscriptionRepository = {
   findByClinicId: async ({ clinicId }) => prisma.subscription.findUnique({
@@ -81,7 +84,7 @@ const subscriptionRepository = {
       },
     });
 
-    if (!payment.paymentLink) {
+    if (!payment.paymentLink && shouldGenerateLegacyPaymentLink(provider)) {
       await tx.subscriptionPayment.update({
         where: { id: payment.id },
         data: { paymentLink: createPaymentLink(payment.id) },
@@ -137,7 +140,7 @@ const subscriptionRepository = {
       },
     });
 
-    if (!payment.paymentLink) {
+    if (!payment.paymentLink && shouldGenerateLegacyPaymentLink(provider)) {
       await tx.subscriptionPayment.update({
         where: { id: payment.id },
         data: { paymentLink: createPaymentLink(payment.id) },
