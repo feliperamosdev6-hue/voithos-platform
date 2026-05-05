@@ -79,6 +79,30 @@ const normalizeSelectedPlan = (value) => {
   return aliases[raw] || '';
 };
 
+const normalizeAddressPart = (value, maxLength = 160) => String(value || '').trim().slice(0, maxLength);
+
+const normalizePendingSignupAddress = (value = {}) => {
+  const raw = value && typeof value === 'object' ? value : {};
+  return {
+    cep: normalizeAddressPart(raw.cep, 16),
+    rua: normalizeAddressPart(raw.rua || raw.logradouro, 160),
+    numero: normalizeAddressPart(raw.numero || raw.addressNumber, 40),
+    complemento: normalizeAddressPart(raw.complemento, 120),
+    bairro: normalizeAddressPart(raw.bairro, 120),
+    cidade: normalizeAddressPart(raw.cidade, 120),
+    uf: normalizeAddressPart(raw.uf || raw.estado, 2).toUpperCase(),
+  };
+};
+
+const buildClinicAddressLine = (address = {}) => {
+  const parts = [
+    String(address?.rua || '').trim(),
+    String(address?.numero || '').trim(),
+    String(address?.bairro || '').trim(),
+  ].filter(Boolean);
+  return parts.join(', ') || null;
+};
+
 const logPasswordReset = (stage, details = {}) => {
   console.info('[password-reset][auth-service]', {
     stage,
@@ -260,6 +284,7 @@ const extractPendingSignupData = (pendingSignup) => {
     adminEmail: normalizeEmail(rawData.adminEmail || pendingSignup?.email || ''),
     clinicEmail: normalizeEmail(rawData.clinicEmail || rawData.adminEmail || pendingSignup?.email || ''),
     clinicPhone: String(rawData.clinicPhone || '').trim(),
+    clinicAddress: normalizePendingSignupAddress(rawData.clinicAddress),
     selectedPlan: normalizeSelectedPlan(rawData.selectedPlan || rawData.planType || rawData.plan),
   };
 };
@@ -285,6 +310,7 @@ const finalizePendingSignup = async (pendingSignup) => {
   }
 
   const created = await prisma.$transaction(async (tx) => {
+    const clinicAddressLine = buildClinicAddressLine(signupData.clinicAddress);
     const clinic = await tx.clinic.create({
       data: {
         nomeFantasia: signupData.nomeFantasia,
@@ -292,7 +318,7 @@ const finalizePendingSignup = async (pendingSignup) => {
         cnpjCpf: signupData.documentNumber,
         email: signupData.clinicEmail || signupData.adminEmail || null,
         telefoneComercial: signupData.clinicPhone || null,
-        endereco: null,
+        endereco: clinicAddressLine,
         operationalSettings: {
           onboarding: {
             selectedPlan: signupData.selectedPlan,
@@ -300,6 +326,16 @@ const finalizePendingSignup = async (pendingSignup) => {
             startedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             completedAt: '',
+          },
+          clinicProfile: {
+            whatsapp: '',
+            cro: '',
+            responsavelTecnico: '',
+            logoDataUrlCache: '',
+            logoVersion: '',
+            endereco: {
+              ...signupData.clinicAddress,
+            },
           },
         },
       },

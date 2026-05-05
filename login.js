@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const signupPlanBanner = document.getElementById('signup-plan-banner');
   const signupPlanName = document.getElementById('signup-plan-name');
   const signupPlanCopy = document.getElementById('signup-plan-copy');
+  const signupClinicEmailInput = document.getElementById('signup-clinic-email');
   const profileSelectionMessage = document.getElementById('profile-selection-message');
   const profileSelectionButtons = Array.from(document.querySelectorAll('[data-operation-type]'));
   const backToVerificationFromProfile = document.getElementById('back-to-verification-from-profile');
@@ -192,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetSignupFormState = ({ prefillEmail = '', preservePlan = false } = {}) => {
     if (signupForm instanceof HTMLFormElement) signupForm.reset();
     if (signupForm?.adminEmail) signupForm.adminEmail.value = prefillEmail;
-    if (signupForm?.clinicEmail) signupForm.clinicEmail.value = '';
+    if (signupForm?.clinicEmail) signupForm.clinicEmail.value = prefillEmail;
     if (emailInput) emailInput.value = prefillEmail;
     setError('');
     setSignupMessage('');
@@ -263,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     signupPlanBanner.classList.remove('hidden');
     if (signupPlanName) signupPlanName.textContent = `${planView.label} | ${planView.price}`;
-    if (signupPlanCopy) signupPlanCopy.textContent = 'Seu cadastro seguira para confirmacao de e-mail, definicao do perfil operacional e ativacao da assinatura.';
+    if (signupPlanCopy) signupPlanCopy.textContent = 'Seu cadastro seguira para confirmacao de e-mail, definicao do perfil operacional e liberacao do pagamento.';
     if (signupEntryHint) signupEntryHint.textContent = `${planView.label} selecionado na landing.`;
   };
 
@@ -1190,18 +1191,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const nomeClinica = String(signupForm?.nomeClinica?.value || '').trim();
     const responsavelNome = String(signupForm?.responsavelNome?.value || '').trim();
     const adminEmail = String(signupForm?.adminEmail?.value || '').trim().toLowerCase();
-    const clinicEmail = String(signupForm?.clinicEmail?.value || '').trim().toLowerCase();
+    const clinicEmail = adminEmail;
     const telefone = String(signupForm?.telefone?.value || '').trim();
+    const cep = String(signupForm?.cep?.value || '').trim();
+    const rua = String(signupForm?.rua?.value || '').trim();
+    const numero = String(signupForm?.numero?.value || '').trim();
+    const complemento = String(signupForm?.complemento?.value || '').trim();
+    const bairro = String(signupForm?.bairro?.value || '').trim();
+    const cidade = String(signupForm?.cidade?.value || '').trim();
+    const uf = String(signupForm?.uf?.value || '').trim().toUpperCase();
     const password = String(signupForm?.password?.value || '').trim();
     const passwordConfirmation = String(signupForm?.passwordConfirmation?.value || '').trim();
 
-    if (!documentType || !documentNumber || !nomeClinica || !responsavelNome || !adminEmail || !password || !passwordConfirmation) {
-      setSignupMessage('Preencha todos os campos do cadastro.');
+    if (!documentType || !documentNumber || !nomeClinica || !responsavelNome || !adminEmail || !telefone || !cep || !rua || !numero || !bairro || !cidade || !uf || !password || !passwordConfirmation) {
+      setSignupMessage('Preencha os dados de acesso e o endereco da clinica para continuar.');
       return;
     }
 
     if (password !== passwordConfirmation) {
       setSignupMessage('A confirmacao de senha nao confere.');
+      return;
+    }
+
+    if (uf.length !== 2) {
+      setSignupMessage('Informe a UF com 2 letras.');
       return;
     }
 
@@ -1224,6 +1237,13 @@ document.addEventListener('DOMContentLoaded', () => {
         adminEmail,
         clinicEmail,
         telefone,
+        cep,
+        rua,
+        numero,
+        complemento,
+        bairro,
+        cidade,
+        uf,
         password,
         passwordConfirmation,
         selectedPlan: onboardingFlowState.selectedPlanType,
@@ -1371,6 +1391,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   const initializeAuthScreen = async () => {
+    const clinicEmailGroup = signupClinicEmailInput?.closest('.input-group');
+    if (clinicEmailGroup) clinicEmailGroup.classList.add('hidden');
     await applyInitialFlowRequest();
     await checkActiveSession();
   };

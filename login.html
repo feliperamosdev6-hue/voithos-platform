@@ -216,7 +216,7 @@
 
                     <div class="payment-guidance-note">
                         <strong>Antes de continuar</strong>
-                        <span>O checkout usa os dados da clinica para pre-preencher a cobranca. Se o endereco da clinica estiver incompleto, a cobranca nao sera gerada.</span>
+                        <span>O checkout usa os dados informados no cadastro da clinica para pre-preencher a cobranca. Revise telefone e endereco antes de seguir.</span>
                     </div>
 
                     <div class="payment-ready-card hidden" id="payment-ready-card">
@@ -252,7 +252,7 @@
                 <div class="signup-plan-banner hidden" id="signup-plan-banner">
                     <span class="signup-plan-kicker">Plano selecionado</span>
                     <strong id="signup-plan-name">Voithos</strong>
-                    <small id="signup-plan-copy">Seu cadastro seguira para confirmacao de e-mail e ativacao da assinatura.</small>
+                    <small id="signup-plan-copy">Seu cadastro seguira para confirmacao de e-mail, definicao do perfil e liberacao do pagamento.</small>
                 </div>
                 <div class="signup-grid">
                     <div class="input-group">
@@ -275,7 +275,8 @@
                         <input type="text" id="signup-owner-name" name="responsavelNome" required>
                     </div>
                     <div class="input-group">
-                        <label for="signup-admin-email">E-mail do administrador</label>
+                        <label for="signup-admin-email">E-mail principal</label>
+                        <small class="input-help">Este e-mail sera usado para acesso, confirmacao da conta e comunicacoes principais.</small>
                         <input type="email" id="signup-admin-email" name="adminEmail" autocomplete="email" required>
                     </div>
                     <div class="input-group">
@@ -284,7 +285,39 @@
                     </div>
                     <div class="input-group">
                         <label for="signup-clinic-phone">Telefone da clínica</label>
-                        <input type="tel" id="signup-clinic-phone" name="telefone" autocomplete="tel">
+                        <input type="tel" id="signup-clinic-phone" name="telefone" autocomplete="tel" required>
+                    </div>
+                    <div class="signup-section-header">
+                        <strong>Endereco para cobranca</strong>
+                        <span>Esses dados deixam o checkout preparado logo apos a confirmacao do e-mail.</span>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-cep">CEP</label>
+                        <input type="text" id="signup-clinic-cep" name="cep" inputmode="numeric" autocomplete="postal-code" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-street">Rua ou avenida</label>
+                        <input type="text" id="signup-clinic-street" name="rua" autocomplete="address-line1" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-number">Numero</label>
+                        <input type="text" id="signup-clinic-number" name="numero" autocomplete="address-line2" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-complement">Complemento</label>
+                        <input type="text" id="signup-clinic-complement" name="complemento" autocomplete="address-line3">
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-neighborhood">Bairro</label>
+                        <input type="text" id="signup-clinic-neighborhood" name="bairro" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-city">Cidade</label>
+                        <input type="text" id="signup-clinic-city" name="cidade" autocomplete="address-level2" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="signup-clinic-state">UF</label>
+                        <input type="text" id="signup-clinic-state" name="uf" maxlength="2" autocomplete="address-level1" required>
                     </div>
                     <div class="input-group">
                         <label for="signup-password">Senha</label>

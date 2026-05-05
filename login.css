@@ -306,7 +306,33 @@ body {
 .signup-grid {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 0;
+    gap: 14px;
+}
+
+.signup-section-header {
+    text-align: left;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(16, 33, 49, 0.05), rgba(255, 255, 255, 0.96));
+    border: 1px solid rgba(16, 33, 49, 0.08);
+}
+
+.signup-section-header strong {
+    display: block;
+    color: #102131;
+    margin-bottom: 4px;
+}
+
+.signup-section-header span,
+.input-help {
+    display: block;
+    color: #516071;
+    line-height: 1.45;
+    font-size: 0.9rem;
+}
+
+.input-help {
+    margin-bottom: 8px;
 }
 
 .signup-plan-banner {

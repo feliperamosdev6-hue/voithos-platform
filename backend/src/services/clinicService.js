@@ -3442,6 +3442,15 @@ const clinicService = {
     const passwordConfirmation = String(payload?.passwordConfirmation || payload?.confirmarSenha || '').trim();
     const clinicEmail = normalizeEmail(payload?.clinicEmail || adminEmail || '');
     const clinicPhone = String(payload?.telefone || payload?.phone || payload?.telefoneComercial || '').trim();
+    const clinicAddress = {
+      cep: String(payload?.cep || payload?.postalCode || '').trim(),
+      rua: String(payload?.rua || payload?.logradouro || payload?.address || '').trim(),
+      numero: String(payload?.numero || payload?.addressNumber || '').trim(),
+      complemento: String(payload?.complemento || payload?.addressComplement || '').trim(),
+      bairro: String(payload?.bairro || payload?.province || '').trim(),
+      cidade: String(payload?.cidade || payload?.city || '').trim(),
+      uf: String(payload?.uf || payload?.estado || payload?.state || '').trim().toUpperCase().slice(0, 2),
+    };
     const selectedPlan = normalizeOnboardingPlan(payload?.selectedPlan || payload?.planType || payload?.plan || '');
     const document = validateDocument(payload?.documentType, payload?.documentNumber);
 
@@ -3539,6 +3548,7 @@ const clinicService = {
           adminEmail,
           clinicEmail,
           clinicPhone,
+          clinicAddress,
           selectedPlan,
         },
         verificationCode: emailVerificationCode,
