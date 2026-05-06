@@ -133,6 +133,9 @@ document.addEventListener('DOMContentLoaded', () => {
     checkoutPaymentMethod: 'CREDIT_CARD',
     installmentCount: 6,
     paymentReturnStatus: '',
+    pendingSignupToken: '',
+    pendingSignupEmail: '',
+    pendingCheckoutMode: false,
   };
   const initialFlowState = {
     requestedMode: 'login',
@@ -186,6 +189,9 @@ document.addEventListener('DOMContentLoaded', () => {
     onboardingFlowState.checkoutPaymentMethod = 'CREDIT_CARD';
     onboardingFlowState.installmentCount = 6;
     onboardingFlowState.paymentReturnStatus = '';
+    onboardingFlowState.pendingSignupToken = '';
+    onboardingFlowState.pendingSignupEmail = '';
+    onboardingFlowState.pendingCheckoutMode = false;
     setProfileSelectionMessage('');
     setPaymentMessage('');
   };
@@ -445,6 +451,25 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const syncOnboardingState = async () => {
+    if (onboardingFlowState.pendingCheckoutMode) {
+      onboardingFlowState.onboardingState = {
+        selectedPlan: onboardingFlowState.selectedPlanType,
+        operationType: onboardingFlowState.operationType,
+      };
+      onboardingFlowState.subscriptionOverview = {
+        effectiveStatus: 'PENDING_PAYMENT',
+        accessAllowed: false,
+        paymentLink: onboardingFlowState.paymentLink,
+        plans: [],
+        subscription: null,
+      };
+      renderPaymentSummary();
+      return {
+        onboardingState: onboardingFlowState.onboardingState,
+        subscriptionOverview: onboardingFlowState.subscriptionOverview,
+      };
+    }
+
     const [onboardingState, subscriptionOverview] = await Promise.all([
       clinicApi?.getOnboardingState ? clinicApi.getOnboardingState().catch(() => null) : Promise.resolve(null),
       subscriptionApi?.getMySubscription ? subscriptionApi.getMySubscription().catch(() => null) : Promise.resolve(null),
@@ -1033,6 +1058,23 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('verification_failed');
       }
       setFlowMessage(verificationMessage, 'E-mail confirmado com sucesso. Preparando seu onboarding...');
+      if (result?.pendingCheckout) {
+        onboardingFlowState.pendingCheckoutMode = true;
+        onboardingFlowState.pendingSignupToken = String(result.pendingSignupToken || '').trim();
+        onboardingFlowState.pendingSignupEmail = email;
+        onboardingFlowState.selectedPlanType = normalizePlanType(result.selectedPlan || onboardingFlowState.selectedPlanType);
+        onboardingFlowState.operationType = normalizeOperationType(result.operationType || onboardingFlowState.operationType);
+        onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(result.paymentLink);
+        stopAllTimers();
+        window.setTimeout(() => {
+          if (onboardingFlowState.operationType) {
+            goToOnboardingPayment();
+          } else {
+            goToOnboardingProfile();
+          }
+        }, 700);
+        return;
+      }
       stopAllTimers();
       window.setTimeout(() => {
         resumeAuthenticatedExperience(result?.user || { email, emailVerified: true }, { forcePayment: true });
@@ -1295,19 +1337,31 @@ document.addEventListener('DOMContentLoaded', () => {
         setProfileSelectionMessage('Selecione um perfil valido para continuar.');
         return;
       }
-      if (!clinicApi?.updateOnboardingState) {
+      if (!onboardingFlowState.pendingCheckoutMode && !clinicApi?.updateOnboardingState) {
+        setProfileSelectionMessage('Nao foi possivel salvar seu perfil agora.');
+        return;
+      }
+      if (onboardingFlowState.pendingCheckoutMode && !authApi?.updatePendingSignupOnboarding) {
         setProfileSelectionMessage('Nao foi possivel salvar seu perfil agora.');
         return;
       }
 
       try {
         setProfileSelectionMessage('Salvando perfil...');
-        const result = await clinicApi.updateOnboardingState({
-          selectedPlan: onboardingFlowState.selectedPlanType,
-          operationType,
-        });
+        const result = onboardingFlowState.pendingCheckoutMode
+          ? await authApi.updatePendingSignupOnboarding({
+              email: onboardingFlowState.pendingSignupEmail,
+              pendingSignupToken: onboardingFlowState.pendingSignupToken,
+              selectedPlan: onboardingFlowState.selectedPlanType,
+              operationType,
+            })
+          : await clinicApi.updateOnboardingState({
+              selectedPlan: onboardingFlowState.selectedPlanType,
+              operationType,
+            });
         onboardingFlowState.onboardingState = result || onboardingFlowState.onboardingState;
         onboardingFlowState.operationType = normalizeOperationType(result?.operationType || operationType);
+        onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(result?.paymentLink, onboardingFlowState.paymentLink);
         setProfileSelectionMessage('');
         await syncOnboardingState();
         goToOnboardingPayment();
@@ -1330,7 +1384,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (!subscriptionApi?.create || !subscriptionApi?.getMySubscription || !subscriptionApi?.createCheckout || !subscriptionApi?.refreshPaymentStatus) {
+    if (onboardingFlowState.pendingCheckoutMode && (!authApi?.createPendingSignupCheckout || !authApi?.refreshPendingSignupPaymentStatus)) {
+      setPaymentMessage('Pagamento indisponivel neste ambiente.');
+      return;
+    }
+
+    if (!onboardingFlowState.pendingCheckoutMode && (!subscriptionApi?.create || !subscriptionApi?.getMySubscription || !subscriptionApi?.createCheckout || !subscriptionApi?.refreshPaymentStatus)) {
       setPaymentMessage('Pagamento indisponivel neste ambiente.');
       return;
     }
@@ -1345,7 +1404,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (paymentLink) {
         setPaymentMessage('Atualizando status do pagamento...');
-        const refreshed = await subscriptionApi.refreshPaymentStatus();
+        const refreshed = onboardingFlowState.pendingCheckoutMode
+          ? await authApi.refreshPendingSignupPaymentStatus({
+              email: onboardingFlowState.pendingSignupEmail,
+              pendingSignupToken: onboardingFlowState.pendingSignupToken,
+            })
+          : await subscriptionApi.refreshPaymentStatus();
+        if (refreshed?.token && refreshed?.user) {
+          setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
+          window.setTimeout(routeAuthenticatedUser, 600);
+          return;
+        }
         onboardingFlowState.subscriptionOverview = refreshed && typeof refreshed === 'object' ? refreshed : onboardingFlowState.subscriptionOverview;
         onboardingFlowState.paymentLink = String(
           refreshed?.paymentLink
@@ -1363,7 +1432,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       setPaymentMessage('Preparando assinatura e checkout seguro...');
-      if (!onboardingFlowState.subscriptionOverview?.subscription) {
+      if (!onboardingFlowState.pendingCheckoutMode && !onboardingFlowState.subscriptionOverview?.subscription) {
         await subscriptionApi.create({
           planType: onboardingFlowState.selectedPlanType,
           provider: 'MANUAL',
@@ -1371,11 +1440,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       }
 
-      const checkout = await subscriptionApi.createCheckout({
-        planType: onboardingFlowState.selectedPlanType,
-        paymentMethod: selectedMethod,
-        installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
-      });
+      const checkout = onboardingFlowState.pendingCheckoutMode
+        ? await authApi.createPendingSignupCheckout({
+            email: onboardingFlowState.pendingSignupEmail,
+            pendingSignupToken: onboardingFlowState.pendingSignupToken,
+            planType: onboardingFlowState.selectedPlanType,
+            paymentMethod: selectedMethod,
+            installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
+          })
+        : await subscriptionApi.createCheckout({
+            planType: onboardingFlowState.selectedPlanType,
+            paymentMethod: selectedMethod,
+            installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
+          });
       onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(checkout?.paymentLink);
       await syncOnboardingState();
       renderPaymentSummary();

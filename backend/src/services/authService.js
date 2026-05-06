@@ -7,12 +7,15 @@ const { pendingSignupRepository } = require('../repositories/pendingSignupReposi
 const { sessionRepository } = require('../repositories/sessionRepository');
 const { userRepository } = require('../repositories/userRepository');
 const { emailService } = require('./emailService');
+const { asaasService } = require('./payment/asaasService');
 
 const SESSION_TTL_DAYS = 7;
 const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
 const SIGNUP_RESEND_WAIT_MINUTES = 2;
 const SIGNUP_RESEND_LIMIT = 3;
 const SIGNUP_RESEND_BLOCK_MINUTES = 15;
+const PENDING_CHECKOUT_TTL_HOURS = 12;
+const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
 const SUPER_ADMIN_EMAIL = String(process.env.VOITHOS_SUPERADMIN_EMAIL || 'superadmin@voithos.local').trim().toLowerCase();
 const SUPER_ADMIN_PASSWORD = String(process.env.VOITHOS_SUPERADMIN_PASSWORD || 'voithos@2026').trim();
 const SUPER_ADMIN_CLINIC_EMAIL = String(process.env.VOITHOS_SUPERADMIN_CLINIC_EMAIL || 'superadmin-clinic@voithos.local').trim().toLowerCase();
@@ -79,6 +82,42 @@ const normalizeSelectedPlan = (value) => {
   return aliases[raw] || '';
 };
 
+const PUBLIC_SUBSCRIPTION_PLANS = Object.freeze({
+  MONTHLY: Object.freeze({ planType: 'MONTHLY', amount: 94.9, durationDays: 30 }),
+  QUARTERLY: Object.freeze({ planType: 'QUARTERLY', amount: 269.9, durationDays: 90 }),
+  SEMIANNUAL: Object.freeze({ planType: 'SEMIANNUAL', amount: 499.9, durationDays: 180 }),
+  ANNUAL: Object.freeze({ planType: 'ANNUAL', amount: 899.9, durationDays: 365 }),
+});
+
+const normalizePaymentMethod = (value) => {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'INSTALLMENT') return 'INSTALLMENT';
+  return 'CREDIT_CARD';
+};
+
+const normalizeInstallmentCount = (value) => {
+  const count = Number(value || 0);
+  return Number.isInteger(count) ? count : 0;
+};
+
+const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const normalizeCheckoutName = (value, fallback = 'Clinica Voithos') => {
+  const raw = String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
+  return (raw || fallback).slice(0, 80);
+};
+
+const resolveCheckoutCallbackBaseUrl = () => String(process.env.PUBLIC_APP_BASE_URL || 'http://127.0.0.1:4000').trim().replace(/\/+$/, '');
+
+const buildCheckoutCallback = () => {
+  const loginUrl = `${resolveCheckoutCallbackBaseUrl()}/login.html`;
+  return {
+    successUrl: `${loginUrl}?resume=true&payment=success`,
+    cancelUrl: `${loginUrl}?resume=true&payment=cancelled`,
+    expiredUrl: `${loginUrl}?resume=true&payment=expired`,
+  };
+};
+
 const normalizeAddressPart = (value, maxLength = 160) => String(value || '').trim().slice(0, maxLength);
 
 const normalizePendingSignupAddress = (value = {}) => {
@@ -101,6 +140,76 @@ const buildClinicAddressLine = (address = {}) => {
     String(address?.bairro || '').trim(),
   ].filter(Boolean);
   return parts.join(', ') || null;
+};
+
+const buildPendingCheckoutCustomerData = (signupData) => {
+  const address = normalizePendingSignupAddress(signupData?.clinicAddress);
+  const customerData = {
+    name: normalizeCheckoutName(signupData?.nomeFantasia || 'Clinica Voithos'),
+    cpfCnpj: String(signupData?.documentNumber || '').replace(/\D/g, '') || undefined,
+    email: normalizeEmail(signupData?.clinicEmail || signupData?.adminEmail || ''),
+    phone: String(signupData?.clinicPhone || '').replace(/\D/g, '') || undefined,
+    address: address.rua || undefined,
+    addressNumber: address.numero || undefined,
+    complement: address.complemento || undefined,
+    postalCode: String(address.cep || '').replace(/\D/g, '') || undefined,
+    province: address.bairro || undefined,
+  };
+  Object.keys(customerData).forEach((key) => {
+    if (!customerData[key]) delete customerData[key];
+  });
+  return customerData;
+};
+
+const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCount }) => {
+  const planType = normalizeSelectedPlan(signupData?.selectedPlan);
+  const plan = PUBLIC_SUBSCRIPTION_PLANS[planType];
+  if (!plan) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
+  }
+
+  const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
+  const normalizedInstallmentCount = normalizeInstallmentCount(installmentCount);
+  if (normalizedPaymentMethod === 'INSTALLMENT' && planType !== 'ANNUAL') {
+    throw new AppError(400, 'VALIDATION_ERROR', 'Installments are only available for annual plan.');
+  }
+  if (normalizedPaymentMethod === 'INSTALLMENT' && (normalizedInstallmentCount < 2 || normalizedInstallmentCount > 12)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'installmentCount must be between 2 and 12.');
+  }
+
+  const customerData = buildPendingCheckoutCustomerData(signupData);
+  if (!customerData.address) {
+    throw new AppError(400, 'CHECKOUT_ADDRESS_REQUIRED', 'Complete o endereco da clinica antes de gerar o checkout.');
+  }
+
+  const payload = {
+    billingTypes: ['CREDIT_CARD'],
+    chargeTypes: normalizedPaymentMethod === 'INSTALLMENT' ? ['DETACHED', 'INSTALLMENT'] : ['DETACHED'],
+    minutesToExpire: PENDING_CHECKOUT_TTL_HOURS * 60,
+    callback: buildCheckoutCallback(),
+    customerData,
+    items: [
+      {
+        name: normalizeCheckoutName(`Plano ${plan.planType}`, 'Plano Voithos'),
+        description: `Assinatura Voithos ${plan.planType}`,
+        quantity: 1,
+        value: roundMoney(plan.amount),
+      },
+    ],
+  };
+
+  if (normalizedPaymentMethod === 'INSTALLMENT') {
+    payload.installment = {
+      maxInstallmentCount: normalizedInstallmentCount,
+    };
+  }
+
+  return {
+    payload,
+    plan,
+    paymentMethod: normalizedPaymentMethod,
+    installmentCount: normalizedPaymentMethod === 'INSTALLMENT' ? normalizedInstallmentCount : null,
+  };
 };
 
 const logPasswordReset = (stage, details = {}) => {
@@ -289,7 +398,7 @@ const extractPendingSignupData = (pendingSignup) => {
   };
 };
 
-const finalizePendingSignup = async (pendingSignup) => {
+const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
   const signupData = extractPendingSignupData(pendingSignup);
   const passwordHash = String(pendingSignup?.passwordHash || '').trim();
   if (!signupData.nomeFantasia || !signupData.adminNome || !signupData.adminEmail || !signupData.documentNumber) {
@@ -309,7 +418,16 @@ const finalizePendingSignup = async (pendingSignup) => {
     throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
   }
 
+  const plan = PUBLIC_SUBSCRIPTION_PLANS[signupData.selectedPlan];
+  if (!plan) {
+    throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup plan is invalid.');
+  }
+
   const created = await prisma.$transaction(async (tx) => {
+    const paidAt = paymentContext?.paidAt instanceof Date ? paymentContext.paidAt : new Date(paymentContext?.paidAt || Date.now());
+    const startDate = paidAt;
+    const endDate = addDays(startDate, plan.durationDays);
+    const graceUntil = addDays(endDate, 3);
     const clinicAddressLine = buildClinicAddressLine(signupData.clinicAddress);
     const clinic = await tx.clinic.create({
       data: {
@@ -338,6 +456,38 @@ const finalizePendingSignup = async (pendingSignup) => {
             },
           },
         },
+      },
+    });
+
+    const subscription = await tx.subscription.create({
+      data: {
+        clinicId: clinic.id,
+        planType: plan.planType,
+        amount: roundMoney(plan.amount),
+        status: 'ACTIVE',
+        startDate,
+        endDate,
+        graceUntil,
+      },
+    });
+
+    const subscriptionPayment = await tx.subscriptionPayment.create({
+      data: {
+        subscriptionId: subscription.id,
+        clinicId: clinic.id,
+        amount: roundMoney(plan.amount),
+        status: 'PAID',
+        provider: String(paymentContext?.provider || ASAAS_CHECKOUT_PROVIDER).trim() || ASAAS_CHECKOUT_PROVIDER,
+        externalPaymentId: String(paymentContext?.externalPaymentId || signupData?.paymentCheckout?.externalPaymentId || '').trim() || null,
+        paymentLink: String(paymentContext?.paymentLink || signupData?.paymentCheckout?.paymentLink || '').trim() || null,
+        paidAt,
+      },
+    });
+
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        lastPaymentId: subscriptionPayment.id,
       },
     });
 
@@ -432,13 +582,35 @@ const confirmEmailVerification = async ({ email, code }) => {
       });
       throw new AppError(400, 'INVALID_VERIFICATION_CODE', 'Invalid or expired verification code.');
     }
-    const result = await finalizePendingSignup(pendingSignup);
-    logAuthDiagnostic('email_verification_pending_signup_finalized', {
+    const signupData = pendingSignup.signupData && typeof pendingSignup.signupData === 'object'
+      ? pendingSignup.signupData
+      : {};
+    const checkoutToken = String(signupData.checkoutToken || crypto.randomUUID()).trim();
+    const nextSignupData = {
+      ...signupData,
+      checkoutToken,
+      emailVerifiedAt: signupData.emailVerifiedAt || new Date().toISOString(),
+    };
+    const updatedPendingSignup = await pendingSignupRepository.updateSignupDataByEmail({
+      email: normalizedEmail,
+      signupData: nextSignupData,
+    });
+    logAuthDiagnostic('email_verification_pending_signup_verified', {
       endpoint: '/auth/email-verification/confirm',
       email: normalizedEmail,
       status: 'success',
     });
-    return result;
+    return {
+      verified: true,
+      pendingCheckout: true,
+      pendingSignupToken: checkoutToken,
+      email: normalizedEmail,
+      selectedPlan: normalizeSelectedPlan(nextSignupData.selectedPlan),
+      operationType: String(nextSignupData.operationType || '').trim(),
+      paymentLink: String(nextSignupData.paymentCheckout?.paymentLink || '').trim() || null,
+      paymentExpiresAt: nextSignupData.paymentCheckout?.expiresAt || null,
+      pendingSignupId: updatedPendingSignup?.id || pendingSignup.id,
+    };
   }
 
   logAuthDiagnostic('email_verification_fallback_user_lookup', {
@@ -848,6 +1020,204 @@ const login = async ({ email, password }) => {
   };
 };
 
+const getPendingSignupForCheckout = async ({ email, pendingSignupToken }) => {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedToken = String(pendingSignupToken || '').trim();
+  if (!normalizedEmail || !normalizedToken) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'email and pendingSignupToken are required.');
+  }
+
+  const pendingSignup = await pendingSignupRepository.findByEmail(normalizedEmail);
+  if (!pendingSignup) {
+    throw new AppError(404, 'PENDING_SIGNUP_NOT_FOUND', 'Pending signup not found.');
+  }
+
+  const signupData = pendingSignup.signupData && typeof pendingSignup.signupData === 'object'
+    ? pendingSignup.signupData
+    : {};
+  if (String(signupData.checkoutToken || '').trim() !== normalizedToken) {
+    throw new AppError(401, 'PENDING_SIGNUP_INVALID_TOKEN', 'Pending signup token is invalid.');
+  }
+  if (!signupData.emailVerifiedAt) {
+    throw new AppError(403, 'PENDING_SIGNUP_EMAIL_NOT_VERIFIED', 'Email verification is required before payment.');
+  }
+
+  const checkoutExpiresAt = signupData.paymentCheckout?.expiresAt
+    ? new Date(signupData.paymentCheckout.expiresAt).getTime()
+    : 0;
+  if (checkoutExpiresAt && checkoutExpiresAt <= Date.now()) {
+    await pendingSignupRepository.deleteByEmail(normalizedEmail);
+    throw new AppError(410, 'PENDING_CHECKOUT_EXPIRED', 'Pending checkout expired. Start signup again.');
+  }
+
+  return {
+    pendingSignup,
+    signupData,
+  };
+};
+
+const updatePendingSignupOnboarding = async ({ email, pendingSignupToken, selectedPlan, operationType }) => {
+  const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  const normalizedPlan = selectedPlan ? normalizeSelectedPlan(selectedPlan) : normalizeSelectedPlan(signupData.selectedPlan);
+  if (selectedPlan && !PUBLIC_SUBSCRIPTION_PLANS[normalizedPlan]) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
+  }
+  const nextSignupData = {
+    ...signupData,
+    selectedPlan: normalizedPlan || signupData.selectedPlan,
+    operationType: String(operationType || signupData.operationType || '').trim().toUpperCase(),
+    paymentCheckout: selectedPlan && normalizedPlan !== normalizeSelectedPlan(signupData.selectedPlan)
+      ? null
+      : signupData.paymentCheckout,
+  };
+
+  const updated = await pendingSignupRepository.updateSignupDataByEmail({
+    email: pendingSignup.email,
+    signupData: nextSignupData,
+  });
+
+  return {
+    selectedPlan: normalizeSelectedPlan(nextSignupData.selectedPlan),
+    operationType: nextSignupData.operationType || '',
+    paymentLink: nextSignupData.paymentCheckout?.paymentLink || null,
+    paymentExpiresAt: nextSignupData.paymentCheckout?.expiresAt || null,
+    pendingCheckout: true,
+    pendingSignupId: updated?.id || pendingSignup.id,
+  };
+};
+
+const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType, paymentMethod, installmentCount }) => {
+  if (!asaasService.isConfigured()) {
+    throw new AppError(503, 'ASAAS_NOT_CONFIGURED', 'Asaas checkout is not configured.');
+  }
+
+  const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  const selectedPlan = normalizeSelectedPlan(planType || signupData.selectedPlan);
+  if (!PUBLIC_SUBSCRIPTION_PLANS[selectedPlan]) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
+  }
+
+  const checkoutContext = buildPendingCheckoutPayload({
+    signupData: {
+      ...signupData,
+      selectedPlan,
+    },
+    paymentMethod,
+    installmentCount,
+  });
+
+  let checkout = null;
+  try {
+    checkout = await asaasService.createCheckout(checkoutContext.payload);
+  } catch (error) {
+    throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', `Nao foi possivel gerar o checkout do Asaas: ${String(error?.message || error || 'erro desconhecido')}`);
+  }
+
+  const checkoutId = String(checkout?.id || '').trim();
+  if (!checkoutId) {
+    throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout did not return an id.');
+  }
+
+  const checkoutUrl = asaasService.buildCheckoutUrl(checkoutId);
+  const expiresAt = addMinutes(new Date(), PENDING_CHECKOUT_TTL_HOURS * 60).toISOString();
+  const nextSignupData = {
+    ...signupData,
+    selectedPlan,
+    paymentCheckout: {
+      provider: ASAAS_CHECKOUT_PROVIDER,
+      externalPaymentId: checkoutId,
+      paymentLink: checkoutUrl,
+      paymentMethod: checkoutContext.paymentMethod,
+      installmentCount: checkoutContext.installmentCount,
+      expiresAt,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+    },
+  };
+
+  await pendingSignupRepository.updateSignupDataByEmail({
+    email: pendingSignup.email,
+    signupData: nextSignupData,
+  });
+
+  return {
+    checkoutId,
+    paymentLink: checkoutUrl,
+    paymentMethod: checkoutContext.paymentMethod,
+    installmentCount: checkoutContext.installmentCount,
+    planType: selectedPlan,
+    expiresAt,
+    pendingCheckout: true,
+  };
+};
+
+const refreshPendingSignupPaymentStatus = async ({ email, pendingSignupToken }) => {
+  const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  const checkoutId = String(signupData.paymentCheckout?.externalPaymentId || '').trim();
+  if (!checkoutId) {
+    return {
+      pendingCheckout: true,
+      paymentLink: null,
+      effectiveStatus: 'PENDING_PAYMENT',
+    };
+  }
+
+  if (!asaasService.isConfigured()) {
+    return {
+      pendingCheckout: true,
+      paymentLink: signupData.paymentCheckout?.paymentLink || null,
+      effectiveStatus: 'PENDING_PAYMENT',
+    };
+  }
+
+  const result = await asaasService.listPaymentsByCheckoutSession(checkoutId);
+  const paymentRows = Array.isArray(result?.data) ? result.data : [];
+  const paidPayment = paymentRows.find((payment) => ['PAID', 'RECEIVED', 'CONFIRMED'].includes(String(payment?.status || '').trim().toUpperCase()));
+  if (!paidPayment) {
+    return {
+      pendingCheckout: true,
+      paymentLink: signupData.paymentCheckout?.paymentLink || null,
+      effectiveStatus: 'PENDING_PAYMENT',
+    };
+  }
+
+  return finalizePendingSignup(pendingSignup, {
+    provider: ASAAS_CHECKOUT_PROVIDER,
+    externalPaymentId: checkoutId,
+    paymentLink: signupData.paymentCheckout?.paymentLink || null,
+    paidAt: paidPayment?.paymentDate || paidPayment?.clientPaymentDate || paidPayment?.confirmedDate || new Date(),
+  });
+};
+
+const finalizePendingSignupPaymentByExternalPaymentId = async ({ externalPaymentId, paidAt }) => {
+  const pendingSignup = await pendingSignupRepository.findByCheckoutExternalPaymentId(externalPaymentId);
+  if (!pendingSignup) {
+    return { handled: false };
+  }
+
+  const signupData = pendingSignup.signupData && typeof pendingSignup.signupData === 'object'
+    ? pendingSignup.signupData
+    : {};
+
+  const duplicateUser = await userRepository.findByEmail(normalizeEmail(signupData.adminEmail || pendingSignup.email || ''));
+  if (duplicateUser) {
+    await pendingSignupRepository.deleteByEmail(pendingSignup.email);
+    return { handled: true, alreadyFinalized: true };
+  }
+
+  const result = await finalizePendingSignup(pendingSignup, {
+    provider: ASAAS_CHECKOUT_PROVIDER,
+    externalPaymentId,
+    paymentLink: signupData.paymentCheckout?.paymentLink || null,
+    paidAt: paidAt || new Date(),
+  });
+
+  return {
+    handled: true,
+    clinicId: result?.clinic?.id || result?.clinic?.clinicId || '',
+  };
+};
+
 const logout = async (token) => {
   const normalizedToken = String(token || '').trim();
   if (!normalizedToken) {
@@ -935,6 +1305,10 @@ module.exports = {
     requestPasswordReset,
     confirmEmailVerification,
     resendEmailVerification,
+    updatePendingSignupOnboarding,
+    createPendingSignupCheckout,
+    refreshPendingSignupPaymentStatus,
+    finalizePendingSignupPaymentByExternalPaymentId,
     validatePasswordResetCode,
     saveNewPassword,
     impersonateClinicAdmin,

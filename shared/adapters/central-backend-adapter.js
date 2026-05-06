@@ -333,6 +333,12 @@ const createCentralBackendAdapter = (options = {}) => {
       token: data?.token || '',
       user: data?.user || null,
       clinic: data?.clinic || null,
+      pendingCheckout: data?.pendingCheckout === true,
+      pendingSignupToken: data?.pendingSignupToken || '',
+      selectedPlan: data?.selectedPlan || '',
+      operationType: data?.operationType || '',
+      paymentLink: data?.paymentLink || '',
+      paymentExpiresAt: data?.paymentExpiresAt || null,
     };
   };
 

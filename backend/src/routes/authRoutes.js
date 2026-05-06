@@ -7,6 +7,9 @@ const {
   changePassword,
   confirmEmailVerificationFlow,
   resendEmailVerificationFlow,
+  updatePendingSignupOnboarding,
+  createPendingSignupCheckout,
+  refreshPendingSignupPaymentStatus,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,
@@ -20,6 +23,9 @@ router.post('/login', login);
 router.post('/signup', signup);
 router.post('/email-verification/confirm', confirmEmailVerificationFlow);
 router.post('/email-verification/resend', resendEmailVerificationFlow);
+router.post('/pending-signup/onboarding', updatePendingSignupOnboarding);
+router.post('/pending-signup/checkout', createPendingSignupCheckout);
+router.post('/pending-signup/refresh-payment-status', refreshPendingSignupPaymentStatus);
 router.post('/password-reset/request', requestPasswordResetFlow);
 router.post('/password-reset/validate', validatePasswordResetFlow);
 router.post('/password-reset/confirm', confirmPasswordResetFlow);

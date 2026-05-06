@@ -177,6 +177,47 @@ const resendEmailVerificationFlow = async (req, res, next) => {
   }
 };
 
+const updatePendingSignupOnboarding = async (req, res, next) => {
+  try {
+    const data = await authService.updatePendingSignupOnboarding({
+      email: req.body?.email || '',
+      pendingSignupToken: req.body?.pendingSignupToken || req.body?.token || '',
+      selectedPlan: req.body?.selectedPlan || req.body?.planType || '',
+      operationType: req.body?.operationType || req.body?.businessType || '',
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createPendingSignupCheckout = async (req, res, next) => {
+  try {
+    const data = await authService.createPendingSignupCheckout({
+      email: req.body?.email || '',
+      pendingSignupToken: req.body?.pendingSignupToken || req.body?.token || '',
+      planType: req.body?.planType || req.body?.selectedPlan || '',
+      paymentMethod: req.body?.paymentMethod || '',
+      installmentCount: req.body?.installmentCount,
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const refreshPendingSignupPaymentStatus = async (req, res, next) => {
+  try {
+    const data = await authService.refreshPendingSignupPaymentStatus({
+      email: req.body?.email || '',
+      pendingSignupToken: req.body?.pendingSignupToken || req.body?.token || '',
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const requestPasswordResetFlow = async (req, res, next) => {
   try {
     logPasswordReset('request_received', req, { status: 'received' });
@@ -243,6 +284,9 @@ module.exports = {
   changePassword,
   confirmEmailVerificationFlow,
   resendEmailVerificationFlow,
+  updatePendingSignupOnboarding,
+  createPendingSignupCheckout,
+  refreshPendingSignupPaymentStatus,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,

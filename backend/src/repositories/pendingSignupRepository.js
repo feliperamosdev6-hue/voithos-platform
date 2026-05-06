@@ -20,6 +20,17 @@ const pendingSignupRepository = {
     return rows?.[0] || null;
   },
 
+  findByCheckoutExternalPaymentId: async (externalPaymentId) => {
+    const normalizedExternalPaymentId = toRequiredString(externalPaymentId, 'externalPaymentId');
+    const rows = await prisma.$queryRaw`
+      SELECT *
+      FROM "PendingSignup"
+      WHERE "signupData"->'paymentCheckout'->>'externalPaymentId' = ${normalizedExternalPaymentId}
+      LIMIT 1
+    `;
+    return rows?.[0] || null;
+  },
+
   upsertByEmail: async ({
     email,
     passwordHash,
@@ -86,13 +97,37 @@ const pendingSignupRepository = {
     `;
   },
 
-  deleteExpired: async (referenceDate = new Date()) => prisma.pendingSignup.deleteMany({
-    where: {
-      verificationExpiresAt: {
-        lt: referenceDate instanceof Date ? referenceDate : new Date(referenceDate),
-      },
-    },
-  }),
+  updateSignupDataByEmail: async ({ email, signupData }) => {
+    const normalizedEmail = toRequiredString(email, 'email');
+    const rows = await prisma.$queryRaw`
+      UPDATE "PendingSignup"
+      SET "signupData" = CAST(${JSON.stringify(normalizeJson(signupData))} AS jsonb),
+          "updatedAt" = NOW()
+      WHERE "email" = ${normalizedEmail}
+      RETURNING *
+    `;
+    return rows?.[0] || null;
+  },
+
+  deleteExpired: async (referenceDate = new Date()) => {
+    const normalizedReferenceDate = referenceDate instanceof Date ? referenceDate : new Date(referenceDate);
+    const rows = await prisma.$queryRaw`
+      WITH deleted AS (
+        DELETE FROM "PendingSignup"
+        WHERE (
+          ("signupData"->>'emailVerifiedAt' IS NULL OR "signupData"->>'emailVerifiedAt' = '')
+          AND "verificationExpiresAt" < ${normalizedReferenceDate}
+        )
+        OR (
+          "signupData"->'paymentCheckout'->>'expiresAt' IS NOT NULL
+          AND "signupData"->'paymentCheckout'->>'expiresAt' < ${normalizedReferenceDate.toISOString()}
+        )
+        RETURNING "id"
+      )
+      SELECT COUNT(*)::int AS count FROM deleted
+    `;
+    return { count: Number(rows?.[0]?.count || 0) };
+  },
 };
 
 module.exports = { pendingSignupRepository };

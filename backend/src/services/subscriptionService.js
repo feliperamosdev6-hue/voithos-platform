@@ -2,6 +2,7 @@ const { AppError } = require('../errors/AppError');
 const { appEnv } = require('../config/appEnv');
 const { clinicRepository } = require('../repositories/clinicRepository');
 const { subscriptionRepository } = require('../repositories/subscriptionRepository');
+const { authService } = require('./authService');
 const { asaasService } = require('./payment/asaasService');
 
 const GRACE_PERIOD_DAYS = 3;
@@ -687,7 +688,10 @@ const subscriptionService = {
     }).catch(() => null);
 
     if (!paymentRecord) {
-      return { handled: false };
+      return authService.finalizePendingSignupPaymentByExternalPaymentId({
+        externalPaymentId,
+        paidAt: resolvePaidAtFromAsaasPayment(payment),
+      });
     }
 
     const paidAt = resolvePaidAtFromAsaasPayment(payment);

@@ -1901,6 +1901,12 @@
           token: result?.token || '',
           user: result?.user ? mapCentralUserToDesktop(result.user, result?.clinic ? normalizeClinicSessionData(result.clinic) : getStoredClinic()) : null,
           clinic: result?.clinic ? normalizeClinicSessionData(result.clinic) : null,
+          pendingCheckout: result?.pendingCheckout === true,
+          pendingSignupToken: cleanText(result?.pendingSignupToken || ''),
+          selectedPlan: cleanText(result?.selectedPlan || ''),
+          operationType: cleanText(result?.operationType || ''),
+          paymentLink: cleanText(result?.paymentLink || ''),
+          paymentExpiresAt: result?.paymentExpiresAt || null,
         };
       } catch (error) {
         logPasswordResetDiagnostic('email_verification_error', payload, {
@@ -1910,6 +1916,22 @@
         });
         throw error;
       }
+    },
+    updatePendingSignupOnboarding: async (payload = {}) => request('POST', '/auth/pending-signup/onboarding', payload || {}, { auth: false }),
+    createPendingSignupCheckout: async (payload = {}) => request('POST', '/auth/pending-signup/checkout', payload || {}, { auth: false }),
+    refreshPendingSignupPaymentStatus: async (payload = {}) => {
+      const result = await request('POST', '/auth/pending-signup/refresh-payment-status', payload || {}, { auth: false });
+      if (result?.token && result?.user) {
+        const clinic = result?.clinic ? normalizeClinicSessionData(result.clinic) : null;
+        const mappedUser = mapCentralUserToDesktop(result.user, clinic);
+        persistWebSession({ token: result.token, user: mappedUser, clinic });
+        return {
+          ...result,
+          user: mappedUser,
+          clinic,
+        };
+      }
+      return result;
     },
     resendEmailVerification: async ({ email }) => {
       const payload = {

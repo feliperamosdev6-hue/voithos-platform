@@ -76,6 +76,18 @@
       if (window.__webAdapter?.auth?.confirmEmailVerification) return window.__webAdapter.auth.confirmEmailVerification(payload);
       return unavailable('auth.confirmEmailVerification');
     },
+    updatePendingSignupOnboarding: async (payload) => {
+      if (window.__webAdapter?.auth?.updatePendingSignupOnboarding) return window.__webAdapter.auth.updatePendingSignupOnboarding(payload);
+      return unavailable('auth.updatePendingSignupOnboarding');
+    },
+    createPendingSignupCheckout: async (payload) => {
+      if (window.__webAdapter?.auth?.createPendingSignupCheckout) return window.__webAdapter.auth.createPendingSignupCheckout(payload);
+      return unavailable('auth.createPendingSignupCheckout');
+    },
+    refreshPendingSignupPaymentStatus: async (payload) => {
+      if (window.__webAdapter?.auth?.refreshPendingSignupPaymentStatus) return window.__webAdapter.auth.refreshPendingSignupPaymentStatus(payload);
+      return unavailable('auth.refreshPendingSignupPaymentStatus');
+    },
     resendEmailVerification: async (payload) => {
       if (window.auth?.resendEmailVerification) return window.auth.resendEmailVerification(payload);
       if (window.__webAdapter?.auth?.resendEmailVerification) return window.__webAdapter.auth.resendEmailVerification(payload);

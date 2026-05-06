@@ -2557,13 +2557,24 @@ const clinicService = {
       const now = new Date();
       const startOfToday = getStartOfDay(now);
       const startOfSevenDays = getStartOfDaysAgo(6, now);
+      await pendingSignupRepository.deleteExpired(now);
 
       const [activePendingSignups, clinicRows] = await Promise.all([
         prisma.pendingSignup.findMany({
           where: {
-            verificationExpiresAt: {
-              gte: now,
-            },
+            OR: [
+              {
+                verificationExpiresAt: {
+                  gte: now,
+                },
+              },
+              {
+                signupData: {
+                  path: ['paymentCheckout', 'expiresAt'],
+                  gte: now.toISOString(),
+                },
+              },
+            ],
           },
           select: {
             id: true,
@@ -2712,7 +2723,12 @@ const clinicService = {
         if (selectedPlan && Object.prototype.hasOwnProperty.call(planBreakdown, selectedPlan)) {
           planBreakdown[selectedPlan] += 1;
         }
-        stageBreakdown.EMAIL_VERIFICATION_PENDING += 1;
+        const pendingStage = signupData.emailVerifiedAt
+          ? 'PAYMENT_PENDING'
+          : 'EMAIL_VERIFICATION_PENDING';
+        if (Object.prototype.hasOwnProperty.call(stageBreakdown, pendingStage)) {
+          stageBreakdown[pendingStage] += 1;
+        }
 
         return {
           id: pendingSignup.id,
@@ -2725,17 +2741,14 @@ const clinicService = {
           resendAvailableAt: normalizeIsoDate(pendingSignup.resendAvailableAt),
           createdAt: normalizeIsoDate(pendingSignup.createdAt),
           updatedAt: normalizeIsoDate(pendingSignup.updatedAt),
-          stage: 'EMAIL_VERIFICATION_PENDING',
-          stageLabel: 'Aguardando confirmacao de e-mail',
+          stage: pendingStage,
+          stageLabel: pendingStage === 'PAYMENT_PENDING'
+            ? 'Cadastro temporario aguardando pagamento'
+            : 'Aguardando confirmacao de e-mail',
         };
       });
 
       const recentEntries = [
-        ...pendingSnapshots.map((item) => ({
-          entryType: 'pending_signup',
-          sortDate: item.updatedAt || item.createdAt,
-          ...item,
-        })),
         ...clinicSnapshots.map((item) => ({
           entryType: 'clinic_onboarding',
           sortDate: item.onboardingUpdatedAt || item.updatedAt || item.createdAt,
@@ -2750,6 +2763,7 @@ const clinicService = {
         stageBreakdown,
         planBreakdown,
         recentEntries,
+        pendingSignups: pendingSnapshots,
         clinicSnapshots,
       };
     } catch (error) {
@@ -2772,6 +2786,7 @@ const clinicService = {
           stageBreakdown: {},
           planBreakdown: {},
           recentEntries: [],
+          pendingSignups: [],
           clinicSnapshots: [],
         };
       }
@@ -3473,6 +3488,7 @@ const clinicService = {
     }
 
     try {
+      await pendingSignupRepository.deleteExpired(new Date());
       console.info('[signup][clinic-service]', {
         stage: 'signup_started',
         email: adminEmail,
