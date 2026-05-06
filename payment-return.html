@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Retorno do pagamento - Voithos</title>
+  <link rel="stylesheet" href="payment-return.css">
+</head>
+<body>
+  <main class="return-shell">
+    <section class="return-panel">
+      <div class="return-hero">
+        <div class="return-badge" id="return-badge">Retorno seguro</div>
+        <img src="assets/logo-voithos.svg" alt="Voithos" class="return-logo">
+        <h1 class="return-title" id="return-title">Estamos validando seu pagamento</h1>
+        <p class="return-copy" id="return-copy">A Voithos recebeu seu retorno do checkout. Vamos confirmar a ativacao desta conta antes de liberar o acesso.</p>
+      </div>
+
+      <div class="return-card" id="return-card">
+        <div class="return-card-head">
+          <span class="return-status-dot" id="return-status-dot"></span>
+          <strong id="return-status-title">Confirmando pagamento</strong>
+        </div>
+        <p class="return-card-copy" id="return-status-copy">Isso normalmente leva apenas alguns instantes.</p>
+        <p class="return-card-detail" id="return-status-detail"></p>
+      </div>
+
+      <div class="return-grid">
+        <article class="return-step">
+          <strong>1. Checkout concluido</strong>
+          <span>O pagamento foi iniciado no ambiente protegido do Asaas.</span>
+        </article>
+        <article class="return-step">
+          <strong>2. Validacao da assinatura</strong>
+          <span>A Voithos confirma o status para liberar apenas contas realmente pagas.</span>
+        </article>
+        <article class="return-step">
+          <strong>3. Boas-vindas ao sistema</strong>
+          <span>Assim que a confirmacao entrar, voce segue para o ambiente principal.</span>
+        </article>
+      </div>
+
+      <div class="return-actions">
+        <button type="button" class="return-button return-button-primary" id="return-primary-button">Verificar novamente</button>
+        <button type="button" class="return-button return-button-secondary hidden" id="return-secondary-button">Abrir checkout</button>
+      </div>
+
+      <p class="return-message" id="return-message"></p>
+    </section>
+  </main>
+
+  <script src="shared/adapters/desktop-adapter.js"></script>
+  <script src="shared/adapters/web-adapter.js"></script>
+  <script src="shared/app-api.js"></script>
+  <script src="payment-return.js"></script>
+</body>
+</html>

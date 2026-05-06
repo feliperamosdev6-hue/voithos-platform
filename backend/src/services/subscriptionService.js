@@ -118,11 +118,11 @@ const resolveCheckoutCallbackBaseUrl = () => normalizeText(appEnv.publicAppBaseU
 
 const buildCheckoutCallback = () => {
   const baseUrl = resolveCheckoutCallbackBaseUrl().replace(/\/+$/, '');
-  const loginUrl = `${baseUrl}/login.html`;
+  const returnUrl = `${baseUrl}/payment-return.html`;
   return {
-    successUrl: `${loginUrl}?resume=true&payment=success`,
-    cancelUrl: `${loginUrl}?resume=true&payment=cancelled`,
-    expiredUrl: `${loginUrl}?resume=true&payment=expired`,
+    successUrl: `${returnUrl}?payment=success`,
+    cancelUrl: `${returnUrl}?payment=cancelled`,
+    expiredUrl: `${returnUrl}?payment=expired`,
   };
 };
 

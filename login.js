@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const authApi = window.appApi?.auth || window.auth;
   const clinicApi = window.appApi?.clinic || window.clinic || {};
   const subscriptionApi = window.appApi?.subscription || window.subscription || {};
+  const PAYMENT_RETURN_STORAGE_KEY = 'voithos.checkout.return';
   const RESEND_WAIT_SECONDS = 5 * 60;
   const VERIFICATION_WAIT_SECONDS = 2 * 60;
   const PLAN_DEFINITIONS = {
@@ -308,9 +309,36 @@ document.addEventListener('DOMContentLoaded', () => {
     return link || '';
   };
 
+  const persistPaymentReturnContext = (paymentLink = '') => {
+    try {
+      const context = {
+        mode: onboardingFlowState.pendingCheckoutMode ? 'pending_signup' : 'subscription',
+        pendingSignupEmail: String(onboardingFlowState.pendingSignupEmail || '').trim().toLowerCase(),
+        pendingSignupToken: String(onboardingFlowState.pendingSignupToken || '').trim(),
+        selectedPlanType: String(onboardingFlowState.selectedPlanType || '').trim().toUpperCase(),
+        paymentMethod: String(onboardingFlowState.checkoutPaymentMethod || '').trim().toUpperCase(),
+        installmentCount: Number(onboardingFlowState.installmentCount || 0) || null,
+        paymentLink: String(paymentLink || onboardingFlowState.paymentLink || '').trim(),
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(PAYMENT_RETURN_STORAGE_KEY, JSON.stringify(context));
+    } catch (_error) {
+      // best-effort only
+    }
+  };
+
+  const clearPaymentReturnContext = () => {
+    try {
+      localStorage.removeItem(PAYMENT_RETURN_STORAGE_KEY);
+    } catch (_error) {
+      // best-effort only
+    }
+  };
+
   const openCheckoutLink = async (paymentLink) => {
     const normalizedLink = String(paymentLink || '').trim();
     if (!normalizedLink) return false;
+    persistPaymentReturnContext(normalizedLink);
 
     const isDesktopMode = String(window.appApi?.mode || '').trim().toLowerCase() === 'desktop';
     if (isDesktopMode && typeof window.appApi?.openExternalUrl === 'function') {
@@ -853,6 +881,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const routeAuthenticatedUser = () => {
+    clearPaymentReturnContext();
     window.location.href = 'index.html';
     return true;
   };
@@ -1428,6 +1457,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
           : await subscriptionApi.refreshPaymentStatus();
         if (refreshed?.token && refreshed?.user) {
+          clearPaymentReturnContext();
           setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
           window.setTimeout(routeAuthenticatedUser, 600);
           return;
@@ -1441,6 +1471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ).trim();
         renderPaymentSummary();
         if (String(refreshed?.effectiveStatus || '').trim().toUpperCase() === 'ACTIVE') {
+          clearPaymentReturnContext();
           setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
         } else {
           setPaymentMessage('Ainda nao encontramos confirmacao final do pagamento. Se voce acabou de pagar, aguarde alguns instantes e atualize novamente.');

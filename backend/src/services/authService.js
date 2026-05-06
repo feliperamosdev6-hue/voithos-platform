@@ -110,11 +110,11 @@ const normalizeCheckoutName = (value, fallback = 'Clinica Voithos') => {
 const resolveCheckoutCallbackBaseUrl = () => String(process.env.PUBLIC_APP_BASE_URL || 'http://127.0.0.1:4000').trim().replace(/\/+$/, '');
 
 const buildCheckoutCallback = () => {
-  const loginUrl = `${resolveCheckoutCallbackBaseUrl()}/login.html`;
+  const returnUrl = `${resolveCheckoutCallbackBaseUrl()}/payment-return.html`;
   return {
-    successUrl: `${loginUrl}?resume=true&payment=success`,
-    cancelUrl: `${loginUrl}?resume=true&payment=cancelled`,
-    expiredUrl: `${loginUrl}?resume=true&payment=expired`,
+    successUrl: `${returnUrl}?payment=success`,
+    cancelUrl: `${returnUrl}?payment=cancelled`,
+    expiredUrl: `${returnUrl}?payment=expired`,
   };
 };
 
