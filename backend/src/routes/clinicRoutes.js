@@ -7,6 +7,7 @@ const {
   listClinics,
   createClinicBootstrap,
   getSuperAdminOnboardingDashboard,
+  deleteSuperAdminPendingRegistration,
   getMyOperationalSettings,
   getMyOnboardingState,
   updateMyOperationalSettings,
@@ -55,6 +56,7 @@ const importUpload = multer({
 router.get('/', authenticateOptional, listClinics);
 router.use(authenticate);
 router.get('/super-admin/onboarding-dashboard', getSuperAdminOnboardingDashboard);
+router.delete('/super-admin/pending/:id', deleteSuperAdminPendingRegistration);
 router.get('/me/onboarding', getMyOnboardingState);
 router.patch('/me/onboarding', updateMyOnboardingState);
 router.use(checkSubscription);

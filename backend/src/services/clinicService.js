@@ -2794,6 +2794,192 @@ const clinicService = {
     }
   },
 
+  deletePendingRegistration: async ({ id, actorId } = {}) => {
+    try {
+      const normalizedId = String(id || '').trim();
+      if (!normalizedId) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'id is required.');
+      }
+
+      const pendingSignup = await pendingSignupRepository.findById(normalizedId);
+      if (pendingSignup) {
+        const freedEmail = normalizeEmail(pendingSignup.email || '');
+        await pendingSignupRepository.deleteByEmail(pendingSignup.email);
+        console.info('[super-admin][pending-cleanup]', {
+          stage: 'pending_signup_deleted',
+          actorId: String(actorId || '').trim(),
+          pendingSignupId: pendingSignup.id,
+          email: freedEmail,
+        });
+        return {
+          removedType: 'pending_signup',
+          removedId: pendingSignup.id,
+          freedEmails: freedEmail ? [freedEmail] : [],
+        };
+      }
+
+      const clinic = await prisma.clinic.findUnique({
+        where: {
+          id: normalizedId,
+        },
+        select: {
+          id: true,
+          nomeFantasia: true,
+          razaoSocial: true,
+          cnpjCpf: true,
+          email: true,
+          createdAt: true,
+          updatedAt: true,
+          operationalSettings: true,
+          users: {
+            select: {
+              id: true,
+              email: true,
+              nome: true,
+              ativo: true,
+              isClinicAdmin: true,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+          subscription: {
+            select: {
+              id: true,
+              status: true,
+              planType: true,
+              lastPaymentId: true,
+              payments: {
+                select: {
+                  id: true,
+                  status: true,
+                  provider: true,
+                  externalPaymentId: true,
+                  paidAt: true,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+              },
+            },
+          },
+          _count: {
+            select: {
+              patients: true,
+              appointments: true,
+              outboundMessages: true,
+              inboundMessages: true,
+              notificationEvents: true,
+              appointmentActionTokens: true,
+              patientClinicalRecords: true,
+              anamneses: true,
+              clinicalNotes: true,
+              patientProcedures: true,
+              patientDocumentMetadata: true,
+              financialAccounts: true,
+              financialInstallments: true,
+              financialTransactions: true,
+              payments: true,
+              patientPlans: true,
+              financialSnapshots: true,
+              laboratoryOrders: true,
+              laboratoryOrderItems: true,
+              laboratoryOrderEvents: true,
+              stockItems: true,
+              stockMovements: true,
+              campaigns: true,
+              campaignAudienceSnapshots: true,
+              campaignAudienceSnapshotMembers: true,
+              campaignBatches: true,
+              campaignDispatches: true,
+            },
+          },
+        },
+      });
+
+      if (!clinic) {
+        throw new AppError(404, 'PENDING_REGISTRATION_NOT_FOUND', 'Pending registration not found.');
+      }
+
+      const operationalSettings = normalizeOperationalSettings(clinic.operationalSettings || {});
+      const stageInfo = deriveOnboardingStage({
+        onboardingState: operationalSettings.onboarding || getDefaultOperationalSettings().onboarding,
+        subscription: clinic.subscription || null,
+      });
+      const subscriptionStatus = String(clinic.subscription?.status || '').trim().toUpperCase();
+      const paidPayments = Array.isArray(clinic.subscription?.payments)
+        ? clinic.subscription.payments.filter((payment) => String(payment.status || '').trim().toUpperCase() === 'PAID')
+        : [];
+      const blockingCounts = Object.entries(clinic._count || {})
+        .filter(([key, value]) => key !== 'subscriptionPayments' && Number(value || 0) > 0)
+        .map(([key, value]) => ({ key, value: Number(value || 0) }));
+
+      if (stageInfo.stage !== 'PAYMENT_PENDING') {
+        throw new AppError(409, 'PENDING_REGISTRATION_NOT_ALLOWED', 'Only pending payment clinics can be removed.');
+      }
+
+      if (subscriptionStatus && subscriptionStatus !== 'PENDING_PAYMENT') {
+        throw new AppError(409, 'PENDING_REGISTRATION_NOT_ALLOWED', 'Only pending payment clinics can be removed.');
+      }
+
+      if (paidPayments.length > 0) {
+        throw new AppError(409, 'PENDING_REGISTRATION_HAS_PAYMENT', 'Paid subscriptions cannot be removed through this action.');
+      }
+
+      if (blockingCounts.length > 0) {
+        throw new AppError(409, 'PENDING_REGISTRATION_HAS_DEPENDENCIES', `Clinic has related records and cannot be removed safely: ${blockingCounts.map((item) => item.key).join(', ')}.`);
+      }
+
+      const freedEmails = (clinic.users || [])
+        .map((user) => normalizeEmail(user.email || ''))
+        .filter(Boolean);
+
+      await prisma.$transaction(async (tx) => {
+        if (clinic.subscription?.id) {
+          await tx.subscription.delete({
+            where: {
+              id: clinic.subscription.id,
+            },
+          });
+        }
+
+        if (clinic.users?.length) {
+          await tx.user.deleteMany({
+            where: {
+              clinicId: clinic.id,
+            },
+          });
+        }
+
+        await tx.clinic.delete({
+          where: {
+            id: clinic.id,
+          },
+        });
+      });
+
+      console.info('[super-admin][pending-cleanup]', {
+        stage: 'clinic_deleted',
+        actorId: String(actorId || '').trim(),
+        clinicId: clinic.id,
+        clinicName: String(clinic.nomeFantasia || clinic.razaoSocial || '').trim(),
+        status: stageInfo.stage,
+        freedEmails,
+      });
+
+      return {
+        removedType: 'clinic',
+        removedId: clinic.id,
+        freedEmails,
+      };
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
   getOperationalSettings: async ({ clinicId } = {}) => {
     const normalizedClinicId = String(clinicId || '').trim();
     if (!normalizedClinicId) {

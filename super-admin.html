@@ -42,6 +42,11 @@
         <h3>Fila recente do funil</h3>
         <div id="dashboard-recent-entries" class="activity-list"></div>
       </div>
+      <div class="dashboard-panel">
+        <h3>Cadastros pendentes</h3>
+        <div id="dashboard-pending-signups" class="activity-list"></div>
+      </div>
+      <p id="dashboard-status" class="result" hidden></p>
       <p id="dashboard-error" class="error"></p>
     </section>
 
@@ -104,11 +109,11 @@
           Etapa
           <select id="clinic-stage-filter">
             <option value="">Todas</option>
-            <option value="EMAIL_VERIFICATION_PENDING">Confirmacao de e-mail</option>
-            <option value="PROFILE_PENDING">Aguardando perfil</option>
+            <option value="EMAIL_VERIFICATION_PENDING">Pendente de verificacao</option>
+            <option value="PROFILE_PENDING">Pendente de perfil</option>
             <option value="PAYMENT_PENDING">Aguardando pagamento</option>
-            <option value="ACTIVE">Onboarding concluido</option>
-            <option value="GRACE_PERIOD">Tolerancia</option>
+            <option value="ACTIVE">Ativa</option>
+            <option value="GRACE_PERIOD">Em tolerancia</option>
             <option value="BLOCKED">Bloqueada</option>
             <option value="CANCELED">Cancelada</option>
           </select>

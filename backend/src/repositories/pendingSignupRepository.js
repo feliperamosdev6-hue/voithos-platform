@@ -9,6 +9,13 @@ const normalizeJson = (value) => {
 };
 
 const pendingSignupRepository = {
+  findById: async (id) => {
+    const normalizedId = toRequiredString(id, 'id');
+    return prisma.pendingSignup.findUnique({
+      where: { id: normalizedId },
+    });
+  },
+
   findByEmail: async (email) => {
     const normalizedEmail = toRequiredString(email, 'email');
     const rows = await prisma.$queryRaw`

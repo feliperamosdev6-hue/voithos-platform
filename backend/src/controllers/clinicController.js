@@ -50,6 +50,22 @@ const getSuperAdminOnboardingDashboard = async (req, res, next) => {
   }
 };
 
+const deleteSuperAdminPendingRegistration = async (req, res, next) => {
+  try {
+    requireSuperAdmin(req);
+    const data = await clinicService.deletePendingRegistration({
+      id: req?.params?.id || '',
+      actorId: req?.auth?.userId || '',
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getMyOperationalSettings = async (req, res, next) => {
   try {
     const data = await clinicService.getOperationalSettings({
@@ -528,6 +544,7 @@ module.exports = {
   listClinics,
   createClinicBootstrap,
   getSuperAdminOnboardingDashboard,
+  deleteSuperAdminPendingRegistration,
   getMyOperationalSettings,
   getMyOnboardingState,
   updateMyOperationalSettings,

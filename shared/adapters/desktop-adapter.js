@@ -132,6 +132,11 @@
       if (window.__webAdapter?.auth?.getOnboardingDashboard) return window.__webAdapter.auth.getOnboardingDashboard();
       return unavailable('auth.getOnboardingDashboard');
     },
+    deletePendingClinicRegistration: async (id) => {
+      if (window.auth?.deletePendingClinicRegistration) return window.auth.deletePendingClinicRegistration(id);
+      if (window.__webAdapter?.auth?.deletePendingClinicRegistration) return window.__webAdapter.auth.deletePendingClinicRegistration(id);
+      return unavailable('auth.deletePendingClinicRegistration');
+    },
     createClinic: async (payload) => {
       if (!window.auth?.createClinic) return unavailable('auth.createClinic');
       return window.auth.createClinic(payload);

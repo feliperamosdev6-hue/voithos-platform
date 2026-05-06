@@ -2150,6 +2150,12 @@
       return (Array.isArray(data) ? data : []).map(mapClinicSummary);
     },
     getOnboardingDashboard: async () => request('GET', '/clinics/super-admin/onboarding-dashboard', null, { auth: true }),
+    deletePendingClinicRegistration: async (id) => request(
+      'DELETE',
+      `/clinics/super-admin/pending/${encodeURIComponent(cleanText(id))}`,
+      null,
+      { auth: true }
+    ),
     createClinic: async (payload = {}) => {
       const result = await request('POST', '/clinics/bootstrap', payload || {}, { auth: true });
       return {

@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const dashboardStages = document.getElementById('dashboard-stages');
   const dashboardPlans = document.getElementById('dashboard-plans');
   const dashboardRecentEntries = document.getElementById('dashboard-recent-entries');
+  const dashboardPendingSignups = document.getElementById('dashboard-pending-signups');
+  const dashboardStatus = document.getElementById('dashboard-status');
   const btnRefreshDashboard = document.getElementById('btn-refresh-dashboard');
   const clinicSearchInput = document.getElementById('clinic-search');
   const clinicStageFilter = document.getElementById('clinic-stage-filter');
@@ -27,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const clinicCredentialsCache = new Map();
   const dashboardClinicMap = new Map();
+  const pendingCleanupIds = new Set();
   let clinicsCache = [];
   let dashboardCache = null;
   let lastCreatedClinicId = '';
@@ -37,6 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const setDashboardError = (message) => {
     if (dashboardError) dashboardError.textContent = message || '';
+  };
+
+  const setDashboardStatus = (message) => {
+    if (!dashboardStatus) return;
+    const text = String(message || '').trim();
+    dashboardStatus.textContent = text;
+    dashboardStatus.hidden = !text;
   };
 
   const formatDateTime = (value) => {
@@ -65,6 +75,20 @@ document.addEventListener('DOMContentLoaded', () => {
       OTHER: 'Outros',
     };
     return labels[String(operationType || '').trim().toUpperCase()] || '-';
+  };
+
+  const formatStageLabel = (stage, fallback = '') => {
+    const labels = {
+      ACTIVE: 'Ativa',
+      EMAIL_VERIFICATION_PENDING: 'Pendente de verificacao',
+      PROFILE_PENDING: 'Pendente de perfil',
+      PAYMENT_PENDING: 'Aguardando pagamento',
+      GRACE_PERIOD: 'Em tolerancia',
+      BLOCKED: 'Bloqueada',
+      CANCELED: 'Cancelada',
+    };
+    const normalized = String(stage || '').trim().toUpperCase();
+    return labels[normalized] || fallback || normalized || 'Etapa';
   };
 
   const getBadgeClass = (stage) => {
@@ -204,6 +228,36 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   };
 
+  const renderPendingSignups = (entries = []) => {
+    if (!dashboardPendingSignups) return;
+    if (!entries.length) {
+      dashboardPendingSignups.innerHTML = '<div class="list-empty">Nenhum cadastro pendente para limpeza.</div>';
+      return;
+    }
+
+    dashboardPendingSignups.innerHTML = entries.map((entry) => {
+      const canDelete = ['EMAIL_VERIFICATION_PENDING', 'PAYMENT_PENDING'].includes(String(entry.stage || '').trim().toUpperCase());
+      const isLoading = pendingCleanupIds.has(String(entry.id || '').trim());
+      return `
+        <article class="activity-item" data-pending-id="${String(entry.id || '')}">
+          <div class="activity-item-header">
+            <div class="activity-title">${entry.nomeClinica || entry.responsavelNome || entry.email || 'Cadastro pendente'}</div>
+            <span class="${getBadgeClass(entry.stage)}">${formatStageLabel(entry.stage, entry.stageLabel)}</span>
+          </div>
+          <div class="activity-meta">
+            ${entry.email || '-'} | Plano ${formatPlanLabel(entry.selectedPlan)} | Responsavel ${entry.responsavelNome || '-'}
+          </div>
+          <div class="activity-submeta">
+            Criado em ${formatDateTime(entry.createdAt)} | Atualizado em ${formatDateTime(entry.updatedAt)}
+          </div>
+          <div class="clinic-actions">
+            ${canDelete ? `<button type="button" class="btn-outline" data-action="delete-pending" data-pending-id="${String(entry.id || '')}" ${isLoading ? 'disabled' : ''}>${isLoading ? 'Excluindo...' : 'Excluir pendente'}</button>` : ''}
+          </div>
+        </article>
+      `;
+    }).join('');
+  };
+
   const renderDashboard = (dashboard = null) => {
     dashboardCache = dashboard;
     const summary = dashboard?.summary || {};
@@ -232,6 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
       { label: 'Anual', value: Number(planBreakdown.ANNUAL || 0) },
     ], 'Nenhum plano em andamento.');
     renderRecentEntries(Array.isArray(dashboard?.recentEntries) ? dashboard.recentEntries : []);
+    renderPendingSignups(Array.isArray(dashboard?.pendingSignups) ? dashboard.pendingSignups : []);
     renderClinics(clinicsCache);
   };
 
@@ -276,7 +331,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const clinicId = String(clinic.clinicId || '');
       const hasCredentials = clinicCredentialsCache.has(clinicId);
       const snapshot = getClinicStageSnapshot(clinicId);
-      const stageLabel = snapshot?.stageLabel || 'Sem telemetria';
+      const stageLabel = formatStageLabel(snapshot?.stage, snapshot?.stageLabel || 'Sem telemetria');
+      const canDeletePending = String(snapshot?.stage || '').trim().toUpperCase() === 'PAYMENT_PENDING';
+      const isDeletingPending = pendingCleanupIds.has(clinicId);
       return `
         <article class="clinic-item" data-clinic-id="${clinicId}">
           <div class="clinic-topline">
@@ -293,6 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <button type="button" class="btn-primary" data-action="open-clinic" data-clinic-id="${clinicId}">Abrir clinica</button>
             <button type="button" data-action="copy-id" data-clinic-id="${clinicId}">Copiar ID</button>
             ${hasCredentials ? `<button type="button" data-action="copy-credentials" data-clinic-id="${clinicId}">Copiar credenciais</button>` : ''}
+            ${canDeletePending ? `<button type="button" class="btn-outline" data-action="delete-pending" data-pending-id="${clinicId}" ${isDeletingPending ? 'disabled' : ''}>${isDeletingPending ? 'Excluindo...' : 'Excluir pendente'}</button>` : ''}
           </div>
         </article>
       `;
@@ -420,14 +478,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const action = target.dataset.action;
     const clinicId = target.dataset.clinicId;
-    if (!action || !clinicId) return;
+    const pendingId = String(target.dataset.pendingId || '').trim();
+    if (!action) return;
 
     if (action === 'open-clinic') {
+      if (!clinicId) return;
       await impersonateClinic(clinicId);
       return;
     }
 
     if (action === 'copy-id') {
+      if (!clinicId) return;
       try {
         await copyText(clinicId);
       } catch (_err) {
@@ -437,6 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (action === 'copy-credentials') {
+      if (!clinicId) return;
       const credentials = clinicCredentialsCache.get(clinicId);
       if (!credentials) {
         setError('Credenciais nao disponiveis para esta clinica nesta sessao.');
@@ -447,8 +509,56 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (_err) {
         setError('Nao foi possivel copiar as credenciais.');
       }
+      return;
+    }
+
+    if (action === 'delete-pending') {
+      await handleDeletePending(pendingId || clinicId);
+      return;
     }
   });
+
+  dashboardPendingSignups?.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.dataset.action !== 'delete-pending') return;
+    const pendingId = String(target.dataset.pendingId || '').trim();
+    if (!pendingId) return;
+    await handleDeletePending(pendingId);
+  });
+
+  const handleDeletePending = async (pendingId) => {
+    const normalizedId = String(pendingId || '').trim();
+    if (!normalizedId) {
+      setDashboardError('Cadastro pendente invalido.');
+      return;
+    }
+
+    const label = clinicsCache.find((clinic) => String(clinic.clinicId || '').trim() === normalizedId)?.nomeFantasia
+      || dashboardCache?.pendingSignups?.find((item) => String(item.id || '').trim() === normalizedId)?.email
+      || normalizedId;
+
+    const confirmed = window.confirm(`Tem certeza? Esta ação removerá o cadastro pendente e liberará o e-mail.\n\n${label}`);
+    if (!confirmed) return;
+
+    pendingCleanupIds.add(normalizedId);
+    setDashboardError('');
+    setDashboardStatus('');
+    renderClinics(clinicsCache);
+    renderPendingSignups(Array.isArray(dashboardCache?.pendingSignups) ? dashboardCache.pendingSignups : []);
+
+    try {
+      await authApi.deletePendingClinicRegistration(normalizedId);
+      setDashboardStatus('Cadastro pendente removido com sucesso.');
+      await refreshSuperAdminData();
+    } catch (err) {
+      setDashboardError(err?.message || 'Falha ao excluir cadastro pendente.');
+    } finally {
+      pendingCleanupIds.delete(normalizedId);
+      renderClinics(clinicsCache);
+      renderPendingSignups(Array.isArray(dashboardCache?.pendingSignups) ? dashboardCache.pendingSignups : []);
+    }
+  };
 
   btnCopyCredentials?.addEventListener('click', async () => {
     const credentials = clinicCredentialsCache.get(lastCreatedClinicId);
