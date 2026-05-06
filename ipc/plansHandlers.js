@@ -132,6 +132,12 @@ const registerPlansHandlers = ({
   ipcMain.handle('plans-dashboard', async () => {
     requirePlansAccess();
     if (isCentralEnabled()) {
+      const dashboard = typeof centralBackendAdapter.getPatientPlansDashboard === 'function'
+        ? await centralBackendAdapter.getPatientPlansDashboard({
+          clinicId: getCurrentClinicId(),
+        })
+        : null;
+      if (dashboard) return dashboard;
       const accounts = await centralBackendAdapter.getFinancialDashboard({
         clinicId: getCurrentClinicId(),
       });

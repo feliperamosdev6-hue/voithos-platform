@@ -388,11 +388,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (destination === 'financeiro' || type === 'financeiro' || accountId) {
+            const params = new URLSearchParams();
+            params.set('view', 'financeiro');
+            params.set('section', 'receitas');
+            if (String(meta?.status || notification?.status || '').trim().toUpperCase() === 'OVERDUE' || String(notification?.tag || '').toLowerCase().includes('atras')) {
+                params.set('status', 'pendente');
+                params.set('overdue', '1');
+            }
+            if (accountId) params.set('accountId', accountId);
             return {
-                href: 'pagamentos.html',
+                href: `gestao.html?${params.toString()}`,
                 category: 'financeiro',
                 persist: () => {
                     if (patient) persistNotificationContext(sessionStorage, getClinicStorageKey('prontuarioPatient'), patient);
+                    persistNotificationContext(sessionStorage, getClinicStorageKey('financeNotificationTarget'), {
+                        accountId,
+                        patientId,
+                        overdue: params.get('overdue') === '1',
+                    });
                 },
             };
         }
@@ -1649,12 +1662,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const liberados = Number(dash?.liberados) || 0;
             const recebidoMes = Number(dash?.recebidoMes) || 0;
             const inadimplencia = Number(dash?.inadimplencia) || 0;
+            const vencemHoje = Number(dash?.vencemHoje ?? dash?.dueToday ?? 0) || 0;
             setMetricValue(homePlanosAtivos, String(ativos), ativos === 0);
             if (homePlanosVencendo) homePlanosVencendo.textContent = formatCurrency(pendenteTotal);
             setMetricValue(homePlanosLiberados, String(liberados), liberados === 0);
             if (homePlanosRecebidoMes) homePlanosRecebidoMes.textContent = formatCurrency(recebidoMes);
             setMetricValue(homePlanosInadimplencia, String(inadimplencia), inadimplencia === 0);
-            if (homePlanosNote) homePlanosNote.textContent = `Recebido vs pendente: ${formatCurrency(recebidoMes)} / ${formatCurrency(pendenteTotal)}`;
+            if (homePlanosNote) homePlanosNote.textContent = `Hoje: ${vencemHoje} | Recebido: ${formatCurrency(recebidoMes)}`;
             try {
                 console.info('[HOME] management_widget_loaded', JSON.stringify({
                     widget: 'home-planos',

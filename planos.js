@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterSearch = document.getElementById('filter-search');
   const filterSearchSuggestions = document.getElementById('filter-search-suggestions');
   const refreshPlansBtn = document.getElementById('btn-refresh-plans');
+  const savePlanBtn = document.getElementById('btn-save-plan');
   const parcelasHint = document.getElementById('input-parcelas-hint');
   const summaryTotal = document.getElementById('summary-total');
   const summaryAndamento = document.getElementById('summary-andamento');
@@ -53,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     valorParcela: document.getElementById('input-valor-parcela'),
     entradaValor: document.getElementById('input-entrada-valor'),
     entradaData: document.getElementById('input-entrada-data'),
+    entradaPaga: document.getElementById('input-entrada-paga'),
     entradaForma: document.getElementById('input-entrada-forma'),
     parcelasPagas: document.getElementById('input-parcelas-pagas'),
     regra: document.getElementById('input-regra'),
@@ -204,10 +206,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const parcelStClass = (p) => {
     const s = clean(p?.status).toUpperCase();
     if (s === 'PAID') return 'paid';
-    if (s === 'CANCELLED') return 'cancelled';
+    if (s === 'OVERDUE') return 'overdue';
+    if (s === 'CANCELLED' || s === 'CANCELED') return 'cancelled';
     return 'pending';
   };
-  const parcelStLabel = (p) => ({ PAID: 'Pago', PENDING: 'Pendente', CANCELLED: 'Cancelado' }[clean(p?.status).toUpperCase()] || 'Pendente');
+  const parcelStLabel = (p) => ({ PAID: 'Pago', PENDING: 'Pendente', OVERDUE: 'Em atraso', PARTIAL: 'Parcial', CANCELLED: 'Cancelado', CANCELED: 'Cancelado' }[clean(p?.status).toUpperCase()] || 'Pendente');
   const hasActiveFilters = () => Boolean(
     clean(filterCategory?.value)
     || clean(filterStatus?.value)
@@ -230,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const pending = Math.max(0, total - paid);
     const sch = Array.isArray(plan?.payment?.schedule) ? plan.payment.schedule : [];
     const paidCount = sch.filter((p) => clean(p.status).toUpperCase() === 'PAID').length;
-    const late = sch.filter((p) => clean(p.status).toUpperCase() === 'PENDING' && isPast(p.dueDate)).length;
+    const late = sch.filter((p) => ['PENDING', 'OVERDUE'].includes(clean(p.status).toUpperCase()) && isPast(p.dueDate)).length;
     const progress = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
     return {
       total,
@@ -525,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const m = metrics(plan);
     if (!m.sch.length) return '<tr><td colspan="8" class="parcel-empty">Nenhuma parcela gerada.</td></tr>';
     return m.sch.map((p) => {
-      const pending = clean(p.status).toUpperCase() === 'PENDING';
+      const pending = ['PENDING', 'OVERDUE'].includes(clean(p.status).toUpperCase());
       const late = pending && isPast(p.dueDate);
       const paidMeta = clean(p.status).toUpperCase() === 'PAID'
         ? `<small class="parcel-paid-meta">${methodLabel(p.paymentMethod)} em ${brDate(dateOnly(p.paidAt || ''))}</small>`
@@ -720,9 +723,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const resetForm = () => {
     editingPlanId = null;
     form?.reset();
-    if (inputs.parcelasPagas) { inputs.parcelasPagas.value = '0'; inputs.parcelasPagas.removeAttribute('disabled'); }
+    if (inputs.parcelasPagas) { inputs.parcelasPagas.value = '0'; inputs.parcelasPagas.setAttribute('disabled', 'disabled'); }
     if (inputs.entradaValor) inputs.entradaValor.value = '0,00';
-    if (inputs.entradaData) inputs.entradaData.value = dateOnly(new Date());
+    if (inputs.entradaData) inputs.entradaData.value = '';
+    if (inputs.entradaPaga) inputs.entradaPaga.checked = false;
     if (inputs.entradaForma) inputs.entradaForma.value = 'PIX';
     if (inputs.startDate) inputs.startDate.value = dateOnly(new Date());
     if (inputs.dueDay) inputs.dueDay.value = String(new Date().getDate());
@@ -743,7 +747,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (inputs.dentista) inputs.dentista.value = plan.dentistName || '';
     if (inputs.valor) inputs.valor.value = formatMoneyBr(num(plan.totalValue, 0));
     if (inputs.entradaValor) inputs.entradaValor.value = formatMoneyBr(num(plan?.payment?.entry?.value, 0));
-    if (inputs.entradaData) inputs.entradaData.value = dateOnly(plan?.payment?.entry?.paidAt || plan.startDate || new Date());
+    if (inputs.entradaPaga) inputs.entradaPaga.checked = clean(plan?.payment?.entry?.status).toUpperCase() === 'PAID';
+    if (inputs.entradaData) inputs.entradaData.value = dateOnly(plan?.payment?.entry?.paidAt || '');
     if (inputs.entradaForma) inputs.entradaForma.value = clean(plan?.payment?.entry?.paymentMethod || 'PIX').toUpperCase() || 'PIX';
     if (inputs.parcelas) inputs.parcelas.value = String(Math.max(1, num(plan.installmentsCount, 1)));
     if (inputs.parcelasPagas) inputs.parcelasPagas.value = String(Math.max(0, Math.min(num(plan.installmentsCount, 1), num(plan.paidInstallments, 0))));
@@ -809,6 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!patient) throw new Error('Selecione um paciente valido (nome + prontuario).');
     const total = Math.max(0, readMoneyInput(inputs.valor, 0));
     const entrada = Math.max(0, readMoneyInput(inputs.entradaValor, 0));
+    const entradaPaga = Boolean(inputs.entradaPaga?.checked) && entrada > 0;
     const n = Math.max(1, num(inputs.parcelas?.value, 1));
     const { releaseRule, minInstallmentsRelease } = resolveReleaseRule();
     const sb = clean(inputs.status?.value || 'ativo').toLowerCase();
@@ -828,14 +834,15 @@ document.addEventListener('DOMContentLoaded', () => {
       installmentValue: Math.max(0, total - Math.min(entrada, total)) / n,
       entryValue: Math.min(entrada, total),
       entradaValor: Math.min(entrada, total),
-      entryPaidAt: dateOnly(inputs.entradaData?.value || '') || dateOnly(new Date()),
+      entryStatus: entradaPaga ? 'PAID' : 'PENDING',
+      entryPaidAt: entradaPaga ? (dateOnly(inputs.entradaData?.value || '') || dateOnly(new Date())) : '',
       entryPaymentMethod: clean(inputs.entradaForma?.value || 'PIX').toUpperCase(),
       payment: {
         entry: {
           value: Math.min(entrada, total),
-          paidAt: dateOnly(inputs.entradaData?.value || '') || dateOnly(new Date()),
+          paidAt: entradaPaga ? (dateOnly(inputs.entradaData?.value || '') || dateOnly(new Date())) : '',
           paymentMethod: clean(inputs.entradaForma?.value || 'PIX').toUpperCase(),
-          status: Math.min(entrada, total) > 0 ? 'PAID' : 'PENDING',
+          status: entradaPaga ? 'PAID' : 'PENDING',
         },
       },
       releaseRule,
@@ -897,13 +904,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const onSubmit = async (ev) => {
     ev.preventDefault();
     if (!plansApi.create || !plansApi.update) return alert('API de planos indisponivel.');
+    if (savePlanBtn?.disabled) return;
+    const originalLabel = savePlanBtn?.textContent || 'Salvar plano';
     try {
+      if (savePlanBtn) {
+        savePlanBtn.disabled = true;
+        savePlanBtn.textContent = 'Salvando...';
+      }
       const payload = buildPayload();
       const saved = editingPlanId ? await plansApi.update({ planId: editingPlanId, patch: payload }) : await plansApi.create(payload);
       selectedPlanId = clean(saved?.planId || saved?.id) || selectedPlanId;
       closeModalForm();
       await loadPlans();
     } catch (err) { alert(err?.message || 'Nao foi possivel salvar o plano.'); }
+    finally {
+      if (savePlanBtn) {
+        savePlanBtn.disabled = false;
+        savePlanBtn.textContent = originalLabel;
+      }
+    }
   };
 
   const onPaySubmit = async (ev) => {

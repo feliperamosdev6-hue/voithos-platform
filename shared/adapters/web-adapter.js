@@ -3005,7 +3005,7 @@
       null,
       { auth: true }
     ),
-    dashboard: async () => notImplemented('plans.dashboard'),
+    dashboard: async () => request('GET', '/financial/plans/dashboard', null, { auth: true }),
     messageHistory: async ({ planId } = {}) => request(
       'GET',
       `/financial/plans/${encodeURIComponent(cleanText(planId))}/messages`,

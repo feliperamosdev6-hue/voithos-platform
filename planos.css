@@ -544,6 +544,11 @@ body {
   color: #b45309;
 }
 
+.parcel-status.overdue {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .parcel-status.cancelled {
   background: #fee2e2;
   color: #b91c1c;

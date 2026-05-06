@@ -215,6 +215,10 @@
             <span>Data da entrada</span>
             <input type="date" id="input-entrada-data" name="entrada_data">
           </label>
+          <label class="form-field checkbox-inline">
+            <input type="checkbox" id="input-entrada-paga" name="entrada_paga">
+            <span>Entrada ja foi paga</span>
+          </label>
           <label class="form-field">
             <span>Forma da entrada</span>
             <select id="input-entrada-forma" name="entrada_forma">
@@ -228,7 +232,7 @@
             </select>
           </label>
           <label class="form-field">
-            <span>Parcelas pagas</span>
+            <span>Parcelas pagas (automatico)</span>
             <input type="number" min="0" id="input-parcelas-pagas" name="parcelas_pagas" value="0">
           </label>
           <label class="form-field">
@@ -272,7 +276,7 @@
         <p class="helper-text" id="rule-preview">Tratamento inicia apos quitacao total.</p>
         <div class="modal-actions">
           <button type="button" class="btn ghost" id="cancel-modal">Cancelar</button>
-          <button type="submit" class="btn primary">Salvar plano</button>
+          <button type="submit" class="btn primary" id="btn-save-plan">Salvar plano</button>
         </div>
       </form>
     </div>

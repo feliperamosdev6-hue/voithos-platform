@@ -2062,6 +2062,17 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || [];
   };
 
+  const getPatientPlansDashboard = async ({ clinicId } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new Error('clinicId is required.');
+    }
+    const payload = await requestInternalJson(
+      `/internal/financial/plans/dashboard?clinicId=${encodeURIComponent(normalizedClinicId)}`
+    );
+    return payload?.data || {};
+  };
+
   const createPatientPlan = async ({ clinicId, patient = {}, appointment = {}, plan = {} } = {}) => {
     const context = await resolveClinicalPatientContext({ clinicId, patient, appointment, allowCreate: true });
     const payload = await requestInternalJson('/internal/financial/plans', {
@@ -2264,6 +2275,7 @@ const createCentralBackendAdapter = (options = {}) => {
     deactivateStockItem,
     listFaturamento,
     listPatientPlans,
+    getPatientPlansDashboard,
     createPatientPlan,
     getPatientPlanById,
     updatePatientPlan,

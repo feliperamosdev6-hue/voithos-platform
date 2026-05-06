@@ -13,6 +13,7 @@ const {
   getMonthlySummary,
   getReminders,
   listPlans,
+  getPlansDashboard,
   createPlan,
   getPlan,
   updatePlan,
@@ -37,6 +38,7 @@ router.get('/dashboard', getDashboard);
 router.get('/summary', getMonthlySummary);
 router.get('/reminders', getReminders);
 router.get('/plans', listPlans);
+router.get('/plans/dashboard', getPlansDashboard);
 router.post('/plans', createPlan);
 router.get('/plans/:planId', getPlan);
 router.patch('/plans/:planId', updatePlan);

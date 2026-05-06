@@ -2307,6 +2307,32 @@
     btnVoltarOverviewEstoque?.addEventListener('click', () => marcarSecaoAtiva('overview'));
   }
 
+  function aplicarContextoInicialFinanceiro() {
+    const params = new URLSearchParams(window.location.search || '');
+    if (String(params.get('view') || '').toLowerCase() !== 'financeiro') return;
+    setGestaoView('financeiro');
+
+    const section = String(params.get('section') || '').toLowerCase();
+    if (section === 'receitas') {
+      document.querySelectorAll('.nav-item-gestao').forEach((item) => {
+        if (!item.dataset.section || item.dataset.section === 'laboratorio') return;
+        item.classList.toggle('active', item.dataset.section === 'receitas');
+      });
+      alternarSecao('receitas');
+    }
+
+    const status = String(params.get('status') || '').toLowerCase();
+    if (status) {
+      filtroReceitasStatus = status;
+      const select = document.getElementById('filtro-receitas-status');
+      if (select) select.value = status;
+      document.querySelectorAll('[data-quick-status][data-target="receitas"]').forEach((item) => {
+        item.classList.toggle('active', String(item.getAttribute('data-quick-status') || '').toLowerCase() === status);
+      });
+    }
+    filtroReceitasSomenteAtrasadas = params.get('overdue') === '1';
+  }
+
   // --- Modal de lancamento ---
   async function abrirModal(tipo, categoriaOverride) {
     const bg = document.getElementById('modal-lancamento-bg');
@@ -3466,6 +3492,7 @@
       setHubBackButtonsVisible(false);
       setGestaoView('financeiro');
     }
+    aplicarContextoInicialFinanceiro();
     carregarLancamentos();
   }
 

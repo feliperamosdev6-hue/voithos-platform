@@ -39,6 +39,13 @@ const normalizeInstallmentStatus = (value) => {
   return 'PENDING';
 };
 
+const normalizePaymentStatus = (value) => {
+  const raw = cleanText(value).toUpperCase();
+  if (raw === 'PAID' || raw === 'PAGO' || raw === 'RECEIVED' || raw === 'RECEBIDO') return 'PAID';
+  if (raw === 'CANCELED' || raw === 'CANCELADO' || raw === 'CANCELLED') return 'CANCELED';
+  return 'PENDING';
+};
+
 const normalizeTransactionMethod = (value) => {
   const raw = cleanText(value).toUpperCase();
   if (raw === 'DINHEIRO') return 'CASH';
@@ -130,6 +137,14 @@ const buildInstallmentsFromPayload = (payload = {}, accountTotal = 0) => {
 
   const installmentsCount = Math.max(1, Number(payload.installmentsCount ?? payload.parcelas ?? payload.installmentsTotal ?? 1) || 1);
   return distributeInstallments(accountTotal, installmentsCount, payload.dueDate || payload.vencimento || payload.data || new Date());
+};
+
+const buildPlanSchedule = ({ totalValue = 0, entryAmount = 0, installments = 1, dueDate = new Date() } = {}) => {
+  const remainingTotal = roundMoney(Math.max(0, roundMoney(totalValue) - roundMoney(entryAmount)));
+  return buildInstallmentsFromPayload({
+    installmentsCount: Math.max(1, Number(installments || 1) || 1),
+    dueDate,
+  }, remainingTotal);
 };
 
 const ensureClinicPatient = async ({ clinicId, patientId }) => {
@@ -471,12 +486,14 @@ const mapPlanScheduleFromMetadata = (metadata = {}, fallbackFinanceEntryId = '',
 
 const computePlanReleaseState = ({ planRow = {}, schedule = [], entryValue = 0, existingStatusAtual = '' } = {}) => {
   const totalValue = roundMoney(planRow.totalValue || 0);
+  const metadata = extractPlanMetadata(planRow);
+  const entryStatus = normalizePaymentStatus(metadata.entryStatus || (metadata.entryPaidAt ? 'PAID' : 'PENDING'));
   const paidFromSchedule = roundMoney(
     schedule
       .filter((parcel) => normalizeInstallmentStatus(parcel.status) === 'PAID')
       .reduce((acc, parcel) => acc + roundMoney(parcel.value), 0),
   );
-  const paidFromEntry = roundMoney(Math.max(0, entryValue));
+  const paidFromEntry = entryStatus === 'PAID' ? roundMoney(Math.max(0, entryValue)) : 0;
   const paidTotal = roundMoney(paidFromSchedule + paidFromEntry);
   const pendingTotal = roundMoney(Math.max(0, totalValue - paidTotal));
   const paidCount = schedule.filter((parcel) => normalizeInstallmentStatus(parcel.status) === 'PAID').length;
@@ -494,10 +511,12 @@ const computePlanReleaseState = ({ planRow = {}, schedule = [], entryValue = 0, 
 
   const currentStatus = cleanText(existingStatusAtual).toUpperCase();
   let statusAtual = currentStatus;
-  if (currentStatus !== 'CANCELADO') {
+  if (!['CANCELADO', 'CANCELED', 'CANCELLED'].includes(currentStatus)) {
     if (releaseStatus === 'LIBERADO') statusAtual = 'LIBERADO';
     else if (paidTotal > 0) statusAtual = 'EM_ANDAMENTO';
     else statusAtual = 'ATIVO';
+  } else {
+    statusAtual = 'CANCELADO';
   }
 
   return {
@@ -520,6 +539,7 @@ const buildLegacyPlan = ({ planRow = {}, accountRow = null } = {}) => {
   );
   const schedule = scheduleFromAccount.length ? scheduleFromAccount : scheduleFromMetadata;
   const entryValue = roundMoney(planRow.entryAmount ?? metadata.entryAmount ?? metadata.entryValue ?? metadata.valorEntrada ?? 0);
+  const entryStatus = normalizePaymentStatus(metadata.entryStatus || (metadata.entryPaidAt ? 'PAID' : 'PENDING'));
   const release = computePlanReleaseState({
     planRow,
     schedule,
@@ -564,9 +584,9 @@ const buildLegacyPlan = ({ planRow = {}, accountRow = null } = {}) => {
     payment: {
       entry: {
         value: entryValue,
-        paidAt: cleanText(metadata.entryPaidAt || '') || null,
+        paidAt: entryStatus === 'PAID' ? (cleanText(metadata.entryPaidAt || '') || null) : null,
         paymentMethod: cleanText(metadata.entryPaymentMethod || 'PIX').toUpperCase() || 'PIX',
-        status: entryValue > 0 ? 'PAID' : 'PENDING',
+        status: entryValue > 0 ? entryStatus : 'PENDING',
         financeEntryId: cleanText(metadata.entryFinanceEntryId || ''),
       },
       schedule,
@@ -718,9 +738,16 @@ const buildPlanLedgerEntries = (accountRow = {}) => {
   });
 
   const entryValue = roundMoney(legacyAccount?.metadata?.entryAmount ?? legacyAccount?.payment?.entry?.value ?? 0);
-  const entryPaidAt = cleanText(legacyAccount?.metadata?.entryPaidAt || legacyAccount?.payment?.entry?.paidAt || '');
+  const entryStatus = normalizePaymentStatus(
+    legacyAccount?.metadata?.entryStatus
+    || legacyAccount?.payment?.entry?.status
+    || (legacyAccount?.metadata?.entryPaidAt ? 'PAID' : 'PENDING'),
+  );
+  const entryPaidAt = entryStatus === 'PAID'
+    ? cleanText(legacyAccount?.metadata?.entryPaidAt || legacyAccount?.payment?.entry?.paidAt || '')
+    : '';
   const entryPaymentMethod = cleanText(legacyAccount?.metadata?.entryPaymentMethod || legacyAccount?.payment?.entry?.paymentMethod || paymentMethod);
-  const entryState = normalizeLedgerFinancialState(legacyAccount?.payment?.entry?.status || (entryPaidAt ? 'PAID' : 'PENDING'));
+  const entryState = entryStatus === 'PAID' ? 'PAID' : 'PENDING';
   const entryReferenceDate = entryPaidAt
     || cleanText(metadata?.startDate || '')
     || (accountRow?.createdAt ? toDateOnly(accountRow.createdAt) : '');
@@ -1501,8 +1528,13 @@ const financialService = {
       ?? payload?.payment?.entry?.value
       ?? 0,
     );
+    if (totalValue <= 0) throw new AppError(400, 'VALIDATION_ERROR', 'totalValue must be greater than zero.');
+    if (entryAmount < 0 || entryAmount > totalValue) throw new AppError(400, 'VALIDATION_ERROR', 'entryAmount must be between zero and totalValue.');
     const planDueDate = resolvePlanDueDate(payload);
-    const entryPaidAt = cleanText(payload.entryPaidAt || payload?.payment?.entry?.paidAt || '') || null;
+    const entryStatus = normalizePaymentStatus(payload.entryStatus || payload?.payment?.entry?.status);
+    const entryPaidAt = entryStatus === 'PAID'
+      ? (cleanText(payload.entryPaidAt || payload?.payment?.entry?.paidAt || '') || toDateOnly(new Date()))
+      : null;
     const entryPaymentMethod = cleanText(
       payload.paymentMethod
       || payload.entryPaymentMethod
@@ -1527,12 +1559,15 @@ const financialService = {
         : [],
       entryAmount,
       entryValue: entryAmount,
+      entryStatus,
       entryPaidAt,
       entryPaymentMethod,
-      schedule: buildInstallmentsFromPayload({
-        installmentsCount: installments,
+      schedule: buildPlanSchedule({
+        totalValue,
+        entryAmount,
+        installments,
         dueDate: planDueDate,
-      }, totalValue).map((item) => ({
+      }).map((item) => ({
         sequence: item.sequence,
         dueDate: toDateOnly(item.dueDate),
         amount: item.amount,
@@ -1621,6 +1656,61 @@ const financialService = {
     });
   },
 
+  getPatientPlansDashboard: async ({ clinicId }) => {
+    const normalizedClinicId = cleanText(clinicId);
+    if (!normalizedClinicId) throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    const plans = await financialService.listPatientPlans({ clinicId: normalizedClinicId });
+    const now = new Date();
+    const month = now.getUTCMonth();
+    const year = now.getUTCFullYear();
+    let pendenteTotal = 0;
+    let venceHoje = 0;
+    let inadimplencia = 0;
+    let recebidoMes = 0;
+
+    plans.forEach((plan) => {
+      const entry = plan?.payment?.entry || {};
+      if (normalizePaymentStatus(entry.status) === 'PAID') {
+        const paidAt = toDate(entry.paidAt, null);
+        if (paidAt && paidAt.getUTCMonth() === month && paidAt.getUTCFullYear() === year) {
+          recebidoMes = roundMoney(recebidoMes + roundMoney(entry.value || 0));
+        }
+      }
+
+      (Array.isArray(plan?.payment?.schedule) ? plan.payment.schedule : []).forEach((parcel) => {
+        const status = normalizeInstallmentStatus(parcel.status);
+        const remainingAmount = roundMoney(parcel.remainingAmount ?? parcel.value ?? 0);
+        const paidAmount = roundMoney(parcel.paidAmount ?? 0);
+        const due = toDate(parcel.dueDate, null);
+        if (status === 'PAID') {
+          const paidAt = toDate(parcel.paidAt, null);
+          if (paidAt && paidAt.getUTCMonth() === month && paidAt.getUTCFullYear() === year) {
+            recebidoMes = roundMoney(recebidoMes + paidAmount);
+          }
+          return;
+        }
+        if (remainingAmount > 0) pendenteTotal = roundMoney(pendenteTotal + remainingAmount);
+        if (!due) return;
+        const diff = differenceInCalendarDaysUtc(due, now);
+        if (diff === 0 && remainingAmount > 0) venceHoje += 1;
+        if ((diff < 0 || status === 'OVERDUE') && remainingAmount > 0) inadimplencia += 1;
+      });
+    });
+
+    return {
+      clinicId: normalizedClinicId,
+      totalPlans: plans.length,
+      ativos: plans.filter((plan) => !['CANCELADO', 'CANCELED'].includes(cleanText(plan.statusAtual).toUpperCase())).length,
+      liberados: plans.filter((plan) => cleanText(plan.statusAtual).toUpperCase() === 'LIBERADO').length,
+      pendenteTotal,
+      pendingInstallments: pendenteTotal,
+      vencemHoje: venceHoje,
+      inadimplencia,
+      recebidoMes,
+      generatedAt: new Date().toISOString(),
+    };
+  },
+
   updatePatientPlan: async ({ clinicId, planId, payload = {} }) => {
     const existing = await financialRepository.findPatientPlanByIdAndClinic({
       clinicId: cleanText(clinicId),
@@ -1641,12 +1731,18 @@ const financialService = {
     const nextEntryAmount = payload.entryAmount !== undefined || payload.entryValue !== undefined || payload.valorEntrada !== undefined
       ? roundMoney(payload.entryAmount ?? payload.entryValue ?? payload.valorEntrada ?? 0)
       : Number(existing.entryAmount || 0);
+    if (nextTotalValue <= 0) throw new AppError(400, 'VALIDATION_ERROR', 'totalValue must be greater than zero.');
+    if (nextEntryAmount < 0 || nextEntryAmount > nextTotalValue) throw new AppError(400, 'VALIDATION_ERROR', 'entryAmount must be between zero and totalValue.');
+    const existingMetadata = extractPlanMetadata(existing);
+    const nextEntryStatus = payload.entryStatus !== undefined || payload?.payment?.entry?.status !== undefined
+      ? normalizePaymentStatus(payload.entryStatus || payload?.payment?.entry?.status)
+      : normalizePaymentStatus(existingMetadata.entryStatus || (existingMetadata.entryPaidAt ? 'PAID' : 'PENDING'));
     const nextDueDate = resolvePlanDueDate({
-      ...extractPlanMetadata(existing),
+      ...existingMetadata,
       ...payload,
     }, new Date());
     const nextMetadata = {
-      ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
+      ...existingMetadata,
       ...sanitizeTenantMetadata(payload.metadata),
       patientName: cleanText(payload.patientName || existing?.metadata?.patientName || existing?.patient?.nome || ''),
       prontuario: cleanText(payload.prontuario || existing?.metadata?.prontuario || existing?.patient?.id || existing.patientId),
@@ -1664,14 +1760,28 @@ const financialService = {
         : (Array.isArray(existing?.metadata?.linkedServiceIds) ? existing.metadata.linkedServiceIds : []),
       entryAmount: nextEntryAmount,
       entryValue: nextEntryAmount,
-      entryPaidAt: cleanText(payload.entryPaidAt || payload?.payment?.entry?.paidAt || existing?.metadata?.entryPaidAt || '') || null,
+      entryStatus: nextEntryStatus,
+      entryPaidAt: nextEntryStatus === 'PAID'
+        ? (cleanText(payload.entryPaidAt || payload?.payment?.entry?.paidAt || existingMetadata.entryPaidAt || '') || toDateOnly(new Date()))
+        : null,
       entryPaymentMethod: cleanText(
         payload.paymentMethod
         || payload.entryPaymentMethod
         || payload?.payment?.entry?.paymentMethod
-        || existing?.metadata?.entryPaymentMethod
+        || existingMetadata.entryPaymentMethod
         || 'PIX',
       ).toUpperCase() || 'PIX',
+      schedule: buildPlanSchedule({
+        totalValue: nextTotalValue,
+        entryAmount: nextEntryAmount,
+        installments: nextInstallments,
+        dueDate: nextDueDate,
+      }).map((item) => ({
+        sequence: item.sequence,
+        dueDate: toDateOnly(item.dueDate),
+        amount: item.amount,
+        status: item.status,
+      })),
     };
 
     await financialRepository.updatePatientPlan({
@@ -1697,13 +1807,18 @@ const financialService = {
       planId: cleanText(planId),
     });
     if (linkedAccount) {
+      const hasLinkedPayments = Array.isArray(linkedAccount.transactions)
+        && linkedAccount.transactions.some((transaction) => cleanText(transaction?.type).toUpperCase() === 'PAYMENT');
       await financialService.updateFinancialAccount({
         clinicId: cleanText(clinicId),
         accountId: linkedAccount.id,
         payload: {
           description: `Plano: ${cleanText(payload.name || payload.title || payload.nome || existing.name)}`,
           totalAmount: nextTotalValue,
-          installmentsCount: nextInstallments,
+          ...(!hasLinkedPayments ? {
+            installments: nextMetadata.schedule,
+            installmentsCount: nextInstallments,
+          } : {}),
           dueDate: nextDueDate,
           paymentMethod: nextMetadata.entryPaymentMethod || linkedAccount.paymentMethod || 'OTHER',
           metadata: {
@@ -1717,9 +1832,11 @@ const financialService = {
             category: nextMetadata.category,
             entryAmount: nextEntryAmount,
             entryValue: nextEntryAmount,
+            entryStatus: nextMetadata.entryStatus,
             entryPaidAt: nextMetadata.entryPaidAt,
             entryPaymentMethod: nextMetadata.entryPaymentMethod,
             startDate: cleanText(nextMetadata.startDate || '') || null,
+            schedule: nextMetadata.schedule,
           },
         },
       });

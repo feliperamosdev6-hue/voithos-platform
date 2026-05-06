@@ -261,6 +261,17 @@ const listPlans = async (req, res, next) => {
   }
 };
 
+const getPlansDashboard = async (req, res, next) => {
+  try {
+    const data = await financialService.getPatientPlansDashboard({
+      clinicId: String(req.query?.clinicId || '').trim(),
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const createPlan = async (req, res, next) => {
   try {
     const data = await financialService.createPatientPlan({
@@ -399,6 +410,7 @@ module.exports = {
   closeMonth,
   listFaturamento,
   listPlans,
+  getPlansDashboard,
   createPlan,
   getPlan,
   updatePlan,

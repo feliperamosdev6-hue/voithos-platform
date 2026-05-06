@@ -17,6 +17,7 @@ const {
   closeMonth,
   listFaturamento,
   listPlans,
+  getPlansDashboard,
   createPlan,
   getPlan,
   updatePlan,
@@ -48,6 +49,7 @@ router.get('/reminders', getReminders);
 router.post('/snapshots/close', closeMonth);
 router.get('/faturamento', listFaturamento);
 router.get('/plans', listPlans);
+router.get('/plans/dashboard', getPlansDashboard);
 router.post('/plans', createPlan);
 router.get('/plans/:planId', getPlan);
 router.patch('/plans/:planId', updatePlan);
