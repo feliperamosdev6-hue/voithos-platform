@@ -308,6 +308,20 @@ document.addEventListener('DOMContentLoaded', () => {
     return link || '';
   };
 
+  const openCheckoutLink = async (paymentLink) => {
+    const normalizedLink = String(paymentLink || '').trim();
+    if (!normalizedLink) return false;
+
+    const isDesktopMode = String(window.appApi?.mode || '').trim().toLowerCase() === 'desktop';
+    if (isDesktopMode && typeof window.appApi?.openExternalUrl === 'function') {
+      await window.appApi.openExternalUrl(normalizedLink);
+      return true;
+    }
+
+    window.location.assign(normalizedLink);
+    return true;
+  };
+
   const applyPaymentMethodAvailability = () => {
     const isAnnualPlan = getIsAnnualPlan();
     if (onboardingFlowState.checkoutPaymentMethod === 'INSTALLMENT' && !isAnnualPlan) {
@@ -966,7 +980,10 @@ document.addEventListener('DOMContentLoaded', () => {
       setPaymentMessage('Ainda nao ha checkout valido disponivel. Gere um novo checkout para continuar.');
       return;
     }
-    window.open(paymentLink, '_blank', 'noopener,noreferrer');
+    openCheckoutLink(paymentLink).catch((error) => {
+      console.error('Falha ao abrir checkout Asaas', error);
+      setPaymentMessage('Nao foi possivel abrir o checkout agora. Tente novamente.');
+    });
   });
 
   resendVerificationPlaceholder?.addEventListener('click', async () => {
@@ -1458,6 +1475,11 @@ document.addEventListener('DOMContentLoaded', () => {
       renderPaymentSummary();
       if (onboardingFlowState.paymentLink) {
         setPaymentMessage('Checkout seguro gerado. Continue para o Asaas e finalize o pagamento.');
+        window.setTimeout(() => {
+          openCheckoutLink(onboardingFlowState.paymentLink).catch((error) => {
+            console.error('Falha ao abrir checkout Asaas', error);
+          });
+        }, 250);
       } else {
         setPaymentMessage('Assinatura preparada, mas o checkout nao foi retornado. Gere novamente para continuar.');
       }
