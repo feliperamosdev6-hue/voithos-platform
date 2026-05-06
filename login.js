@@ -698,7 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
     verificationFlowState.email = String(email || '').trim().toLowerCase();
     verificationFlowState.maskedEmail = maskEmail(verificationFlowState.email);
     if (verificationEmailBadge) {
-      verificationEmailBadge.textContent = `Código enviado para ${verificationFlowState.maskedEmail}`;
+      verificationEmailBadge.textContent = `Código enviado`;
     }
   };
 

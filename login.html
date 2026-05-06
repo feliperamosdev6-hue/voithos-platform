@@ -35,11 +35,11 @@
                 <div class="flow-header">
                     <p class="flow-kicker">Confirmação</p>
                     <h2 class="flow-title">Confirme seu e-mail</h2>
-                    <p class="flow-copy">Digite o código de 6 dígitos enviado para sua conta para liberar o acesso ao sistema.</p>
+                    <p class="flow-copy">Digite o código enviado para seu e-mail.</p>
                 </div>
 
                 <div class="flow-card">
-                    <div class="mask-badge" id="verification-email-badge">Código enviado para seu e-mail</div>
+                    <div class="mask-badge" id="verification-email-badge">Código enviado</div>
                     <div class="input-group">
                         <label for="verification-code-input">Código de verificação</label>
                         <input type="text" id="verification-code-input" inputmode="numeric" maxlength="6" placeholder="000000">
@@ -124,7 +124,7 @@
                 <div class="flow-header">
                     <p class="flow-kicker">Onboarding</p>
                     <h2 class="flow-title">Como voce vai operar a Voithos?</h2>
-                    <p class="flow-copy">Escolha o perfil que melhor descreve seu uso para ajustarmos a implantacao e a cobranca inicial.</p>
+                    <p class="flow-copy">Escolha a opcao que melhor descreve sua operacao.</p>
                 </div>
 
                 <div class="flow-card flow-card-wide">
@@ -132,17 +132,17 @@
                         <button type="button" class="selection-card" data-operation-type="AUTONOMOUS_DENTIST">
                             <span class="selection-icon" aria-hidden="true">D</span>
                             <strong>Dentista autonomo</strong>
-                            <span>Atendimento proprio, rotina enxuta e cobranca direta.</span>
+                            <span>Atendimento proprio.</span>
                         </button>
                         <button type="button" class="selection-card" data-operation-type="CLINIC">
                             <span class="selection-icon" aria-hidden="true">C</span>
                             <strong>Clinica</strong>
-                            <span>Equipe, recepcao, agenda compartilhada e operacao recorrente.</span>
+                            <span>Equipe e recepcao.</span>
                         </button>
                         <button type="button" class="selection-card" data-operation-type="OTHER">
                             <span class="selection-icon" aria-hidden="true">O</span>
                             <strong>Outros</strong>
-                            <span>Consultorio em transicao, parceiro ou formato operacional hibrido.</span>
+                            <span>Formato hibrido.</span>
                         </button>
                     </div>
                     <p class="flow-message" id="profile-selection-message"></p>
@@ -154,7 +154,7 @@
                 <div class="flow-header">
                     <p class="flow-kicker">Pagamento</p>
                     <h2 class="flow-title">Conclua sua assinatura com pagamento seguro</h2>
-                    <p class="flow-copy">Seu cadastro continua simples: a Voithos prepara a cobranca e voce finaliza o cartao em um checkout protegido, sem expor dados sensiveis dentro da plataforma.</p>
+                    <p class="flow-copy">Finalize o pagamento em um checkout seguro do Asaas.</p>
                 </div>
 
                 <div class="flow-card flow-card-wide">
@@ -226,19 +226,10 @@
 
                     <button type="button" class="btn-login payment-link-button hidden" id="payment-link-button">Continuar para o checkout seguro</button>
 
-                    <div class="payment-next-grid">
-                        <article class="payment-next-card">
-                            <strong>1. Cadastro confirmado</strong>
-                            <span>Conta criada e e-mail validado.</span>
-                        </article>
-                        <article class="payment-next-card">
-                            <strong>2. Pagamento orientado</strong>
-                            <span>Voce escolhe entre cartao de credito ou parcelamento anual antes de abrir o checkout.</span>
-                        </article>
-                        <article class="payment-next-card">
-                            <strong>3. Liberacao do acesso</strong>
-                            <span>Depois da confirmacao do pagamento, o acesso completo ao sistema pode ser liberado.</span>
-                        </article>
+                    <div class="payment-step-chips" aria-label="Etapas do onboarding">
+                        <span class="payment-step-chip">E-mail confirmado</span>
+                        <span class="payment-step-chip">Escolha o pagamento</span>
+                        <span class="payment-step-chip">Acesso apos confirmacao</span>
                     </div>
 
                     <button type="button" class="btn-login" id="prepare-payment-button">Gerar checkout seguro</button>
