@@ -923,6 +923,8 @@ campaignService.createBatch = async ({
         suggestionReasonCode: cleanText(member.metadata?.suggestionReasonCode || member.suggestionReasonCode),
         suggestionReasonLabel: cleanText(member.metadata?.suggestionReasonLabel || member.suggestionReasonLabel),
         templateId: normalizedTemplateId || null,
+        replyEnabled: false,
+        noReplyExpected: true,
       }),
     };
   });

@@ -466,6 +466,8 @@ const createDispatchArtifacts = async ({
       metadata: {
         planMessageEventId: cleanText(planMessageEvent?.id),
         attemptNumber,
+        replyEnabled: false,
+        noReplyExpected: true,
       },
     }],
   });

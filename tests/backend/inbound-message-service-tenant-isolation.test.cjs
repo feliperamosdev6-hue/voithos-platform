@@ -238,6 +238,111 @@ test('inboundMessageService.receiveWhatsappInbound retorna cedo sem persistir qu
   assert.equal(result?.replyText, null);
 });
 
+test('inboundMessageService.receiveWhatsappInbound nao usa fallback por telefone quando resposta referencia mensagem nao contextual', async (t) => {
+  let phoneFallbackCalls = 0;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/inboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/inboundMessageRepository.js')]: {
+        inboundMessageRepository: {
+          findByClinicAndProviderMessageId: async () => null,
+          create: async () => {
+            throw new Error('inbound persistence should not run for one-way referenced messages');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findActiveReplyContextByClinicAndProviderMessageId: async () => null,
+          findLatestReplyEnabledByClinicAndPhone: async () => {
+            phoneFallbackCalls += 1;
+            return {
+              id: 'old-appointment-outbound',
+              patientId: 'patient-1',
+              appointmentId: 'appt-1',
+              type: 'APPOINTMENT_CONFIRMATION',
+              status: 'SENT',
+            };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/db/prisma.js')]: { prisma: {} },
+    }
+  );
+  t.after(restore);
+
+  const result = await serviceModule.inboundMessageService.receiveWhatsappInbound({
+    clinicId: 'clinic-auth',
+    fromPhone: '11999999999',
+    body: 'ok obrigado',
+    providerMessageId: 'provider-inbound-plan-1',
+    rawPayload: {
+      message: {
+        extendedTextMessage: {
+          contextInfo: {
+            stanzaId: 'provider-outbound-plan-1',
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(phoneFallbackCalls, 0);
+  assert.equal(result?.status, 'IGNORED');
+  assert.equal(result?.persisted, false);
+  assert.equal(result?.processingNotes, 'Referenced outbound message is not an active appointment reply context.');
+});
+
+test('inboundMessageService.receiveWhatsappInbound nao consulta contexto por telefone para texto livre sem intencao 1/2', async (t) => {
+  let phoneFallbackCalls = 0;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/inboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/inboundMessageRepository.js')]: {
+        inboundMessageRepository: {
+          findByClinicAndProviderMessageId: async () => null,
+          create: async () => {
+            throw new Error('inbound persistence should not run for free text without appointment intent');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findActiveReplyContextByClinicAndProviderMessageId: async () => null,
+          findLatestReplyEnabledByClinicAndPhone: async () => {
+            phoneFallbackCalls += 1;
+            return {
+              id: 'old-appointment-outbound',
+              patientId: 'patient-1',
+              appointmentId: 'appt-1',
+              type: 'APPOINTMENT_CONFIRMATION',
+              status: 'SENT',
+            };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/db/prisma.js')]: { prisma: {} },
+    }
+  );
+  t.after(restore);
+
+  const result = await serviceModule.inboundMessageService.receiveWhatsappInbound({
+    clinicId: 'clinic-auth',
+    fromPhone: '11999999999',
+    body: 'ok obrigado',
+    providerMessageId: 'provider-inbound-free-text-1',
+    rawPayload: {},
+  });
+
+  assert.equal(phoneFallbackCalls, 0);
+  assert.equal(result?.status, 'IGNORED');
+  assert.equal(result?.persisted, false);
+});
+
 test('inboundMessageService.receiveWhatsappInbound ignora resposta valida quando o contexto ja foi fechado por outro evento', async (t) => {
   let ignoredProcessing = null;
   const { module: serviceModule, restore } = loadModuleWithMocks(

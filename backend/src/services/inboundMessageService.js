@@ -141,6 +141,14 @@ const buildReplyContextWhere = ({ clinicId, phone, appointmentId }) => ({
   },
 });
 
+const isActiveAppointmentReplyContext = (context = {}) => {
+  if (!context?.appointmentId) return false;
+  const type = String(context?.type || '').trim().toUpperCase();
+  const status = String(context?.status || '').trim().toUpperCase();
+  return (!type || ACTIVE_REPLY_CONTEXT_TYPES.includes(type))
+    && (!status || ACTIVE_REPLY_CONTEXT_STATUSES.includes(status));
+};
+
 const TENANT_SENSITIVE_KEYS = new Set([
   'clinicId',
   'patientId',
@@ -211,12 +219,34 @@ const inboundMessageService = {
         providerMessageId: referencedOutboundProviderMessageId,
       })
       : null;
-    const activeReplyContext = outbound || await outboundMessageRepository.findLatestReplyEnabledByClinicAndPhone({
-      clinicId: normalizedClinicId,
-      phone: normalizedPhone,
-    });
+    if (referencedOutboundProviderMessageId && !outbound) {
+      logInboundState('ignored_non_contextual_reply_reference', {
+        clinicId: normalizedClinicId,
+        phone: maskPhone(normalizedPhone),
+        providerMessageId: providerMessageId ? String(providerMessageId || '').trim() : null,
+        referencedOutboundProviderMessageId,
+        intent,
+      });
+      return {
+        clinicId: normalizedClinicId,
+        fromPhone: normalizedPhone,
+        providerMessageId: providerMessageId ? String(providerMessageId || '').trim() : null,
+        status: INBOUND_STATUS.IGNORED,
+        intent,
+        processingNotes: 'Referenced outbound message is not an active appointment reply context.',
+        persisted: false,
+        replyText: null,
+      };
+    }
 
-    if (!activeReplyContext?.appointmentId) {
+    const activeReplyContext = outbound || (intent !== INBOUND_INTENT.UNKNOWN
+      ? await outboundMessageRepository.findLatestReplyEnabledByClinicAndPhone({
+        clinicId: normalizedClinicId,
+        phone: normalizedPhone,
+      })
+      : null);
+
+    if (!isActiveAppointmentReplyContext(activeReplyContext)) {
       logInboundState('ignored_without_active_context', {
         clinicId: normalizedClinicId,
         phone: maskPhone(normalizedPhone),
