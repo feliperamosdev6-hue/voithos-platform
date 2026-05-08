@@ -1233,8 +1233,76 @@ main {
   color: #0f766e;
 }
 
-.finance-mini.is-hidden [data-sensitive] {
-  filter: blur(6px);
+.card-visibility-toggle {
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: #f8fafc;
+  color: #0f172a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.card-visibility-toggle:hover,
+.finance-mini-toggle:hover {
+  background: #eef6ff;
+  border-color: rgba(59, 130, 246, 0.28);
+}
+
+.card-visibility-toggle:focus-visible,
+.finance-mini-toggle:focus-visible {
+  outline: 3px solid rgba(15, 118, 110, 0.22);
+  outline-offset: 3px;
+}
+
+.card-visibility-toggle .visibility-icon,
+.finance-mini-toggle .visibility-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.card-visibility-toggle svg,
+.finance-mini-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.card-visibility-toggle .icon-eye-closed,
+.finance-mini-toggle .icon-eye-closed {
+  display: none;
+}
+
+.finance-mini.is-hidden .finance-mini-toggle .icon-eye-open,
+.home-planos.is-hidden .card-visibility-toggle .icon-eye-open {
+  display: none;
+}
+
+.finance-mini.is-hidden .finance-mini-toggle .icon-eye-closed,
+.home-planos.is-hidden .card-visibility-toggle .icon-eye-closed {
+  display: block;
+}
+
+.finance-mini .finance-mini-toggle .visibility-label,
+.home-planos .card-visibility-toggle .visibility-label {
+  display: inline-block;
+}
+
+.finance-mini.is-hidden .finance-mini-toggle .visibility-label,
+.home-planos.is-hidden .card-visibility-toggle .visibility-label {
+  color: inherit;
+}
+
+.finance-mini.is-hidden .finance-mini-toggle,
+.home-planos.is-hidden .card-visibility-toggle {
+  background: #fff;
 }
 
 .finance-mini-footer {

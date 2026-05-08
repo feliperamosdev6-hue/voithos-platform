@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const homePlanosRecebidoMes = document.getElementById('home-planos-recebido-mes');
     const homePlanosInadimplencia = document.getElementById('home-planos-inadimplencia');
     const homePlanosNote = document.getElementById('home-planos-note');
+    const homePlanosVisibility = document.getElementById('home-planos-visibility');
     const homeCampanhasHoje = document.getElementById('home-campanhas-hoje');
     const homeCampanhasResposta = document.getElementById('home-campanhas-resposta');
     const homeCampanhasProximo = document.getElementById('home-campanhas-proximo');
@@ -102,6 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let homeGestaoView = 'operacional';
     let homeGestaoFinanceData = { receita: 0, pendentes: 0, inadimplencia: 0 };
     let homeGestaoOperacionalData = { estoqueTotal: 0, estoqueCritico: 0, laboratorioPendentes: 0 };
+    let homePlanosSummary = { vencemHoje: 0, recebidoMes: 0 };
     let homeServicesCache = { promise: null, data: null, timestamp: 0 };
     let notifItems = [];
     let renderedNotifItems = [];
@@ -109,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let notifTab = 'geral';
     let notifViewed = false;
     let homeAutoRefreshTimer = null;
+    const FINANCE_MASK = '••••••••';
     const getFinanceSyncStorageKey = () => {
         const clinicId = String(currentUser?.clinicId || '').trim();
         return clinicId ? `voithos-finance-updated:${clinicId}` : 'voithos-finance-updated:global';
@@ -1253,10 +1256,44 @@ document.addEventListener('DOMContentLoaded', () => {
         return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
 
+    const setVisibilityButtonState = (button, hidden, hiddenLabel = 'Ocultar valores', visibleLabel = 'Mostrar valores') => {
+        if (!button) return;
+        const label = button.querySelector('.visibility-label');
+        if (label) label.textContent = hidden ? visibleLabel : hiddenLabel;
+        button.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+        button.setAttribute('aria-label', hidden ? visibleLabel : hiddenLabel);
+    };
+
+    const setMaskedText = (element, value, hidden) => {
+        if (!element) return;
+        element.dataset.realValue = String(value ?? '');
+        element.textContent = hidden ? FINANCE_MASK : String(value ?? '');
+    };
+
+    const syncMaskedText = (element, hidden) => {
+        if (!element) return;
+        const realValue = element.dataset.realValue ?? element.textContent ?? '';
+        element.textContent = hidden ? FINANCE_MASK : realValue;
+    };
+
+    const syncFinancialVisibility = (hidden) => {
+        syncMaskedText(financeReceita, hidden);
+        syncMaskedText(financeDespesa, hidden);
+        syncMaskedText(financeSaldo, hidden);
+        syncMaskedText(homePlanosVencendo, hidden);
+        syncMaskedText(homePlanosRecebidoMes, hidden);
+        if (homePlanosNote) {
+            homePlanosNote.textContent = `Hoje: ${homePlanosSummary.vencemHoje} | Recebido: ${hidden ? FINANCE_MASK : formatCurrency(homePlanosSummary.recebidoMes)}`;
+        }
+    };
+
     const setFinanceHidden = (hidden) => {
-        if (!financeMini) return;
-        financeMini.classList.toggle('is-hidden', hidden);
-        if (financeToggle) financeToggle.textContent = hidden ? 'Ver' : 'Ocultar';
+        if (financeMini) financeMini.classList.toggle('is-hidden', hidden);
+        const planCard = homePlanosVisibility?.closest('.home-planos');
+        if (planCard) planCard.classList.toggle('is-hidden', hidden);
+        setVisibilityButtonState(financeToggle, hidden, 'Ocultar valores', 'Mostrar valores');
+        setVisibilityButtonState(homePlanosVisibility, hidden, 'Ocultar valores', 'Mostrar valores');
+        syncFinancialVisibility(hidden);
         try {
             localStorage.setItem('home-finance-hidden', hidden ? '1' : '0');
         } catch (_) {
@@ -1270,6 +1307,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return false;
         }
     };
+
+    const isFinanceHidden = () => financeMini?.classList.contains('is-hidden') || homePlanosVisibility?.closest('.home-planos')?.classList.contains('is-hidden');
 
     const updateFinanceChart = (receitas, despesas) => {
         if (!financeChart) return;
@@ -1376,6 +1415,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const renderFinanceMini = () => {
+        const hidden = financeMini?.classList.contains('is-hidden');
         const currentPeriod = financePeriod || 'mes';
         const listBlock = buildHomeFinanceSummaryFromList(financeListCache, currentPeriod);
         const monthlySummary = financeCache?.monthlySummary || null;
@@ -1400,9 +1440,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const receitas = Number(bloco.receitas) || 0;
         const despesas = Number(bloco.despesas) || 0;
         const saldo = Number(bloco.saldo) || receitas - despesas;
-        if (financeReceita) financeReceita.textContent = formatCurrency(receitas);
-        if (financeDespesa) financeDespesa.textContent = formatCurrency(despesas);
-        if (financeSaldo) financeSaldo.textContent = formatCurrency(saldo);
+        setMaskedText(financeReceita, formatCurrency(receitas), hidden);
+        setMaskedText(financeDespesa, formatCurrency(despesas), hidden);
+        setMaskedText(financeSaldo, formatCurrency(saldo), hidden);
         if (financeSub) {
             const label = financePeriodLabel[currentPeriod] || 'Mes';
             const labelText = currentPeriod === 'dia'
@@ -1459,9 +1499,9 @@ document.addEventListener('DOMContentLoaded', () => {
             financeRemindersCache = null;
             refreshNotifications();
             if (financeSub) financeSub.textContent = 'Sem acesso';
-            if (financeReceita) financeReceita.textContent = formatCurrency(0);
-            if (financeDespesa) financeDespesa.textContent = formatCurrency(0);
-            if (financeSaldo) financeSaldo.textContent = formatCurrency(0);
+            setMaskedText(financeReceita, formatCurrency(0), financeMini?.classList.contains('is-hidden'));
+            setMaskedText(financeDespesa, formatCurrency(0), financeMini?.classList.contains('is-hidden'));
+            setMaskedText(financeSaldo, formatCurrency(0), financeMini?.classList.contains('is-hidden'));
             updateFinanceChart(0, 0);
             updateHomeFinancePanel(null, null, []);
         } finally {
@@ -1716,12 +1756,15 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateHomePlansPanel = async () => {
+        const hidden = homePlanosVisibility?.closest('.home-planos')?.classList.contains('is-hidden');
         if (!plansApi.dashboard) {
             setMetricValue(homePlanosAtivos, '0', true);
-            setMetricValue(homePlanosVencendo, '0', true);
+            setMaskedText(homePlanosVencendo, formatCurrency(0), hidden);
             setMetricValue(homePlanosLiberados, '0', true);
-            if (homePlanosRecebidoMes) homePlanosRecebidoMes.textContent = formatCurrency(0);
+            setMaskedText(homePlanosRecebidoMes, formatCurrency(0), hidden);
             setMetricValue(homePlanosInadimplencia, '0', true);
+            homePlanosSummary = { vencemHoje: 0, recebidoMes: 0 };
+            if (homePlanosNote) homePlanosNote.textContent = `Hoje: 0 | Recebido: ${hidden ? FINANCE_MASK : formatCurrency(0)}`;
             return;
         }
         try {
@@ -1733,11 +1776,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const inadimplencia = Number(dash?.inadimplencia) || 0;
             const vencemHoje = Number(dash?.vencemHoje ?? dash?.dueToday ?? 0) || 0;
             setMetricValue(homePlanosAtivos, String(ativos), ativos === 0);
-            if (homePlanosVencendo) homePlanosVencendo.textContent = formatCurrency(pendenteTotal);
+            setMaskedText(homePlanosVencendo, formatCurrency(pendenteTotal), hidden);
             setMetricValue(homePlanosLiberados, String(liberados), liberados === 0);
-            if (homePlanosRecebidoMes) homePlanosRecebidoMes.textContent = formatCurrency(recebidoMes);
+            setMaskedText(homePlanosRecebidoMes, formatCurrency(recebidoMes), hidden);
             setMetricValue(homePlanosInadimplencia, String(inadimplencia), inadimplencia === 0);
-            if (homePlanosNote) homePlanosNote.textContent = `Hoje: ${vencemHoje} | Recebido: ${formatCurrency(recebidoMes)}`;
+            homePlanosSummary = { vencemHoje, recebidoMes };
+            if (homePlanosNote) homePlanosNote.textContent = `Hoje: ${vencemHoje} | Recebido: ${hidden ? FINANCE_MASK : formatCurrency(recebidoMes)}`;
             try {
                 console.info('[HOME] management_widget_loaded', JSON.stringify({
                     widget: 'home-planos',
@@ -1749,10 +1793,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.warn('[HOME] nao foi possivel carregar planos', err);
             setMetricValue(homePlanosAtivos, '0', true);
-            setMetricValue(homePlanosVencendo, '0', true);
+            setMaskedText(homePlanosVencendo, formatCurrency(0), hidden);
             setMetricValue(homePlanosLiberados, '0', true);
-            if (homePlanosRecebidoMes) homePlanosRecebidoMes.textContent = formatCurrency(0);
+            setMaskedText(homePlanosRecebidoMes, formatCurrency(0), hidden);
             setMetricValue(homePlanosInadimplencia, '0', true);
+            homePlanosSummary = { vencemHoje: 0, recebidoMes: 0 };
+            if (homePlanosNote) homePlanosNote.textContent = `Hoje: 0 | Recebido: ${hidden ? FINANCE_MASK : formatCurrency(0)}`;
         }
     };
 
@@ -1964,6 +2010,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadHomeOperationalPanel();
     startHomeAutoRefresh();
     financeToggle?.addEventListener('click', () => {
+        setFinanceHidden(!(financeMini && financeMini.classList.contains('is-hidden')));
+    });
+    homePlanosVisibility?.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         setFinanceHidden(!(financeMini && financeMini.classList.contains('is-hidden')));
     });
     updateFinanceFilterButtons(financePeriod);
