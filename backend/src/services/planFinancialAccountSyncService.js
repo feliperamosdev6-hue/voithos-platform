@@ -25,6 +25,16 @@ const normalizeInstallmentStatus = (value) => {
   return 'PENDING';
 };
 
+const normalizeTransactionMethod = (value) => {
+  const raw = cleanText(value).toUpperCase();
+  if (raw === 'PIX') return 'PIX';
+  if (raw === 'BOLETO') return 'BOLETO';
+  if (raw === 'CASH' || raw === 'DINHEIRO') return 'CASH';
+  if (raw === 'CREDIT' || raw === 'DEBIT' || raw === 'CARD' || raw === 'CARTAO' || raw === 'CARTAO_CREDITO' || raw === 'CARTAO_DEBITO') return 'CARD';
+  if (raw === 'TRANSFER' || raw === 'TRANSFERENCIA') return 'TRANSFER';
+  return 'OTHER';
+};
+
 const normalizePlanDueDay = (value) => {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed) || parsed <= 0) return 0;
@@ -123,7 +133,7 @@ const buildPlanAccountData = ({ clinicId, planRow = {}, patient = {} }) => {
     category: 'planos',
     source: 'plano',
     dueDate: resolvePlanDueDate(metadata, planRow.createdAt || new Date()),
-    paymentMethod: entryPaymentMethod || 'OTHER',
+    paymentMethod: normalizeTransactionMethod(entryPaymentMethod),
     externalReference: `plan:${cleanText(planRow.id)}`,
     metadata: accountMetadata,
     installments: buildPlanInstallments(planRow),

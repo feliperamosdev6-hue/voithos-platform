@@ -916,7 +916,13 @@ document.addEventListener('DOMContentLoaded', () => {
       selectedPlanId = clean(saved?.planId || saved?.id) || selectedPlanId;
       closeModalForm();
       await loadPlans();
-    } catch (err) { alert(err?.message || 'Nao foi possivel salvar o plano.'); }
+    } catch (err) {
+      const rawMessage = clean(err?.message || '');
+      const safeMessage = /internal server error|internal_error/i.test(rawMessage)
+        ? 'Nao foi possivel salvar o plano. Confira os dados e tente novamente.'
+        : (rawMessage || 'Nao foi possivel salvar o plano. Confira os dados e tente novamente.');
+      alert(safeMessage);
+    }
     finally {
       if (savePlanBtn) {
         savePlanBtn.disabled = false;

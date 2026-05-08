@@ -83,6 +83,53 @@ test('financialService.createPatientPlan usa clinicId explicito e ignora payload
   }]);
 });
 
+test('ensurePlanFinancialAccount normaliza metodo CREDIT para enum CARD sem perder detalhe', async (t) => {
+  let createdAccount = null;
+  const { module: syncModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/planFinancialAccountSyncService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/financialRepository.js')]: {
+        financialRepository: {
+          findPlanFinancialAccountByPlanId: async () => null,
+          createFinancialAccount: async (data) => {
+            createdAccount = data;
+            return { id: 'account-1', ...data };
+          },
+          replaceInstallments: async () => [],
+          findFinancialAccountByIdAndClinic: async () => ({ id: 'account-1', ...createdAccount, installments: [], transactions: [] }),
+        },
+      },
+    }
+  );
+  t.after(restore);
+
+  await syncModule.ensurePlanFinancialAccount({
+    clinicId: 'clinic-auth',
+    planRow: {
+      id: 'plan-1',
+      clinicId: 'clinic-auth',
+      patientId: 'patient-1',
+      patient: { id: 'patient-1', nome: 'Paciente' },
+      name: 'Plano teste',
+      totalValue: 500,
+      installments: 2,
+      entryAmount: 100,
+      metadata: {
+        entryPaymentMethod: 'CREDIT',
+        schedule: [
+          { sequence: 1, dueDate: '2026-05-10', amount: 200, status: 'PENDING' },
+          { sequence: 2, dueDate: '2026-06-10', amount: 200, status: 'PENDING' },
+        ],
+      },
+    },
+  });
+
+  assert.equal(createdAccount.paymentMethod, 'CARD');
+  assert.equal(createdAccount.metadata.entryPaymentMethod, 'CREDIT');
+  assert.equal(createdAccount.clinicId, 'clinic-auth');
+  assert.equal(createdAccount.patientId, 'patient-1');
+});
+
 test('financialService.getFinancialReminders ignora procedimento sem vencimento financeiro explicito', async (t) => {
   const yesterday = new Date(Date.now() - 86400000);
   const { module: serviceModule, restore } = loadModuleWithMocks(
