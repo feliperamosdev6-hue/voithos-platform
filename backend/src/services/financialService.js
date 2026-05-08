@@ -394,11 +394,18 @@ const buildReminderItem = ({ account = {}, installment = null, type = '' } = {})
   };
 };
 
+const isReceivedOnlyLedgerEntry = (entry = {}) => {
+  const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+  return metadata.receivedOnly === true || cleanText(metadata.origin).toLowerCase() === 'prontuario_payment';
+};
+
 const buildFinancialReport = ({ clinicId, month, year, accounts = [] }) => {
   const filtered = filterAccountsByMonthYear(accounts, month, year);
   const entradas = filtered.filter((item) => String(item.tipo || '').toLowerCase() === 'receita');
   const saidas = filtered.filter((item) => String(item.tipo || '').toLowerCase() !== 'receita');
-  const totalEntradas = roundMoney(entradas.reduce((acc, item) => acc + roundMoney(item.valor), 0));
+  const totalEntradas = roundMoney(entradas
+    .filter((item) => !isReceivedOnlyLedgerEntry(item))
+    .reduce((acc, item) => acc + roundMoney(item.valor), 0));
   const totalSaidas = roundMoney(saidas.reduce((acc, item) => acc + roundMoney(item.valor), 0));
   const totalReceived = roundMoney(entradas.reduce((acc, item) => acc + roundMoney(item.paidAmount || 0), 0));
   const totalPending = roundMoney(sumPendingEntriesByPredicate(filtered, (entry) => isEntryPendingLike(entry)));

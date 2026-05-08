@@ -687,7 +687,10 @@ const registerFinanceHandlers = ({
         patientName: lanc?.paciente || '',
         procedureName: lanc?.procedimento || '',
         prontuario: lanc?.prontuario || lanc?.patientId || '',
-        metadata: { legacyShadow: true },
+        metadata: {
+          ...(lanc?.metadata && typeof lanc.metadata === 'object' ? lanc.metadata : {}),
+          legacyShadow: true,
+        },
       },
     });
     await shadowUpsert(lancamento);

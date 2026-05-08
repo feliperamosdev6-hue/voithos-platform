@@ -1411,15 +1411,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const totalPaid = list
-      .filter((item) => normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pago')
-      .reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+      .reduce((acc, item) => acc + (Number(item.paidAmount) || (normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pago' ? Number(item.valor) || 0 : 0)), 0);
     const totalPending = list
-      .filter((item) => normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pendente')
-      .reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+      .reduce((acc, item) => acc + (Number(item.remainingAmount) || (normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pendente' ? Number(item.valor) || 0 : 0)), 0);
     const totalOverdue = list
       .filter((item) => normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pendente')
       .filter((item) => isPastDate(item.vencimento || item.dueDate))
-      .reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
+      .reduce((acc, item) => acc + (Number(item.remainingAmount) || Number(item.valor) || 0), 0);
 
     if (patientFinanceTotalPaid) patientFinanceTotalPaid.textContent = formatCurrency(totalPaid);
     if (patientFinanceTotalPending) patientFinanceTotalPending.textContent = formatCurrency(totalPending);
@@ -1667,11 +1665,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (Array.isArray(patientFinanceRows) && patientFinanceRows.length) {
-      const totalPrevisto = patientFinanceRows.reduce((acc, row) => acc + (Number(row.valor) || 0), 0);
+      const totalPrevisto = patientFinanceRows
+        .filter((row) => !row?.metadata?.receivedOnly)
+        .reduce((acc, row) => acc + (Number(row.valor) || Number(row.totalAmount) || 0), 0);
       const totalRecebido = patientFinanceRows
-        .filter((row) => String(row.status || '').toLowerCase() === 'pago')
-        .reduce((acc, row) => acc + (Number(row.valor) || 0), 0);
-      const saldo = Math.max(totalPrevisto - totalRecebido, 0);
+        .reduce((acc, row) => acc + (Number(row.paidAmount) || (String(row.status || '').toLowerCase() === 'pago' ? Number(row.valor) || 0 : 0)), 0);
+      const saldo = patientFinanceRows
+        .filter((row) => !row?.metadata?.receivedOnly)
+        .reduce((acc, row) => acc + (Number(row.remainingAmount) || 0), 0);
       financeTotalPrevisto.textContent = formatCurrency(totalPrevisto);
       financeTotalRecebido.textContent = formatCurrency(totalRecebido);
       financeSaldo.textContent = formatCurrency(saldo);
@@ -3804,7 +3805,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setPatientPaymentModalStatus('Paciente nao carregado.', 'error');
       return;
     }
-    if (!editingPatientPaymentId && !financeApi.add) {
+    if (!editingPatientPaymentId && (!financeApi.add || !financeApi.confirmPayment)) {
       setPatientPaymentModalStatus('Funcao financeira indisponivel neste ambiente.', 'error');
       return;
     }
@@ -3870,27 +3871,29 @@ document.addEventListener('DOMContentLoaded', () => {
           origem: 'prontuario',
           data: today,
           ...basePayload,
-          status: 'pendente',
-          paymentStatus: 'PENDING',
+          status: 'pago',
+          paymentStatus: 'PAID',
           procedimento: '',
+          metadata: {
+            receivedOnly: true,
+            origin: 'prontuario_payment',
+            idempotencyKey: `patient-payment:${currentPatient.id || currentPatient._id || currentPatient.prontuario || ''}:${Date.now()}`,
+          },
         });
         const financeEntryId = addResult?.lancamento?.id || addResult?.id || '';
-        if (financeEntryId && financeApi.update) {
-          // Hardening: garante vinculo do lancamento ao paciente mesmo em backends com schema legado.
-          await financeApi.update({
-            id: financeEntryId,
-            patientId: currentPatient.id || currentPatient._id || '',
-            prontuario: currentPatient.prontuario || '',
-            paciente: currentPatient.nome || currentPatient.name || '',
-            paymentStatus: 'PENDING',
-            status: 'pendente',
-          paymentMethod,
-          paymentMethodDetail: paymentMethod,
-          metodoPagamento: paymentMethodToFinance(paymentMethod),
-          dueDate: dueDate || null,
-          vencimento: dueDate || null,
-          installments,
-        });
+        if (financeEntryId && financeApi.confirmPayment) {
+          await financeApi.confirmPayment({
+            financeEntryId,
+            amount: valor,
+            paymentMethod,
+            paymentMethodDetail: paymentMethod,
+            paidAt: nowIso(),
+            metadata: {
+              receivedOnly: true,
+              origin: 'prontuario_payment',
+              idempotencyKey: `patient-payment-confirm:${financeEntryId}:${valor}`,
+            },
+          });
         }
         setPatientPaymentModalStatus('Pagamento adicionado com sucesso.', 'success');
       }
