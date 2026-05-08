@@ -126,6 +126,10 @@ const patientClinicalRepository = {
     where: { clinicId, patientId, sourceDocumentId },
   }),
 
+  findClinicalNoteById: async ({ id, clinicId, patientId }) => prisma.clinicalNote.findFirst({
+    where: { id, clinicId, patientId },
+  }),
+
   createClinicalNote: async (data) => prisma.clinicalNote.create({ data }),
 
   updateClinicalNote: async ({ id, clinicId, patientId, data }) => prisma.clinicalNote.updateMany({

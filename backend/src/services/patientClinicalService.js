@@ -912,30 +912,78 @@ const patientClinicalService = {
 
   updateClinicalNoteBySourceDocument: async ({ clinicId, patientId, sourceDocumentId, content, sourceDocument }) => {
     await patientClinicalService.getClinicalRecord({ clinicId, patientId });
-    const existing = await patientClinicalRepository.findClinicalNoteBySourceDocumentId({
+    const normalizedSourceDocumentId = cleanText(sourceDocumentId);
+    if (!normalizedSourceDocumentId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'sourceDocumentId is required.');
+    }
+
+    let existing = await patientClinicalRepository.findClinicalNoteBySourceDocumentId({
       clinicId,
       patientId,
-      sourceDocumentId,
+      sourceDocumentId: normalizedSourceDocumentId,
     });
+
+    if (!existing) {
+      const documentRow = await patientClinicalRepository.findDocumentByExternalId({
+        clinicId,
+        patientId,
+        externalDocumentId: normalizedSourceDocumentId,
+      });
+      if (documentRow?.id) {
+        existing = await patientClinicalRepository.findClinicalNoteBySourceDocumentId({
+          clinicId,
+          patientId,
+          sourceDocumentId: documentRow.id,
+        });
+      }
+    }
+
+    if (!existing) {
+      existing = await patientClinicalRepository.findClinicalNoteById({
+        id: normalizedSourceDocumentId,
+        clinicId,
+        patientId,
+      });
+    }
+
     if (!existing) {
       throw new AppError(404, 'CLINICAL_NOTE_NOT_FOUND', 'Clinical note not found.');
     }
-    const sourceDocumentRecord = await patientClinicalService.upsertDocumentMetadata({ clinicId, patientId, document: sourceDocument });
+
+    const documentPayload = sourceDocument && typeof sourceDocument === 'object'
+      ? {
+          ...sourceDocument,
+          id: cleanText(sourceDocument.id || sourceDocument.externalDocumentId || normalizedSourceDocumentId),
+        }
+      : { id: normalizedSourceDocumentId, type: 'EVOLUCAO', title: existing.title || 'Evolucao' };
+    const sourceDocumentRecord = await patientClinicalService.upsertDocumentMetadata({
+      clinicId,
+      patientId,
+      document: documentPayload,
+    });
+    const sourceDocumentRow = await patientClinicalRepository.findDocumentByExternalId({
+      clinicId,
+      patientId,
+      externalDocumentId: cleanText(sourceDocumentRecord?.id || documentPayload.id),
+    });
+
     await patientClinicalRepository.updateClinicalNote({
       id: existing.id,
       clinicId,
       patientId,
       data: {
-        title: String(sourceDocument?.title || sourceDocument?.titulo || existing.title || 'Evolucao').trim(),
+        sourceDocumentId: sourceDocumentRow?.id || existing.sourceDocumentId || null,
+        title: String(documentPayload?.title || documentPayload?.titulo || existing.title || 'Evolucao').trim(),
         content,
         status: String(content?.status || '').trim() || null,
-        noteDate: normalizeIsoDate(sourceDocument?.documentDate),
+        noteDate: normalizeIsoDate(documentPayload?.documentDate),
       },
     });
-    const updated = await patientClinicalRepository.findClinicalNoteBySourceDocumentId({
+
+    const updated = await patientClinicalRepository.findClinicalNoteById({
+      id: existing.id,
       clinicId,
       patientId,
-      sourceDocumentId,
     });
     return {
       record: updated,

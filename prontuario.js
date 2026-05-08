@@ -222,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let lastProcedimentosPatientKey = '';
   let lastPatientFinanceKey = '';
   let patientAvatarLoadToken = 0;
+  let documentsLoadToken = 0;
   let consultaStatusUpdating = false;
 
   const ensureLoadingStyles = (() => {
@@ -1996,8 +1997,28 @@ document.addEventListener('DOMContentLoaded', () => {
     return dt.toLocaleDateString('pt-BR');
   };
 
-  const renderAnotacoes = (docs = []) => {
+  const renderAnotacoes = (docs = [], options = {}) => {
     if (!anotacoesList || !anotacoesEmpty) return;
+    anotacoesList.innerHTML = '';
+    if (options.loading) {
+      anotacoesEmpty.innerHTML = buildLoadingStateHtml(
+        'Carregando anotacoes...',
+        'Buscando as evolucoes clinicas deste paciente.',
+        3
+      );
+      anotacoesEmpty.style.display = 'block';
+      return;
+    }
+    if (options.error) {
+      anotacoesEmpty.innerHTML = `
+        <div class="voithos-loading-panel" role="alert">
+          <p class="empty-state-title">Nao foi possivel carregar as anotacoes</p>
+          <p class="empty-state-subtitle">${options.error}</p>
+        </div>
+      `;
+      anotacoesEmpty.style.display = 'block';
+      return;
+    }
     const list = (Array.isArray(docs) ? docs : [])
       .filter((doc) => {
         const type = String(doc.type || doc.tipo || '').toUpperCase();
@@ -2009,8 +2030,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return tb - ta;
       });
 
-    anotacoesList.innerHTML = '';
     if (!list.length) {
+      anotacoesEmpty.textContent = 'O paciente nao possui anotacoes adicionadas.';
       anotacoesEmpty.style.display = 'block';
       return;
     }
@@ -2848,23 +2869,33 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadDocuments = async () => {
-    if (!documentsApi.list) return;
+    if (!documentsApi.list) {
+      docsCache = [];
+      renderAnotacoes([], { error: 'Modulo de documentos indisponivel neste ambiente.' });
+      return;
+    }
     const prontuario = await ensureProntuario();
     if (!prontuario) return;
+    const loadToken = ++documentsLoadToken;
+    renderAnotacoes([], { loading: true });
     try {
       const docs = await documentsApi.list({ prontuario, includeArchived: false });
+      if (loadToken !== documentsLoadToken) return;
       docsCache = Array.isArray(docs) ? docs : [];
       renderDocuments(docs || []);
       renderArquivos(docs || []);
       renderAnamneseDocuments(docs || []);
       renderAnotacoes(docs || []);
     } catch (err) {
+      if (loadToken !== documentsLoadToken) return;
       console.warn('[PRONTUARIO] falha ao carregar documentos', err);
       docsCache = [];
       renderDocuments([]);
       renderArquivos([]);
       renderAnamneseDocuments([]);
-      renderAnotacoes([]);
+      renderAnotacoes([], {
+        error: err?.message || 'Verifique sua conexao e tente novamente.',
+      });
     }
   };
 
@@ -4029,22 +4060,35 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   (async () => {
-    await loadCurrentUser();
-    syncDocumentsUiPermissions();
-    await loadProcedures();
-    const storedPatient = await loadPatientFromStorage();
-    if (storedPatient) {
-      const full = await fetchPatient(storedPatient);
-      currentPatient = full || storedPatient;
-      updateHeader(currentPatient);
-      renderConsultas(currentPatient?.consultas || []);
-      await refreshProcedimentos();
-      await loadDocuments();
-      applyProntuarioEntryNavigation();
-      if (document.getElementById('tab-consultas')?.classList.contains('active')) {
-        await loadConsultasTab({ sync: true });
+    try {
+      await loadCurrentUser();
+      syncDocumentsUiPermissions();
+      await loadProcedures();
+      const storedPatient = await loadPatientFromStorage();
+      if (storedPatient) {
+        const full = await fetchPatient(storedPatient);
+        currentPatient = full || storedPatient;
+        updateHeader(currentPatient);
+        renderConsultas(currentPatient?.consultas || []);
+        await refreshProcedimentos();
+        await loadDocuments();
+        applyProntuarioEntryNavigation();
+        if (document.getElementById('tab-consultas')?.classList.contains('active')) {
+          await loadConsultasTab({ sync: true });
+        }
+        return;
       }
-      return;
+    } catch (err) {
+      console.warn('[PRONTUARIO] falha ao inicializar prontuario', err);
+      renderProcedimentos(currentPatient?.servicos || [], getActiveProcedimentosFilter(), {
+        error: err?.message || 'Nao foi possivel carregar os dados do prontuario.',
+      });
+      renderPatientFinance([], {
+        error: 'Nao foi possivel carregar os dados financeiros do paciente.',
+      });
+      renderAnotacoes([], {
+        error: 'Nao foi possivel carregar as anotacoes do paciente.',
+      });
     }
   })();
 });
