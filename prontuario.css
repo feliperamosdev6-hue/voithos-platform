@@ -1696,7 +1696,9 @@ body {
   top: 0;
   right: 0;
   width: min(420px, 92vw);
-  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  box-sizing: border-box;
   background: #fff;
   box-shadow: -12px 0 30px rgba(15, 23, 42, 0.18);
   padding: 22px;
@@ -1836,8 +1838,11 @@ body {
 .proc-edit-form {
   display: grid;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 0 4px 8px 0;
+  overscroll-behavior: contain;
 }
 
 .proc-edit-form .field {
@@ -1920,10 +1925,21 @@ body {
 }
 
 .proc-edit-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  margin: 0 -4px -8px 0;
+  padding: 12px 4px 8px 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), #ffffff 42%);
+}
+
+.proc-edit-actions .btn {
+  min-width: max-content;
 }
 
 @media (max-width: 768px) {
@@ -1987,8 +2003,8 @@ body {
   right: auto;
   transform: translateX(-50%);
   height: auto;
-  max-height: 92vh;
-  top: 4vh;
+  max-height: calc(100dvh - 32px);
+  top: 16px;
   border-radius: 16px;
   overflow: hidden;
 }
@@ -2030,8 +2046,11 @@ body {
 .proc-finalize-form {
   display: grid;
   gap: 14px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 0 4px 8px 0;
+  overscroll-behavior: contain;
 }
 
 .proc-finalize-form .field {

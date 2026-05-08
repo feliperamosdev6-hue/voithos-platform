@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const financeToggle = document.getElementById('finance-visibility');
     const financeRefresh = document.getElementById('finance-mini-refresh');
     const financeFilters = Array.from(document.querySelectorAll('.finance-filter[data-finance-period]'));
+    const homeCardLinks = Array.from(document.querySelectorAll('.home-main .card-link[href]'));
     const homeServicosTotal = document.getElementById('home-servicos-total');
     const homeServicosUltimo = document.getElementById('home-servicos-ultimo');
     const homeServicosAndamento = document.getElementById('home-servicos-andamento');
@@ -101,6 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let homeGestaoView = 'operacional';
     let homeGestaoFinanceData = { receita: 0, pendentes: 0, inadimplencia: 0 };
     let homeGestaoOperacionalData = { estoqueTotal: 0, estoqueCritico: 0, laboratorioPendentes: 0 };
+    let homeServicesCache = { promise: null, data: null, timestamp: 0 };
     let notifItems = [];
     let renderedNotifItems = [];
     let centralNotifItems = [];
@@ -112,9 +114,76 @@ document.addEventListener('DOMContentLoaded', () => {
         return clinicId ? `voithos-finance-updated:${clinicId}` : 'voithos-finance-updated:global';
     };
 
+    const showHomeNavigationFeedback = (target) => {
+        const card = target?.closest?.('.card-link') || target?.closest?.('.card') || target;
+        if (!card) return;
+        card.classList.add('is-loading');
+        const action = card.querySelector?.('.card-action');
+        if (action && !action.dataset.originalText) {
+            action.dataset.originalText = action.textContent || '';
+            action.textContent = 'Abrindo';
+        }
+    };
+
+    const setupHomeNavigationFeedback = () => {
+        homeCardLinks.forEach((link) => {
+            link.addEventListener('click', (ev) => {
+                if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+                showHomeNavigationFeedback(link);
+            }, { capture: true });
+        });
+    };
+
+    const prefetchHomeTargets = () => {
+        const urls = homeCardLinks
+            .map((link) => link.getAttribute('href'))
+            .filter((href) => href && !href.startsWith('#'));
+        urls.push('gestao.html');
+        Array.from(new Set(urls)).forEach((href) => {
+            if (document.querySelector(`link[rel="prefetch"][href="${href}"]`)) return;
+            const hint = document.createElement('link');
+            hint.rel = 'prefetch';
+            hint.href = href;
+            hint.as = 'document';
+            document.head.appendChild(hint);
+        });
+    };
+
+    const scheduleHomePrefetch = () => {
+        const run = () => {
+            try { prefetchHomeTargets(); } catch (_) {}
+        };
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(run, { timeout: 2500 });
+        } else {
+            setTimeout(run, 1200);
+        }
+    };
+
+    const getHomeServicesList = async () => {
+        if (!servicesApi.listAll) return [];
+        const now = Date.now();
+        if (homeServicesCache.data && (now - homeServicesCache.timestamp) < 15000) {
+            return homeServicesCache.data;
+        }
+        if (!homeServicesCache.promise) {
+            homeServicesCache.promise = servicesApi.listAll()
+                .then((list) => {
+                    homeServicesCache.data = Array.isArray(list) ? list : [];
+                    homeServicesCache.timestamp = Date.now();
+                    return homeServicesCache.data;
+                })
+                .finally(() => {
+                    homeServicesCache.promise = null;
+                });
+        }
+        return homeServicesCache.promise;
+    };
+
     if (cardGestao) {
         const openGestao = () => {
             if (!canManageClinic(currentUser)) return;
+            showHomeNavigationFeedback(cardGestao);
             window.location.href = 'gestao.html';
         };
         cardGestao.addEventListener('click', openGestao);
@@ -1547,7 +1616,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         try {
-            const list = await servicesApi.listAll();
+            const list = await getHomeServicesList();
             const total = Array.isArray(list) ? list.length : 0;
             const andamento = (list || []).filter((s) => isHomeServiceInProgress(s)).length;
             const lastDate = (list || [])
@@ -1585,7 +1654,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const [list, services] = await Promise.all([
                 patientsApi.list(),
-                servicesApi.listAll ? servicesApi.listAll().catch(() => []) : Promise.resolve([]),
+                getHomeServicesList().catch(() => []),
             ]);
             const total = Array.isArray(list) ? list.length : 0;
             try {
@@ -1849,6 +1918,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    setupHomeNavigationFeedback();
+    scheduleHomePrefetch();
     setupUserMenu();
     loadAgendaMini();
     loadCentralNotificationEvents();
