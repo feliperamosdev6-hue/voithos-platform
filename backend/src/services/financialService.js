@@ -633,6 +633,18 @@ const isProcedureFinancialAccount = (row = {}) => {
     || Boolean(cleanText(row?.patientProcedureId || metadata?.patientProcedureId || metadata?.procedureId));
 };
 
+const hasExplicitFinancialDueDate = (row = {}) => {
+  const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  if (metadata.explicitDueDate === true || metadata.hasExplicitDueDate === true) return true;
+  if (cleanText(metadata.dueDateSource).toLowerCase() === 'financial') return true;
+  if (cleanText(metadata.vencimentoSource).toLowerCase() === 'financial') return true;
+  return false;
+};
+
+const isEligibleForFinancialOverdue = (entry = {}) => (
+  !isProcedureFinancialAccount(entry) || hasExplicitFinancialDueDate(entry)
+);
+
 const buildFinancialAccountDedupKey = (row = {}) => {
   if (!isProcedureFinancialAccount(row)) return '';
   const externalReference = cleanText(row?.externalReference);
@@ -875,6 +887,7 @@ const isEntryPendingLike = (entry = {}) => {
 };
 
 const isEntryOverdueLike = (entry = {}) => {
+  if (!isEligibleForFinancialOverdue(entry)) return false;
   const state = normalizeLedgerFinancialState(entry?.paymentStatus || entry?.status);
   if (state === 'OVERDUE') return true;
   if (state !== 'PENDING') return false;
@@ -941,6 +954,9 @@ const financialService = {
     if (totalAmount <= 0) {
       throw new AppError(400, 'VALIDATION_ERROR', 'totalAmount must be greater than zero.');
     }
+    const explicitDueDate = payload.explicitDueDate !== undefined
+      ? payload.explicitDueDate === true
+      : (payload?.metadata?.explicitDueDate === true || Boolean(cleanText(payload.dueDate || payload.vencimento)));
 
     const externalReference = cleanText(payload.externalReference || payload.financeEntryId || payload.procedureId);
     if (externalReference) {
@@ -975,6 +991,8 @@ const financialService = {
       category: payload.category || payload.categoria || '',
       origin: payload.source || payload.origem || '',
       type: payload.type || payload.tipo || 'receita',
+      explicitDueDate,
+      dueDateSource: explicitDueDate ? 'financial' : cleanText(payload?.metadata?.dueDateSource || ''),
     };
 
     const account = await financialRepository.createFinancialAccount({
@@ -1077,6 +1095,10 @@ const financialService = {
         metadata: {
           ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
           ...((payload.metadata && typeof payload.metadata === 'object') ? payload.metadata : {}),
+          ...(payload.explicitDueDate === false ? { explicitDueDate: false, dueDateSource: 'clinical_fallback' } : {}),
+          ...(((payload.explicitDueDate !== undefined ? payload.explicitDueDate === true : false) || payload?.metadata?.explicitDueDate === true || (payload.explicitDueDate === undefined && Boolean(cleanText(payload.dueDate || payload.vencimento))))
+            ? { explicitDueDate: true, dueDateSource: 'financial' }
+            : {}),
           ...((payload.paymentMethod !== undefined || payload.metodoPagamento !== undefined || payload.paymentMethodDetail !== undefined || payload?.metadata?.paymentMethodDetail !== undefined)
             ? {
                 paymentMethodDetail: normalizePaymentMethodDetail(
@@ -1379,7 +1401,9 @@ const financialService = {
 
   getOverdueAccounts: async ({ clinicId }) => {
     const accounts = await listFinancialAccountSnapshots({ clinicId });
-    return accounts.filter((account) => (account.installments || []).some((parcel) => parcel.status === 'OVERDUE'));
+    return accounts
+      .filter((account) => isEligibleForFinancialOverdue(account))
+      .filter((account) => (account.installments || []).some((parcel) => parcel.status === 'OVERDUE'));
   },
 
   getFinancialReminders: async ({ clinicId }) => {
@@ -1397,6 +1421,7 @@ const financialService = {
 
     accounts
       .filter((account) => String(account?.tipo || '').toLowerCase() === 'receita')
+      .filter((account) => isEligibleForFinancialOverdue(account))
       .forEach((account) => {
         const collectibleInstallments = (account.installments || []).filter(isInstallmentCollectible);
         collectibleInstallments.forEach((installment) => {

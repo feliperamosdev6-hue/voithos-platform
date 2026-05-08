@@ -274,7 +274,8 @@ const registerServicesHandlers = ({
           type: 'receita',
           paymentMethod: payload?.paymentMethod || payload?.metodoPagamento || '',
           paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.metodoPagamento || '',
-          dueDate: payload?.dueDate || payload?.data || null,
+          dueDate: payload?.dueDate || payload?.vencimento || null,
+          explicitDueDate: Boolean(payload?.dueDate || payload?.vencimento),
           installments: payload?.installments ?? null,
           appointmentId: payload?.appointmentId || '',
           procedureId: payload?.procedureId || '',
@@ -793,6 +794,7 @@ const registerServicesHandlers = ({
           status: 'PENDING',
           paymentMethod: 'PIX',
           dueDate: null,
+          explicitDueDate: false,
           installments: null,
           data: toDateOnly(new Date().toISOString()),
         });
@@ -928,6 +930,7 @@ const registerServicesHandlers = ({
           status: paymentStatus,
           paymentMethod,
           dueDate,
+          explicitDueDate: Boolean(dueDate),
           paidAt,
           installments: financeiro.installments ?? null,
           data: toDateOnly(merged.dataRealizacao || new Date().toISOString()),
@@ -1060,6 +1063,7 @@ const registerServicesHandlers = ({
         paymentMethod: existingPaymentMethod,
         paidAt: existingPaymentStatus === 'PAID' ? (existingPaidAt || new Date().toISOString()) : null,
         dueDate: null,
+        explicitDueDate: false,
         installments: null,
       };
     }

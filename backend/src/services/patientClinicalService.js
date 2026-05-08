@@ -106,15 +106,19 @@ const resolveProcedureInstallments = (payload = {}) => {
   return Math.max(1, count);
 };
 
+const hasExplicitProcedureFinancialDueDate = (payload = {}) => Boolean(
+  cleanText(payload?.financeiro?.dueDate)
+  || cleanText(payload?.financeiro?.vencimento)
+  || cleanText(payload?.vencimento)
+  || cleanText(payload?.dueDate)
+);
+
 const buildProcedureDueDate = (payload = {}, fallback = new Date()) => {
   return normalizeIsoDate(
     payload?.financeiro?.dueDate
+    || payload?.financeiro?.vencimento
     || payload?.vencimento
     || payload?.dueDate
-    || payload?.dataRealizacao
-    || payload?.registeredAt
-    || payload?.createdAt
-    || payload?.dataRegistro
   ) || fallback;
 };
 
@@ -330,6 +334,7 @@ const syncProcedureFinancialAccount = async ({
   );
   const dentistId = cleanText(procedureRow?.dentistId || payload?.dentistaId);
   const dentistName = cleanText(procedureRow?.dentistName || payload?.dentistaNome);
+  const explicitDueDate = hasExplicitProcedureFinancialDueDate(payload);
   const dueDate = buildProcedureDueDate(payload, procedureRow?.registeredAt || new Date());
   const requestedPaymentStatus = normalizeProcedurePaymentStatus(payload?.financeiro?.paymentStatus || payload?.paymentStatus || payload?.statusPagamento);
   const paymentStatus = allowPaymentRegistration ? requestedPaymentStatus : 'PENDING';
@@ -354,6 +359,7 @@ const syncProcedureFinancialAccount = async ({
     tipo: 'receita',
     dueDate,
     vencimento: dueDate,
+    explicitDueDate,
     status: paymentStatus === 'PAID' ? 'PAID' : 'OPEN',
     paymentStatus,
     paidAt,
@@ -373,6 +379,8 @@ const syncProcedureFinancialAccount = async ({
       origin: PROCEDURE_FINANCIAL_SOURCE,
       type: 'receita',
       data: dueDate.toISOString().slice(0, 10),
+      explicitDueDate,
+      dueDateSource: explicitDueDate ? 'financial' : 'clinical_fallback',
       paymentStatus,
       paidAt: paidAt ? paidAt.toISOString() : null,
     },

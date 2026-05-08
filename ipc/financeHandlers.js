@@ -63,6 +63,23 @@ const registerFinanceHandlers = ({
     };
     return map[upper] || 'pix';
   };
+  const isProcedureFinanceEntry = (entry = {}) => {
+    const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+    return cleanText(entry?.origem || entry?.source || metadata.origin).toLowerCase() === 'procedimento'
+      || cleanText(entry?.categoria || entry?.category || metadata.category).toLowerCase() === 'procedimentos'
+      || Boolean(cleanText(entry?.procedureId || entry?.servicoId || entry?.patientProcedureId || metadata.procedureId || metadata.patientProcedureId));
+  };
+  const hasExplicitFinancialDueDate = (entry = {}) => {
+    const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+    return entry?.explicitDueDate === true
+      || metadata.explicitDueDate === true
+      || metadata.hasExplicitDueDate === true
+      || cleanText(metadata.dueDateSource).toLowerCase() === 'financial'
+      || cleanText(metadata.vencimentoSource).toLowerCase() === 'financial';
+  };
+  const isEligibleForFinancialReminder = (entry = {}) => (
+    !isProcedureFinanceEntry(entry) || hasExplicitFinancialDueDate(entry)
+  );
   const normalizeFinanceRow = (row = {}) => {
     const paymentStatus = normalizePaymentStatus(row?.paymentStatus || row?.status || 'PENDING');
     const paymentMethod = normalizePaymentMethod(
@@ -452,7 +469,8 @@ const registerFinanceHandlers = ({
           source: 'procedimento',
           type: 'receita',
           paymentMethod: normalizePaymentMethod(procedure?.financeiro?.paymentMethod || procedure?.paymentMethod || procedure?.metodoPagamento || 'PIX'),
-          dueDate: procedure?.financeiro?.dueDate || procedure?.vencimento || procedure?.dataRealizacao || procedure?.registeredAt || null,
+          dueDate: procedure?.financeiro?.dueDate || procedure?.financeiro?.vencimento || procedure?.vencimento || null,
+          explicitDueDate: Boolean(procedure?.financeiro?.dueDate || procedure?.financeiro?.vencimento || procedure?.vencimento),
           installments: procedure?.financeiro?.installments ?? null,
           procedureId: missing.procedureId,
           patientName: context.patient.nome || '',
@@ -559,7 +577,9 @@ const registerFinanceHandlers = ({
 
   const buildLocalReminders = (entries = []) => {
     const now = new Date();
-    const receitas = (Array.isArray(entries) ? entries : []).filter((item) => String(item?.tipo || '').toLowerCase() === 'receita');
+    const receitas = (Array.isArray(entries) ? entries : [])
+      .filter((item) => String(item?.tipo || '').toLowerCase() === 'receita')
+      .filter((item) => isEligibleForFinancialReminder(item));
     const overdue = [];
     const dueToday = [];
     const dueSoon = [];
@@ -714,7 +734,8 @@ const registerFinanceHandlers = ({
         type: 'receita',
         paymentMethod: payload?.paymentMethod || payload?.metodoPagamento || '',
         paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.metodoPagamento || '',
-        dueDate: payload?.dueDate || payload?.data || null,
+        dueDate: payload?.dueDate || payload?.vencimento || null,
+        explicitDueDate: Boolean(payload?.dueDate || payload?.vencimento),
         installments: payload?.installments ?? null,
         procedureId: payload?.procedureId || '',
         appointmentId: payload?.appointmentId || '',
