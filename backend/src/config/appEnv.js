@@ -71,6 +71,7 @@ const appEnv = {
   appointmentActionLinksEnabled: String(readValue('APPOINTMENT_ACTION_LINKS_ENABLED', 'false')).trim().toLowerCase() === 'true',
   appointmentActionBaseUrl: normalizeBaseUrl(readValue('APPOINTMENT_ACTION_BASE_URL', readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000'))),
   appointmentActionTokenTtlHours: Math.max(1, Number(readValue('APPOINTMENT_ACTION_TOKEN_TTL_HOURS', '36')) || 36),
+  appointmentConfirmationDedupMinutes: Math.max(1, Number(readValue('APPOINTMENT_CONFIRMATION_DEDUP_MINUTES', '10')) || 10),
   appointmentReplyContextTtlHours: Math.max(1, Number(readValue('APPOINTMENT_REPLY_CONTEXT_TTL_HOURS', '24')) || 24),
 };
 

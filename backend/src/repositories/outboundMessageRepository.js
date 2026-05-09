@@ -175,6 +175,22 @@ const outboundMessageRepository = {
     },
   }),
 
+  closeActiveConfirmationContextsByAppointment: async ({ clinicId, appointmentId, lastError }) => prisma.outboundMessage.updateMany({
+    where: {
+      clinicId: toRequiredString(clinicId, 'clinicId'),
+      appointmentId: toRequiredString(appointmentId, 'appointmentId'),
+      channel: 'WHATSAPP',
+      type: 'APPOINTMENT_CONFIRMATION',
+      status: {
+        in: ACTIVE_REPLY_CONTEXT_STATUSES,
+      },
+    },
+    data: {
+      status: 'FAILED',
+      lastError: toNullableString(lastError) || 'Stale appointment confirmation context closed before resend.',
+    },
+  }),
+
   failActiveWhatsappReplyContextsByClinic: async ({ clinicId, lastError }) => prisma.outboundMessage.updateMany({
     where: {
       clinicId: toRequiredString(clinicId, 'clinicId'),

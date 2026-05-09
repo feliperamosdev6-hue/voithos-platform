@@ -15,6 +15,17 @@ const OUTBOUND_STATUS = {
   FAILED: 'FAILED',
 };
 
+const getAppointmentConfirmationDedupWindowMs = () => {
+  const minutes = Math.max(1, Number(appEnv?.appointmentConfirmationDedupMinutes) || 10);
+  return minutes * 60 * 1000;
+};
+
+const isFreshAppointmentConfirmationContext = (message = {}) => {
+  const createdAt = new Date(message?.createdAt || '');
+  if (Number.isNaN(createdAt.getTime())) return false;
+  return (Date.now() - createdAt.getTime()) < getAppointmentConfirmationDedupWindowMs();
+};
+
 const normalizePhone = (value) => {
   const digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -229,14 +240,30 @@ const outboundMessageService = {
       appointmentId: appointment.id,
     });
     if (existingConfirmation) {
-      return formatOutboundResponse({
-        ...existingConfirmation,
-        deduped: true,
-        alreadyPending: true,
-        confirmationPending: true,
-        lastConfirmationSentAt: existingConfirmation.createdAt,
-        nextAction: 'await_patient_reply',
+      if (isFreshAppointmentConfirmationContext(existingConfirmation)) {
+        return formatOutboundResponse({
+          ...existingConfirmation,
+          deduped: true,
+          alreadyPending: true,
+          confirmationPending: true,
+          lastConfirmationSentAt: existingConfirmation.createdAt,
+          nextAction: 'await_patient_reply',
+        });
+      }
+
+      const staleCloseResult = await outboundMessageRepository.closeActiveConfirmationContextsByAppointment({
+        clinicId: normalizedClinicId,
+        appointmentId: appointment.id,
+        lastError: 'Stale appointment confirmation context closed before resend.',
       });
+
+      console.info('[OUTBOUND] stale appointment confirmation context closed before resend', JSON.stringify({
+        clinicId: normalizedClinicId,
+        patientId: patient.id,
+        appointmentId: appointment.id,
+        closedContexts: Number(staleCloseResult?.count || 0),
+        staleOutboundMessageId: existingConfirmation.id,
+      }));
     }
 
     const baseText = buildAppointmentConfirmationBody({ clinic, patient, appointment });
