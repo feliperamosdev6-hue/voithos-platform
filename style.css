@@ -603,6 +603,32 @@ body::before {
 .home-main .card--planos {
   --card-accent: #7c3aed;
   --card-accent-soft: rgba(124, 58, 237, 0.16);
+  min-height: 290px;
+}
+
+.home-main .card--planos .card-footer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "note note"
+    "visibility action";
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.home-main .card--planos .card-note {
+  grid-area: note;
+  line-height: 1.25;
+}
+
+.home-main .card--planos .card-visibility-toggle {
+  grid-area: visibility;
+  justify-self: start;
+}
+
+.home-main .card--planos .card-action {
+  grid-area: action;
+  justify-self: end;
 }
 
 .home-main .card--campanhas {
