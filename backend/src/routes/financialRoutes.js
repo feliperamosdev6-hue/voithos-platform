@@ -8,6 +8,7 @@ const {
   getAccount,
   deleteAccount,
   registerPayment,
+  applyPatientPayment,
   getPatientSummary,
   getDashboard,
   getMonthlySummary,
@@ -33,6 +34,7 @@ router.get('/accounts/:accountId', getAccount);
 router.patch('/accounts/:accountId', updateAccount);
 router.delete('/accounts/:accountId', deleteAccount);
 router.post('/accounts/:accountId/payments', registerPayment);
+router.post('/patients/:patientId/payments', applyPatientPayment);
 router.get('/patients/:patientId/summary', getPatientSummary);
 router.get('/dashboard', getDashboard);
 router.get('/summary', getMonthlySummary);

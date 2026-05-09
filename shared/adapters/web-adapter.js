@@ -2672,6 +2672,19 @@
       },
       { auth: true }
     ),
+    applyPatientPayment: async (payload = {}) => request(
+      'POST',
+      `/financial/patients/${encodeURIComponent(resolvePatientId(payload))}/payments`,
+      {
+        amount: payload?.amount ?? payload?.valor,
+        paymentMethod: payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+        paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.method || payload?.metodoPagamento,
+        paidAt: payload?.paidAt || new Date().toISOString(),
+        description: payload?.description || payload?.descricao || '',
+        metadata: payload?.metadata || {},
+      },
+      { auth: true }
+    ),
     createOrUpdateProcedureRevenue: async (payload = {}) => {
       const normalizedId = cleanText(payload?.financeEntryId || payload?.id);
       if (normalizedId) {

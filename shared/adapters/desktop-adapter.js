@@ -319,6 +319,10 @@
       if (window.api?.finance?.confirmPayment) return window.api.finance.confirmPayment(payload);
       return unavailable('finance.confirmPayment');
     },
+    applyPatientPayment: async (payload) => {
+      if (window.api?.finance?.applyPatientPayment) return window.api.finance.applyPatientPayment(payload);
+      return unavailable('finance.applyPatientPayment');
+    },
     createOrUpdateProcedureRevenue: async (payload) => {
       if (window.api?.finance?.createOrUpdateProcedureRevenue) return window.api.finance.createOrUpdateProcedureRevenue(payload);
       return unavailable('finance.createOrUpdateProcedureRevenue');

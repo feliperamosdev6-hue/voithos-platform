@@ -79,6 +79,23 @@ const registerPayment = async (req, res, next) => {
   }
 };
 
+const applyPatientPayment = async (req, res, next) => {
+  try {
+    const data = await financialService.applyPatientPayment({
+      clinicId: String(req.body?.clinicId || '').trim(),
+      patientId: req.params.patientId,
+      amount: req.body?.amount,
+      method: req.body?.method || req.body?.paymentMethod || req.body?.metodoPagamento,
+      paidAt: req.body?.paidAt,
+      description: req.body?.description || req.body?.descricao,
+      metadata: req.body?.metadata || {},
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getPatientSummary = async (req, res, next) => {
   try {
     const data = await financialService.getPatientFinancialSummary({
@@ -400,6 +417,7 @@ module.exports = {
   updateAccount,
   getAccount,
   registerPayment,
+  applyPatientPayment,
   getPatientSummary,
   getDashboard,
   getReport,

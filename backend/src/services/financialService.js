@@ -925,6 +925,57 @@ const sumPendingEntriesByPredicate = (entries = [], predicate = () => true) => e
     return roundMoney(acc + getEntryRemainingAmount(entry));
   }, 0);
 
+const getAccountAllocationDate = (account = {}, installment = null) => cleanText(
+  installment?.dueDate
+  || account?.dueDate
+  || account?.vencimento
+  || account?.data
+  || account?.createdAt
+  || '',
+);
+
+const buildPatientPaymentAllocationCandidates = (accounts = []) => {
+  const candidates = [];
+  accounts.forEach((account) => {
+    if (isReceivedOnlyLedgerEntry(account)) return;
+    if (String(account?.tipo || '').toLowerCase() !== 'receita') return;
+    const accountStatus = normalizeAccountStatus(account?.paymentStatus || account?.status);
+    if (accountStatus === 'PAID' || accountStatus === 'CANCELED') return;
+
+    const installments = Array.isArray(account?.installments) ? account.installments : [];
+    const collectibleInstallments = installments.filter(isInstallmentCollectible);
+    if (collectibleInstallments.length) {
+      collectibleInstallments.forEach((installment) => {
+        candidates.push({
+          accountId: cleanText(account.id),
+          installmentId: cleanText(installment.id),
+          remainingAmount: roundMoney(installment.remainingAmount ?? installment.amount ?? 0),
+          dueDate: getAccountAllocationDate(account, installment),
+        });
+      });
+      return;
+    }
+
+    const remainingAmount = roundMoney(account.remainingAmount ?? account.totalAmount ?? account.valor ?? 0);
+    if (remainingAmount > 0) {
+      candidates.push({
+        accountId: cleanText(account.id),
+        installmentId: '',
+        remainingAmount,
+        dueDate: getAccountAllocationDate(account),
+      });
+    }
+  });
+
+  return candidates
+    .filter((item) => item.accountId && item.remainingAmount > 0)
+    .sort((a, b) => {
+      const dueCompare = cleanText(a.dueDate).localeCompare(cleanText(b.dueDate));
+      if (dueCompare !== 0) return dueCompare;
+      return cleanText(a.accountId).localeCompare(cleanText(b.accountId));
+    });
+};
+
 const financialService = {
   createFinancialAccount: async ({ clinicId, payload = {} }) => {
     const normalizedClinicId = cleanText(clinicId || payload.clinicId);
@@ -1308,6 +1359,144 @@ const financialService = {
     }
 
     return mapAccountToLegacy(updated);
+  },
+
+  applyPatientPayment: async ({ clinicId, patientId, amount, method, paidAt, description = '', metadata = {} }) => {
+    const normalizedClinicId = cleanText(clinicId);
+    const normalizedPatientId = cleanText(patientId);
+    const normalizedAmount = roundMoney(amount);
+    if (!normalizedClinicId) throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    if (!normalizedPatientId) throw new AppError(400, 'VALIDATION_ERROR', 'patientId is required.');
+    if (normalizedAmount <= 0) throw new AppError(400, 'VALIDATION_ERROR', 'amount must be greater than zero.');
+
+    const patient = await ensureClinicPatient({ clinicId: normalizedClinicId, patientId: normalizedPatientId });
+    const normalizedMethod = normalizeTransactionMethod(method);
+    const normalizedPaidAt = paidAt || new Date().toISOString();
+    const normalizedIdempotencyKey = cleanText(metadata?.idempotencyKey);
+    const accountRows = await loadFinancialAccountRows({
+      clinicId: normalizedClinicId,
+      patientId: normalizedPatientId,
+    });
+
+    if (normalizedIdempotencyKey) {
+      const existing = accountRows.some((account) => (account.transactions || []).some((transaction) => (
+        cleanText(transaction?.type).toUpperCase() === 'PAYMENT'
+          && (
+            cleanText(transaction?.metadata?.idempotencyKey) === normalizedIdempotencyKey
+            || cleanText(transaction?.metadata?.parentIdempotencyKey) === normalizedIdempotencyKey
+          )
+      )));
+      if (existing) {
+        return {
+          patientId: normalizedPatientId,
+          clinicId: normalizedClinicId,
+          amount: normalizedAmount,
+          appliedAmount: 0,
+          excessAmount: 0,
+          idempotent: true,
+          allocations: [],
+          summary: await financialService.getPatientFinancialSummary({
+            clinicId: normalizedClinicId,
+            patientId: normalizedPatientId,
+          }),
+        };
+      }
+    }
+
+    let remainingToApply = normalizedAmount;
+    const allocations = [];
+    const candidates = buildPatientPaymentAllocationCandidates(accountRows.map(mapAccountToLegacy));
+
+    for (const candidate of candidates) {
+      if (remainingToApply <= 0) break;
+      const allocationAmount = roundMoney(Math.min(remainingToApply, candidate.remainingAmount));
+      if (allocationAmount <= 0) continue;
+      const applied = await financialService.registerPayment({
+        clinicId: normalizedClinicId,
+        accountId: candidate.accountId,
+        installmentId: candidate.installmentId,
+        amount: allocationAmount,
+        method: normalizedMethod,
+        paidAt: normalizedPaidAt,
+        metadata: {
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
+          origin: cleanText(metadata?.origin) || 'prontuario_payment',
+          patientPaymentAllocation: true,
+          source: 'patient_payment_allocation',
+          parentIdempotencyKey: normalizedIdempotencyKey || undefined,
+          idempotencyKey: normalizedIdempotencyKey
+            ? `${normalizedIdempotencyKey}:${candidate.accountId}:${candidate.installmentId || 'account'}`
+            : undefined,
+        },
+      });
+      allocations.push({
+        accountId: candidate.accountId,
+        installmentId: candidate.installmentId,
+        amount: allocationAmount,
+        remainingAmount: roundMoney(applied?.remainingAmount || 0),
+        paymentStatus: cleanText(applied?.paymentStatus || ''),
+      });
+      remainingToApply = roundMoney(remainingToApply - allocationAmount);
+    }
+
+    let excessAccount = null;
+    if (remainingToApply > 0) {
+      excessAccount = await financialService.createFinancialAccount({
+        clinicId: normalizedClinicId,
+        payload: {
+          patientId: normalizedPatientId,
+          description: cleanText(description) || 'Recebimento avulso',
+          totalAmount: remainingToApply,
+          category: 'outros',
+          source: 'prontuario',
+          type: 'receita',
+          paymentMethod: normalizedMethod,
+          paymentMethodDetail: normalizePaymentMethodDetail(method),
+          dueDate: normalizedPaidAt,
+          installments: 1,
+          patientName: cleanText(patient?.nome || ''),
+          prontuario: normalizedPatientId,
+          metadata: {
+            ...(metadata && typeof metadata === 'object' ? metadata : {}),
+            receivedOnly: true,
+            origin: cleanText(metadata?.origin) || 'prontuario_payment',
+            excessOnly: true,
+            parentIdempotencyKey: normalizedIdempotencyKey || undefined,
+          },
+        },
+      });
+      excessAccount = await financialService.registerPayment({
+        clinicId: normalizedClinicId,
+        accountId: excessAccount.id,
+        amount: remainingToApply,
+        method: normalizedMethod,
+        paidAt: normalizedPaidAt,
+        metadata: {
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
+          receivedOnly: true,
+          origin: cleanText(metadata?.origin) || 'prontuario_payment',
+          excessOnly: true,
+          parentIdempotencyKey: normalizedIdempotencyKey || undefined,
+          idempotencyKey: normalizedIdempotencyKey ? `${normalizedIdempotencyKey}:excess` : undefined,
+        },
+      });
+    }
+
+    const appliedAmount = roundMoney(normalizedAmount - remainingToApply);
+    return {
+      patientId: normalizedPatientId,
+      clinicId: normalizedClinicId,
+      amount: normalizedAmount,
+      appliedAmount,
+      excessAmount: roundMoney(remainingToApply),
+      idempotent: false,
+      allocations,
+      excessAccount,
+      summary: await financialService.getPatientFinancialSummary({
+        clinicId: normalizedClinicId,
+        patientId: normalizedPatientId,
+      }),
+    };
   },
 
   getPatientFinancialSummary: async ({ clinicId, patientId }) => {

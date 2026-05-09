@@ -1748,6 +1748,26 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || null;
   };
 
+  const applyPatientFinancialPayment = async ({ clinicId, patientId, amount, method, paymentMethodDetail = '', paidAt, description = '', metadata = {} } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    const normalizedPatientId = String(patientId || '').trim();
+    const normalizedPaymentMethodDetail = String(paymentMethodDetail || method || '').trim();
+    const payload = await requestInternalJson(`/internal/financial/patients/${encodeURIComponent(normalizedPatientId)}/payments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        clinicId: normalizedClinicId,
+        amount,
+        method,
+        paymentMethod: method,
+        paymentMethodDetail: normalizedPaymentMethodDetail,
+        paidAt,
+        description,
+        metadata,
+      }),
+    });
+    return payload?.data || null;
+  };
+
   const getPatientFinancialSummary = async ({ clinicId, patient = {}, patientId = '' } = {}) => {
     const context = patientId
       ? { clinicId: String(clinicId || '').trim(), patient: { id: String(patientId || '').trim() } }
@@ -2246,6 +2266,7 @@ const createCentralBackendAdapter = (options = {}) => {
     updateFinancialAccount,
     deleteFinancialAccount,
     registerFinancialPayment,
+    applyPatientFinancialPayment,
     getPatientFinancialSummary,
     getFinancialDashboard,
     getFinancialReport,

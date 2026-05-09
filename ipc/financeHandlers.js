@@ -788,6 +788,33 @@ const registerFinanceHandlers = ({
     return { success: true, lancamento };
   });
 
+  ipcMain.handle('finance-apply-patient-payment', async (_event, payload = {}) => {
+    requireAccess({ roles: ['admin', 'dentista'], perms: ['finance.view'] });
+    if (!isCentralEnabled()) throw new Error('Financeiro central indisponivel.');
+    const patientId = cleanText(payload?.patientId || payload?.prontuario);
+    if (!patientId) throw new Error('patientId e obrigatorio.');
+    const result = await centralBackendAdapter.applyPatientFinancialPayment({
+      clinicId: getCurrentClinicId(),
+      patientId,
+      amount: payload?.amount || payload?.valor || 0,
+      method: payload?.paymentMethod || payload?.metodoPagamento || '',
+      paymentMethodDetail: payload?.paymentMethodDetail || payload?.paymentMethod || payload?.metodoPagamento || '',
+      paidAt: payload?.paidAt || new Date().toISOString(),
+      description: payload?.description || payload?.descricao || '',
+      metadata: payload?.metadata || {},
+    });
+    const accounts = Array.isArray(result?.summary?.accounts) ? result.summary.accounts : [];
+    for (const account of accounts) {
+      await runFinanceShadowSync(account, { action: 'patient_payment_applied_shadow_sync' });
+    }
+    logCentral('patient_payment_applied', {
+      patientId,
+      appliedAmount: result?.appliedAmount || 0,
+      excessAmount: result?.excessAmount || 0,
+    });
+    return { success: true, result };
+  });
+
   ipcMain.handle('finance-delete', async (_event, id) => {
     requireAccess({ roles: ['admin'], perms: ['finance.edit'] });
     if (!id) throw new Error('ID e obrigatorio.');

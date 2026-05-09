@@ -3805,7 +3805,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setPatientPaymentModalStatus('Paciente nao carregado.', 'error');
       return;
     }
-    if (!editingPatientPaymentId && (!financeApi.add || !financeApi.confirmPayment)) {
+    if (!editingPatientPaymentId && !financeApi.applyPatientPayment && (!financeApi.add || !financeApi.confirmPayment)) {
       setPatientPaymentModalStatus('Funcao financeira indisponivel neste ambiente.', 'error');
       return;
     }
@@ -3865,35 +3865,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         setPatientPaymentModalStatus('Pagamento atualizado com sucesso.', 'success');
       } else {
-        const addResult = await financeApi.add({
-          tipo: 'receita',
-          categoria: 'outros',
-          origem: 'prontuario',
-          data: today,
-          ...basePayload,
-          status: 'pago',
-          paymentStatus: 'PAID',
-          procedimento: '',
-          metadata: {
-            receivedOnly: true,
-            origin: 'prontuario_payment',
-            idempotencyKey: `patient-payment:${currentPatient.id || currentPatient._id || currentPatient.prontuario || ''}:${Date.now()}`,
-          },
-        });
-        const financeEntryId = addResult?.lancamento?.id || addResult?.id || '';
-        if (financeEntryId && financeApi.confirmPayment) {
-          await financeApi.confirmPayment({
-            financeEntryId,
+        const idempotencyKey = `patient-payment:${currentPatient.id || currentPatient._id || currentPatient.prontuario || ''}:${Date.now()}`;
+        if (financeApi.applyPatientPayment) {
+          await financeApi.applyPatientPayment({
+            patientId: currentPatient.id || currentPatient._id || '',
+            prontuario: currentPatient.prontuario || '',
             amount: valor,
+            valor,
             paymentMethod,
             paymentMethodDetail: paymentMethod,
             paidAt: nowIso(),
+            description: descricao,
+            descricao,
+            metadata: {
+              origin: 'prontuario_payment',
+              idempotencyKey,
+            },
+          });
+        } else {
+          const addResult = await financeApi.add({
+            tipo: 'receita',
+            categoria: 'outros',
+            origem: 'prontuario',
+            data: today,
+            ...basePayload,
+            status: 'pago',
+            paymentStatus: 'PAID',
+            procedimento: '',
             metadata: {
               receivedOnly: true,
               origin: 'prontuario_payment',
-              idempotencyKey: `patient-payment-confirm:${financeEntryId}:${valor}`,
+              idempotencyKey,
             },
           });
+          const financeEntryId = addResult?.lancamento?.id || addResult?.id || '';
+          if (financeEntryId && financeApi.confirmPayment) {
+            await financeApi.confirmPayment({
+              financeEntryId,
+              amount: valor,
+              paymentMethod,
+              paymentMethodDetail: paymentMethod,
+              paidAt: nowIso(),
+              metadata: {
+                receivedOnly: true,
+                origin: 'prontuario_payment',
+                idempotencyKey: `patient-payment-confirm:${financeEntryId}:${valor}`,
+              },
+            });
+          }
         }
         setPatientPaymentModalStatus('Pagamento adicionado com sucesso.', 'success');
       }

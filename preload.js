@@ -254,6 +254,7 @@ contextBridge.exposeInMainWorld('api', {
     add: (lanc) => ipcRenderer.invoke('finance-add', lanc),
     update: (lanc) => ipcRenderer.invoke('finance-update', lanc),
     confirmPayment: (payload) => ipcRenderer.invoke('finance-confirm-payment', payload),
+    applyPatientPayment: (payload) => ipcRenderer.invoke('finance-apply-patient-payment', payload),
     createOrUpdateProcedureRevenue: (payload) => ipcRenderer.invoke('finance-procedure-revenue-upsert', payload),
     remove: (id) => ipcRenderer.invoke('finance-delete', id),
     generateReportPdf: (payload) => ipcRenderer.invoke('finance-generate-report-pdf', payload),
