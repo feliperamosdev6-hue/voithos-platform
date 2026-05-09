@@ -267,18 +267,6 @@ const appointmentActionTokenService = {
         actionType: ACTION_TYPE.CONFIRM_APPOINTMENT,
       });
 
-      await notificationEventService.create({
-        clinicId: refreshedToken.clinicId,
-        appointmentId: appointment.id,
-        patientId: refreshedToken.patientId,
-        phone: patient?.telefone || null,
-        type: 'APPOINTMENT_ACTION_LINK_USED',
-        payload: {
-          ...buildNotificationPayload({ tokenRecord: refreshedToken, requestMeta, result }),
-          patientName,
-        },
-      });
-
       return {
         outcome: result,
         actionType: refreshedToken.actionType,
@@ -328,22 +316,6 @@ const appointmentActionTokenService = {
         patientName,
       },
     });
-    await notificationEventService.create({
-      clinicId: refreshedToken.clinicId,
-      appointmentId: appointment.id,
-      patientId: refreshedToken.patientId,
-      phone: patient?.telefone || null,
-      type: 'APPOINTMENT_ACTION_LINK_USED',
-      payload: {
-        ...buildNotificationPayload({
-          tokenRecord: refreshedToken,
-          requestMeta,
-          result: ACTION_RESULT.RESCHEDULE_REQUESTED,
-        }),
-        patientName,
-      },
-    });
-
     return {
       outcome: ACTION_RESULT.RESCHEDULE_REQUESTED,
       actionType: refreshedToken.actionType,

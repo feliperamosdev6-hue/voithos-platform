@@ -6,7 +6,6 @@ const { clinicRepository } = require('../repositories/clinicRepository');
 const { outboundMessageRepository } = require('../repositories/outboundMessageRepository');
 const { patientRepository } = require('../repositories/patientRepository');
 const { appointmentActionTokenService } = require('./appointmentActionTokenService');
-const { notificationEventService } = require('./notificationEventService');
 
 const OUTBOUND_STATUS = {
   PENDING: 'PENDING',
@@ -462,20 +461,6 @@ const outboundMessageService = {
       body: smartLinks?.sendBody || deliveryBody,
       auditBody: smartLinks?.auditBody || deliveryBody,
       type: 'APPOINTMENT_REMINDER',
-    });
-
-    await notificationEventService.create({
-      clinicId: normalizedClinicId,
-      appointmentId: appointment.id,
-      patientId: patient.id,
-      phone,
-      type: 'APPOINTMENT_REMINDER_SENT',
-      payload: {
-        outboundMessageId: sent?.id || outbound.id,
-        appointmentStatus: appointment.status,
-        actionTokenIds: smartLinks?.tokens || null,
-        patientName: String(patient?.nome || '').trim(),
-      },
     });
 
     return sent;

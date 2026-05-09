@@ -1088,6 +1088,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const buildCentralNotifications = (events) => {
         return (Array.isArray(events) ? events : []).map((event) => {
             const type = String(event?.type || '').trim().toUpperCase();
+            if (type === 'APPOINTMENT_ACTION_LINK_USED' || type === 'APPOINTMENT_REMINDER_SENT') {
+                return null;
+            }
             const createdAt = String(event?.createdAt || '').trim();
             const payload = event?.payload || {};
             const patientLabel = resolveNotificationPatientLabel(event);
@@ -1167,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     readAt: String(payload?.readAt || event?.readAt || '').trim(),
                 },
             };
-        });
+        }).filter(Boolean);
     };
 
     const refreshNotifications = () => {

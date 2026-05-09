@@ -68,8 +68,18 @@ const notificationEventRepository = {
     return { count };
   },
 
-  listByClinic: async ({ clinicId, type, types, patientId, limit = 50, dateFrom, dateTo, markViewed = false, olderThanHours = 24 }) => {
+  listByClinic: async ({ clinicId, type, types, excludeTypes, patientId, limit = 50, dateFrom, dateTo, markViewed = false, olderThanHours = 24 }) => {
     const normalizedClinicId = toRequiredString(clinicId, 'clinicId');
+    const normalizedTypes = Array.from(new Set(
+      (Array.isArray(types) ? types : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    ));
+    const normalizedExcludeTypes = Array.from(new Set(
+      (Array.isArray(excludeTypes) ? excludeTypes : [])
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    ));
     const olderThan = new Date(Date.now() - (Math.max(Number(olderThanHours) || 24, 1) * 60 * 60 * 1000));
     await prisma.notificationEvent.deleteMany({
       where: {
@@ -85,13 +95,15 @@ const notificationEventRepository = {
         clinicId: normalizedClinicId,
         type: type
           ? toRequiredString(type, 'type')
-          : (Array.isArray(types) && types.length
+          : (normalizedTypes.length
             ? {
-                in: types
-                  .map((item) => String(item || '').trim())
-                  .filter(Boolean),
+                in: normalizedTypes,
               }
-            : undefined),
+            : (normalizedExcludeTypes.length
+              ? {
+                  notIn: normalizedExcludeTypes,
+                }
+              : undefined)),
         patientId: patientId ? toNullableString(patientId) : undefined,
         createdAt: dateFrom || dateTo
           ? {
