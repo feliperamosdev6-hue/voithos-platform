@@ -339,10 +339,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const resolveCurrentUserSafely = async ({ attempts = 3, delayMs = 180 } = {}) => {
+    let lastError = null;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const user = await authApi.currentUser();
+        return { user, error: null };
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts - 1) {
+          await sleep(delayMs * (attempt + 1));
+        }
+      }
+    }
+    return { user: null, error: lastError };
+  };
+
   const setupUser = async () => {
     if (!authApi.currentUser) return;
     try {
-      const user = await authApi.currentUser();
+      const { user, error } = await resolveCurrentUserSafely();
+      if (error) {
+        console.warn('[HEADER] falha ao resolver sessao do usuario', error);
+        return;
+      }
       currentUser = user;
       const authContext = authApi.currentContext ? await authApi.currentContext().catch(() => null) : null;
       if (!user) {
@@ -416,8 +438,8 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       }
-    } catch (_err) {
-      window.location.href = 'login.html';
+    } catch (err) {
+      console.warn('[HEADER] setupUser falhou', err);
     }
   };
 
