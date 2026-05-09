@@ -318,6 +318,7 @@ const mapAccountToLegacy = (row = {}) => {
 
 const summarizeAccountStatus = ({ installments = [], transactions = [], totalAmount = 0, rowStatus = '' } = {}) => {
   if (!installments.length && roundMoney(totalAmount) <= 0) return normalizeAccountStatus(rowStatus || 'OPEN');
+  if (normalizeAccountStatus(rowStatus) === 'CANCELED') return 'CANCELED';
   const activeInstallments = installments.filter((item) => item.status !== 'CANCELED');
   const activeAmount = roundMoney(activeInstallments.reduce((acc, item) => acc + roundMoney(item.amount), 0));
   const referenceAmount = activeAmount > 0 ? activeAmount : roundMoney(totalAmount);
@@ -401,15 +402,16 @@ const isReceivedOnlyLedgerEntry = (entry = {}) => {
 
 const buildFinancialReport = ({ clinicId, month, year, accounts = [] }) => {
   const filtered = filterAccountsByMonthYear(accounts, month, year);
-  const entradas = filtered.filter((item) => String(item.tipo || '').toLowerCase() === 'receita');
-  const saidas = filtered.filter((item) => String(item.tipo || '').toLowerCase() !== 'receita');
+  const activeEntries = filtered.filter((item) => !isCanceledFinancialAccount(item));
+  const entradas = activeEntries.filter((item) => String(item.tipo || '').toLowerCase() === 'receita');
+  const saidas = activeEntries.filter((item) => String(item.tipo || '').toLowerCase() !== 'receita');
   const totalEntradas = roundMoney(entradas
     .filter((item) => !isReceivedOnlyLedgerEntry(item))
     .reduce((acc, item) => acc + roundMoney(item.valor), 0));
   const totalSaidas = roundMoney(saidas.reduce((acc, item) => acc + roundMoney(item.valor), 0));
   const totalReceived = roundMoney(entradas.reduce((acc, item) => acc + roundMoney(item.paidAmount || 0), 0));
-  const totalPending = roundMoney(sumPendingEntriesByPredicate(filtered, (entry) => isEntryPendingLike(entry)));
-  const totalOverdue = roundMoney(sumPendingEntriesByPredicate(filtered, (entry) => isEntryOverdueLike(entry)));
+  const totalPending = roundMoney(sumPendingEntriesByPredicate(activeEntries, (entry) => isEntryPendingLike(entry)));
+  const totalOverdue = roundMoney(sumPendingEntriesByPredicate(activeEntries, (entry) => isEntryOverdueLike(entry)));
   return {
     clinicId: cleanText(clinicId),
     mes: Number(month),
@@ -631,7 +633,7 @@ const isPlanFinancialAccount = (row = {}) => Boolean(
   || cleanText(row?.category).toLowerCase() === 'planos'
 );
 
-const isCanceledFinancialAccount = (row = {}) => cleanText(row?.status).toUpperCase() === 'CANCELED';
+const isCanceledFinancialAccount = (row = {}) => ['CANCELED', 'CANCELADO', 'CANCELLED'].includes(cleanText(row?.status).toUpperCase());
 
 const isProcedureFinancialAccount = (row = {}) => {
   const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
@@ -1504,9 +1506,10 @@ const financialService = {
       throw new AppError(400, 'VALIDATION_ERROR', 'patientId is required.');
     }
     const accounts = await listFinancialAccountSnapshots({ clinicId, patientId });
-    const totalOpen = accounts
+    const activeAccounts = accounts.filter((item) => !isCanceledFinancialAccount(item));
+    const totalOpen = activeAccounts
       .reduce((acc, item) => acc + roundMoney(item.remainingAmount || 0), 0);
-    const totalPaid = accounts
+    const totalPaid = activeAccounts
       .reduce((acc, item) => acc + roundMoney(item.paidAmount || 0), 0);
 
     return {
@@ -1522,13 +1525,14 @@ const financialService = {
   getFinancialDashboard: async ({ clinicId }) => {
     const ledgerEntries = await listFinancialLedgerEntries({ clinicId });
     const accountSnapshots = await listFinancialAccountSnapshots({ clinicId });
-    const openAmount = sumPendingEntriesByPredicate(ledgerEntries, (entry) => isEntryPendingLike(entry));
+    const activeLedgerEntries = ledgerEntries.filter((entry) => !isCanceledFinancialAccount(entry));
+    const openAmount = sumPendingEntriesByPredicate(activeLedgerEntries, (entry) => isEntryPendingLike(entry));
     const totalPaidAmount = roundMoney(
-      ledgerEntries
+      activeLedgerEntries
         .filter((entry) => String(entry?.tipo || '').toLowerCase() === 'receita')
         .reduce((acc, entry) => acc + roundMoney(entry.paidAmount || 0), 0),
     );
-    const overdue = ledgerEntries.filter((entry) => isEntryOverdueLike(entry));
+    const overdue = activeLedgerEntries.filter((entry) => isEntryOverdueLike(entry));
 
     return {
       totalAccounts: accountSnapshots.length,

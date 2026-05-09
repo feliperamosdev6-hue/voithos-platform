@@ -294,3 +294,90 @@ test('pagamento do prontuario maior que saldo quita pendencia e registra exceden
   assert.equal(result.summary.totalPaid, 150);
   assert.ok(result.excessAccount?.metadata?.receivedOnly);
 });
+
+test('resumo financeiro do paciente ignora contas canceladas nos totais recebidos e pendentes', async (t) => {
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/financialService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/financialRepository.js')]: {
+        financialRepository: {
+          listFinancialAccountsByPatient: async ({ clinicId, patientId }) => (
+            clinicId === 'clinic-auth' && patientId === 'patient-1'
+              ? [
+                  {
+                    id: 'account-open',
+                    clinicId: 'clinic-auth',
+                    patientId: 'patient-1',
+                    description: 'Procedimento pendente',
+                    totalAmount: 200,
+                    status: 'OPEN',
+                    source: 'procedimento',
+                    category: 'procedimentos',
+                    dueDate: new Date('2026-05-10T00:00:00.000Z'),
+                    createdAt: new Date('2026-05-01T00:00:00.000Z'),
+                    updatedAt: new Date('2026-05-01T00:00:00.000Z'),
+                    metadata: { type: 'receita' },
+                    installments: [{
+                      id: 'installment-open',
+                      sequence: 1,
+                      dueDate: new Date('2026-05-10T00:00:00.000Z'),
+                      amount: 200,
+                      status: 'PENDING',
+                      paidAt: null,
+                    }],
+                    transactions: [],
+                  },
+                  {
+                    id: 'account-canceled',
+                    clinicId: 'clinic-auth',
+                    patientId: 'patient-1',
+                    description: 'Procedimento excluido',
+                    totalAmount: 150,
+                    status: 'CANCELED',
+                    source: 'procedimento',
+                    category: 'procedimentos',
+                    dueDate: new Date('2026-05-08T00:00:00.000Z'),
+                    createdAt: new Date('2026-05-01T00:00:00.000Z'),
+                    updatedAt: new Date('2026-05-08T00:00:00.000Z'),
+                    metadata: { type: 'receita' },
+                    installments: [{
+                      id: 'installment-canceled',
+                      sequence: 1,
+                      dueDate: new Date('2026-05-08T00:00:00.000Z'),
+                      amount: 150,
+                      status: 'PAID',
+                      paidAt: new Date('2026-05-08T10:00:00.000Z'),
+                    }],
+                    transactions: [{
+                      id: 'transaction-canceled',
+                      accountId: 'account-canceled',
+                      installmentId: 'installment-canceled',
+                      type: 'PAYMENT',
+                      amount: 150,
+                      method: 'PIX',
+                      createdAt: new Date('2026-05-08T10:00:00.000Z'),
+                    }],
+                  },
+                ]
+              : []
+          ),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/services/planMessageService.js')]: { planMessageService: {} },
+      [path.resolve(__dirname, '../../backend/src/services/planFinancialAccountSyncService.js')]: {
+        ensurePlanFinancialAccount: async () => null,
+        ensurePlanFinancialAccounts: async () => [],
+      },
+    }
+  );
+  t.after(restore);
+
+  const summary = await serviceModule.financialService.getPatientFinancialSummary({
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+  });
+
+  assert.equal(summary.totalOpen, 200);
+  assert.equal(summary.totalPaid, 0);
+  assert.equal(summary.totalAccounts, 2);
+});

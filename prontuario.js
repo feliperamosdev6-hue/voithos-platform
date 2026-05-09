@@ -1140,13 +1140,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const normalizeFinanceStatusLower = (value) => {
     const raw = String(value || '').trim().toLowerCase();
     if (!raw) return '';
-    if (raw === 'paid' || raw === 'pago') return 'pago';
-    if (raw === 'pending' || raw === 'pendente') return 'pendente';
-    if (raw === 'cancelled' || raw === 'cancelado') return 'cancelado';
+    if (raw === 'paid' || raw === 'pago' || raw === 'received' || raw === 'recebido') return 'pago';
+    if (raw === 'open' || raw === 'pending' || raw === 'pendente') return 'pendente';
+    if (raw === 'partial' || raw === 'parcial') return 'parcial';
+    if (raw === 'overdue' || raw === 'atrasado') return 'atrasado';
+    if (raw === 'cancelled' || raw === 'canceled' || raw === 'cancelado') return 'cancelado';
     return raw;
   };
+  const isPaidFinanceStatus = (value) => normalizeFinanceStatusLower(value) === 'pago';
+  const isCancelledFinanceStatus = (value) => normalizeFinanceStatusLower(value) === 'cancelado';
+  const isPendingLikeFinanceStatus = (value) => ['pendente', 'parcial', 'atrasado'].includes(normalizeFinanceStatusLower(value));
   const patientFinanceStatusChip = (value) => {
     const key = normalizeFinanceStatusLower(value);
+    if (key === 'atrasado') return '<span class="patient-finance-status-chip overdue">Atrasado</span>';
+    if (key === 'parcial') return '<span class="patient-finance-status-chip partial">Parcial</span>';
     if (key === 'pendente') return '<span class="patient-finance-status-chip pending">Pendente</span>';
     if (key === 'cancelado') return '<span class="patient-finance-status-chip cancelled">Cancelado</span>';
     return '<span class="patient-finance-status-chip paid">Pago</span>';
@@ -1410,13 +1417,15 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    const totalPaid = list
-      .reduce((acc, item) => acc + (Number(item.paidAmount) || (normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pago' ? Number(item.valor) || 0 : 0)), 0);
-    const totalPending = list
-      .reduce((acc, item) => acc + (Number(item.remainingAmount) || (normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pendente' ? Number(item.valor) || 0 : 0)), 0);
-    const totalOverdue = list
-      .filter((item) => normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'pendente')
-      .filter((item) => isPastDate(item.vencimento || item.dueDate))
+    const visibleRows = list
+      .filter((item) => !isCancelledFinanceStatus(item.paymentStatus || item.status));
+    const totalPaid = visibleRows
+      .reduce((acc, item) => acc + (Number(item.paidAmount) || (isPaidFinanceStatus(item.paymentStatus || item.status) ? Number(item.valor) || 0 : 0)), 0);
+    const totalPending = visibleRows
+      .reduce((acc, item) => acc + (Number(item.remainingAmount) || (isPendingLikeFinanceStatus(item.paymentStatus || item.status) ? Number(item.valor) || 0 : 0)), 0);
+    const totalOverdue = visibleRows
+      .filter((item) => normalizeFinanceStatusLower(item.paymentStatus || item.status) === 'atrasado'
+        || (isPendingLikeFinanceStatus(item.paymentStatus || item.status) && isPastDate(item.vencimento || item.dueDate)))
       .reduce((acc, item) => acc + (Number(item.remainingAmount) || Number(item.valor) || 0), 0);
 
     if (patientFinanceTotalPaid) patientFinanceTotalPaid.textContent = formatCurrency(totalPaid);
@@ -1434,11 +1443,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     patientFinanceEmpty.classList.remove('show');
+    patientFinanceEmpty.innerHTML = '';
 
     list.forEach((item) => {
       const statusRaw = normalizeFinanceStatusLower(item.paymentStatus || item.status);
       const method = normalizePaymentMethodUpper(item.paymentMethod || item.metodoPagamento || 'PIX');
-      const canConfirm = statusRaw === 'pendente';
+      const canConfirm = isPendingLikeFinanceStatus(statusRaw);
       const dueDate = item.dueDate || item.vencimento || '';
       const installmentsHelp = getPatientFinanceInstallmentsLabel(item);
       const supportsInstallments = patientFinanceMethodSupportsInstallments(method);
@@ -1665,14 +1675,16 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     if (Array.isArray(patientFinanceRows) && patientFinanceRows.length) {
-      const totalPrevisto = patientFinanceRows
+      const visibleRows = patientFinanceRows
+        .filter((row) => !isCancelledFinanceStatus(row?.paymentStatus || row?.status));
+      const totalPrevisto = visibleRows
         .filter((row) => !row?.metadata?.receivedOnly)
         .reduce((acc, row) => acc + (Number(row.valor) || Number(row.totalAmount) || 0), 0);
-      const totalRecebido = patientFinanceRows
-        .reduce((acc, row) => acc + (Number(row.paidAmount) || (String(row.status || '').toLowerCase() === 'pago' ? Number(row.valor) || 0 : 0)), 0);
-      const saldo = patientFinanceRows
+      const totalRecebido = visibleRows
+        .reduce((acc, row) => acc + (Number(row.paidAmount) || (isPaidFinanceStatus(row?.paymentStatus || row?.status) ? Number(row.valor) || 0 : 0)), 0);
+      const saldo = visibleRows
         .filter((row) => !row?.metadata?.receivedOnly)
-        .reduce((acc, row) => acc + (Number(row.remainingAmount) || 0), 0);
+        .reduce((acc, row) => acc + (Number(row.remainingAmount) || (isPendingLikeFinanceStatus(row?.paymentStatus || row?.status) ? Number(row.valor) || 0 : 0)), 0);
       financeTotalPrevisto.textContent = formatCurrency(totalPrevisto);
       financeTotalRecebido.textContent = formatCurrency(totalRecebido);
       financeSaldo.textContent = formatCurrency(saldo);
@@ -1681,8 +1693,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const list = Array.isArray(services) ? services : [];
     const totalPrevisto = list.reduce((sum, svc) => sum + getServiceAmount(svc), 0);
     const totalRecebido = list.reduce((sum, svc) => {
-      const estado = normalizeEstado(svc.status || svc.estado || svc.situacao);
-      if (estado === 'realizado') return sum + getServiceAmount(svc);
+      if (getServicePaymentStatusUpper(svc) === 'PAID') return sum + getServiceAmount(svc);
       return sum;
     }, 0);
     const saldo = Math.max(totalPrevisto - totalRecebido, 0);
