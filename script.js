@@ -1848,9 +1848,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const resolveHomeCurrentUserSafely = async () => {
+        try {
+            return { user: await authApi.currentUser?.(), error: null };
+        } catch (error) {
+            return { user: null, error };
+        }
+    };
+
     const setupUserMenu = async () => {
         try {
-            const user = await authApi.currentUser?.();
+            const { user, error } = await resolveHomeCurrentUserSafely();
+            if (error) {
+                console.warn('[HOME] falha transitória ao resolver sessao do usuario', error);
+                return;
+            }
             const authContext = authApi.currentContext ? await authApi.currentContext().catch(() => null) : null;
             if (!user) {
                 window.location.href = 'login.html';
@@ -1960,7 +1972,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (err) {
             console.error('Erro ao carregar usuario logado', err);
-            window.location.href = 'login.html';
         }
     };
 
