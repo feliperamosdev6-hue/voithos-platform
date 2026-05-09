@@ -13,6 +13,181 @@ document.addEventListener('DOMContentLoaded', () => {
   const gestaoToggle = document.getElementById('gestao-toggle');
   const gestaoDropdown = document.getElementById('gestao-dropdown');
   let currentUser = null;
+  const MOBILE_NAV_STYLE_ID = 'voithos-mobile-bottom-nav-styles';
+  const MOBILE_NAV_ID = 'voithos-mobile-bottom-nav';
+
+  const ensureMobileBottomNavStyles = () => {
+    if (document.getElementById(MOBILE_NAV_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = MOBILE_NAV_STYLE_ID;
+    style.textContent = `
+      .mobile-bottom-nav {
+        display: none;
+      }
+
+      @media (max-width: 768px) {
+        body.has-mobile-bottom-nav {
+          padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .mobile-bottom-nav {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1400;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 0;
+          padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+          background: rgba(247, 255, 252, 0.92);
+          backdrop-filter: blur(14px);
+          border-top: 1px solid rgba(15, 118, 110, 0.14);
+          box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+        }
+
+        .mobile-bottom-nav__link {
+          display: grid;
+          justify-items: center;
+          gap: 4px;
+          min-width: 0;
+          padding: 8px 4px 6px;
+          border-radius: 16px;
+          color: #475569;
+          text-decoration: none;
+          font: inherit;
+          font-size: 0.72rem;
+          font-weight: 700;
+          line-height: 1;
+          -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+        }
+
+        .mobile-bottom-nav__link:active,
+        .mobile-bottom-nav__link.is-pressed {
+          transform: translateY(1px);
+          background: rgba(255, 255, 255, 0.96);
+          box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.12);
+        }
+
+        .mobile-bottom-nav__link.is-active {
+          color: #0f766e;
+        }
+
+        .mobile-bottom-nav__icon {
+          width: 22px;
+          height: 22px;
+          display: inline-grid;
+          place-items: center;
+          color: currentColor;
+        }
+
+        .mobile-bottom-nav__icon svg {
+          width: 22px;
+          height: 22px;
+          display: block;
+        }
+
+        .mobile-bottom-nav__label {
+          display: block;
+          max-width: 100%;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+
+      @media (min-width: 769px) {
+        .mobile-bottom-nav {
+          display: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  };
+
+  const ensureMobileBottomNav = () => {
+    if (document.getElementById(MOBILE_NAV_ID)) return;
+    const page = String(window.location.pathname || '').split('/').pop().toLowerCase();
+    const nav = document.createElement('nav');
+    nav.id = MOBILE_NAV_ID;
+    nav.className = 'mobile-bottom-nav';
+    nav.setAttribute('aria-label', 'Navegação principal');
+    nav.innerHTML = `
+      <a class="mobile-bottom-nav__link" data-mobile-nav="agenda" href="agendamentos.html">
+        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 3v3M17 3v3M4 8h16"/>
+            <rect x="4" y="6" width="16" height="14" rx="3"/>
+            <path d="M7 12h4M7 16h4"/>
+          </svg>
+        </span>
+        <span class="mobile-bottom-nav__label">Agenda</span>
+      </a>
+      <a class="mobile-bottom-nav__link" data-mobile-nav="pacientes" href="prontuario.html">
+        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M16 19a4 4 0 0 0-8 0"/>
+            <circle cx="12" cy="9" r="3.2"/>
+            <path d="M4 19.5c1.4-3.2 4.2-5 8-5s6.6 1.8 8 5"/>
+          </svg>
+        </span>
+        <span class="mobile-bottom-nav__label">Pacientes</span>
+      </a>
+      <a class="mobile-bottom-nav__link" data-mobile-nav="oportunidades" href="campanhas.html">
+        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 11.5 19 5v14L3 12.5z"/>
+            <path d="M19 9.5 22 8.5v7l-3-1"/>
+            <path d="M8 13l1.2 5.2a1.2 1.2 0 0 0 2.3-.1L13 13"/>
+          </svg>
+        </span>
+        <span class="mobile-bottom-nav__label">Oportunidades</span>
+      </a>
+      <a class="mobile-bottom-nav__link" data-mobile-nav="gestao" href="gestao.html">
+        <span class="mobile-bottom-nav__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19h16"/>
+            <path d="M6 16V9"/>
+            <path d="M12 16V6"/>
+            <path d="M18 16v-4"/>
+          </svg>
+        </span>
+        <span class="mobile-bottom-nav__label">Gestão</span>
+      </a>
+    `;
+
+    const activeMap = [
+      { key: 'agenda', match: ['agendamentos.html', 'agenda-dia.html', 'agenda-mes.html', 'agenda-config.html'] },
+      { key: 'pacientes', match: ['prontuario.html', 'arquivos.html', 'lista-pacientes.html', 'cadastro-paciente.html', 'editar-paciente.html', 'odontograma.html', 'odontograma-fdi.html'] },
+      { key: 'oportunidades', match: ['campanhas.html', 'relacionamento.html', 'comunicacao.html'] },
+      { key: 'gestao', match: ['gestao.html'] },
+    ];
+
+    const activeItem = activeMap.find((item) => item.match.some((part) => page.endsWith(part)));
+    if (activeItem) {
+      const link = nav.querySelector(`[data-mobile-nav="${activeItem.key}"]`);
+      if (link) link.classList.add('is-active');
+    }
+
+    nav.addEventListener('pointerdown', (event) => {
+      const link = event.target.closest('.mobile-bottom-nav__link');
+      if (link) link.classList.add('is-pressed');
+    });
+    nav.addEventListener('pointerup', () => {
+      nav.querySelectorAll('.mobile-bottom-nav__link.is-pressed').forEach((link) => link.classList.remove('is-pressed'));
+    });
+    nav.addEventListener('pointercancel', () => {
+      nav.querySelectorAll('.mobile-bottom-nav__link.is-pressed').forEach((link) => link.classList.remove('is-pressed'));
+    });
+    nav.addEventListener('mouseleave', () => {
+      nav.querySelectorAll('.mobile-bottom-nav__link.is-pressed').forEach((link) => link.classList.remove('is-pressed'));
+    });
+
+    document.body.appendChild(nav);
+    document.body.classList.add('has-mobile-bottom-nav');
+  };
   const ensureAttnPaymentsItem = () => {
     if (!attnDropdown) return;
     const existing = attnDropdown.querySelector('a.attn-item[href="pagamentos.html"]');
@@ -51,6 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
   ensurePageBackButton();
   ensureAttnPaymentsItem();
+  ensureMobileBottomNavStyles();
+  ensureMobileBottomNav();
 
   const setDropdownState = (dropdown, toggle, isOpen) => {
     if (!dropdown) return;
