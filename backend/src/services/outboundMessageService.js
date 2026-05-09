@@ -15,6 +15,8 @@ const OUTBOUND_STATUS = {
   FAILED: 'FAILED',
 };
 
+const DISCONNECTED_RETRY_DELAY_CAP_MS = 15 * 1000;
+
 const getAppointmentConfirmationDedupWindowMs = () => {
   const minutes = Math.max(1, Number(appEnv?.appointmentConfirmationDedupMinutes) || 10);
   return minutes * 60 * 1000;
@@ -90,6 +92,63 @@ const formatOutboundResponse = (payload = {}) => ({
   lastConfirmationSentAt: payload?.lastConfirmationSentAt || null,
 });
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+
+const parseDisconnectedRetryDelayMs = (error) => {
+  const message = String(error?.message || '').trim();
+  const match = message.match(/(\d+)\s*segundos?/i);
+  const seconds = Number(match?.[1] || 0);
+  if (seconds > 0) return Math.min(DISCONNECTED_RETRY_DELAY_CAP_MS, seconds * 1000);
+  return 10 * 1000;
+};
+
+const isTransientDisconnectedNgError = (error) => {
+  const statusCode = Number(error?.statusCode || error?.status || 0);
+  const code = String(error?.code || '').trim().toUpperCase();
+  const message = String(error?.message || '').trim();
+  if (code === 'WHATSAPP_NG_NOT_READY' || code === 'WHATSAPP_NG_TIMEOUT' || code === 'WHATSAPP_NG_UNAVAILABLE') {
+    return true;
+  }
+  return statusCode === 409 && /desconectad|cooling|esfriando/i.test(message);
+};
+
+const sendWhatsappAppointmentMessage = async ({ clinicId, phone, body, auditBody, appointmentId, outboundMessageId, patientId, type }) => {
+  try {
+    return await whatsappNgClient.sendAppointmentConfirmation({
+      clinicId,
+      phone,
+      body,
+      auditBody,
+      appointmentId,
+    });
+  } catch (error) {
+    if (!isTransientDisconnectedNgError(error)) throw error;
+
+    const retryDelayMs = parseDisconnectedRetryDelayMs(error);
+    console.warn('[OUTBOUND] transient whatsapp disconnect detected before retry', JSON.stringify({
+      outboundMessageId,
+      clinicId,
+      patientId,
+      appointmentId,
+      type,
+      retryDelayMs,
+      error: error?.message || 'Transient WhatsApp NG disconnect.',
+      code: error?.code || null,
+      statusCode: Number(error?.statusCode || error?.status || 0) || null,
+    }));
+
+    await sleep(retryDelayMs);
+
+    return whatsappNgClient.sendAppointmentConfirmation({
+      clinicId,
+      phone,
+      body,
+      auditBody,
+      appointmentId,
+    });
+  }
+};
+
 const createOutboundRecord = async ({ clinicId, patientId, appointmentId, phone, body, type }) => outboundMessageRepository.create({
   clinicId,
   patientId,
@@ -119,12 +178,15 @@ const dispatchOutboundRecord = async ({ outbound, clinicId, patientId, appointme
       status: OUTBOUND_STATUS.QUEUED,
     });
 
-    const provider = await whatsappNgClient.sendAppointmentConfirmation({
+    const provider = await sendWhatsappAppointmentMessage({
       clinicId,
       phone,
       body,
       auditBody: auditBody || outbound.body || body,
       appointmentId,
+      outboundMessageId: outbound.id,
+      patientId,
+      type,
     });
 
     const providerStatus = String(provider?.status || '').trim().toUpperCase();

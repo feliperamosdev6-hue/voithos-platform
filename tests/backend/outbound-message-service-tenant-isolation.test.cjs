@@ -212,3 +212,111 @@ test('outboundMessageService.sendAppointmentConfirmation fecha contexto antigo e
   assert.equal(result?.confirmationPending, true);
   assert.equal(result?.alreadyPending, false);
 });
+
+test('outboundMessageService.sendAppointmentConfirmation reaproveita retry para 409 transitório do WhatsApp NG', async (t) => {
+  let updatedStatuses = [];
+  let providerCalls = 0;
+  const originalSetTimeout = global.setTimeout;
+  const originalClearTimeout = global.clearTimeout;
+  global.setTimeout = (fn, _delay, ...args) => {
+    fn(...args);
+    return 0;
+  };
+  global.clearTimeout = () => {};
+
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/outboundMessageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/appointmentRepository.js')]: {
+        appointmentRepository: {
+          findByIdAndClinic: async () => ({
+            id: 'appt-1',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            dataHora: '2026-04-13T10:00:00.000Z',
+            status: 'AGENDADO',
+            confirmado: false,
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findByIdAndClinic: async () => ({
+            id: 'patient-1',
+            clinicId: 'clinic-auth',
+            nome: 'Paciente',
+            telefone: '11999999999',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/outboundMessageRepository.js')]: {
+        outboundMessageRepository: {
+          findLatestActiveConfirmationByAppointment: async () => null,
+          create: async (input) => ({
+            id: 'out-retry',
+            createdAt: new Date('2026-04-13T09:30:00.000Z'),
+            ...input,
+          }),
+          updateStatus: async (input) => {
+            updatedStatuses.push(input);
+            return { count: 1 };
+          },
+          findByIdAndClinic: async () => ({
+            id: 'out-retry',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            appointmentId: 'appt-1',
+            status: 'SENT',
+            providerMessageId: 'provider-message-retry',
+            createdAt: new Date('2026-04-13T09:30:00.000Z'),
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {
+          findById: async () => ({
+            id: 'clinic-auth',
+            nomeFantasia: 'Clinica Teste',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/services/appointmentActionTokenService.js')]: { appointmentActionTokenService: {} },
+      [path.resolve(__dirname, '../../backend/src/services/notificationEventService.js')]: { notificationEventService: {} },
+      [path.resolve(__dirname, '../../backend/src/adapters/whatsappNgClient.js')]: {
+        whatsappNgClient: {
+          sendAppointmentConfirmation: async () => {
+            providerCalls += 1;
+            if (providerCalls === 1) {
+              const error = new Error('Instância desconectada. Esfriando por 11 segundos antes de tentar novamente.');
+              error.statusCode = 409;
+              error.code = 'WHATSAPP_INSTANCE_DISCONNECTED';
+              throw error;
+            }
+            return {
+              status: 'sent',
+              providerMessageId: 'provider-message-retry',
+            };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/config/appEnv.js')]: { appEnv: { appointmentActionLinksEnabled: false, appointmentConfirmationDedupMinutes: 10 } },
+    }
+  );
+  t.after(() => {
+    global.setTimeout = originalSetTimeout;
+    global.clearTimeout = originalClearTimeout;
+    restore();
+  });
+
+  const result = await serviceModule.outboundMessageService.sendAppointmentConfirmation({
+    clinicId: 'clinic-auth',
+    appointmentId: 'appt-1',
+  });
+
+  assert.equal(providerCalls, 2);
+  assert.equal(updatedStatuses.length, 2);
+  assert.equal(updatedStatuses[0]?.status, 'QUEUED');
+  assert.equal(updatedStatuses[1]?.status, 'SENT');
+  assert.equal(result?.deduped, false);
+  assert.equal(result?.confirmationPending, true);
+});
