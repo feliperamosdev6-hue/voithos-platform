@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const servicesApi = appApi.services || {};
   const loadProceduresApi = appApi.loadProcedures;
   const patientForm = document.getElementById('patient-form');
+  const savePatientBtn = patientForm?.querySelector('button[type="submit"]');
   const servicesBody = document.getElementById('services-body');
   const addServiceBtn = document.getElementById('add-service-btn');
   const deletePatientBtn = document.getElementById('delete-patient-btn');
@@ -32,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentPatient = null;
   let procedures = [];
   let selectedSelfieFile = null;
+  let isSavingPatient = false;
 
   const getClinicStorageKey = (baseKey, user = currentUser) => {
     const clinicId = String(user?.clinicId || '').trim();
@@ -79,6 +81,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   const setDentistaLabel = (nome) => {
     if (dentistaLabel) dentistaLabel.textContent = nome || 'Nao definido';
+  };
+
+  const setSavePatientLoading = (loading) => {
+    isSavingPatient = loading;
+    if (!savePatientBtn) return;
+    savePatientBtn.disabled = loading;
+    savePatientBtn.textContent = loading ? 'Salvando...' : 'Salvar Dados do Paciente';
+  };
+
+  const getFriendlySaveError = (err) => {
+    const message = String(err?.message || '').trim();
+    if (/dentista invalido|invalid_dentist/i.test(message)) return 'Dentista invalido para a clinica atual.';
+    if (/outra clinica|clinic|tenant/i.test(message)) return 'Paciente nao encontrado para a clinica atual.';
+    return 'Nao foi possivel salvar os dados do paciente.';
   };
 
   const setSelfieState = ({ file = null, url = '', label = '' } = {}) => {
@@ -259,14 +275,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
     try {
-      await patientsApi.updateDentist({ prontuario: currentPatient.prontuario, novoDentistaId: dentistaId });
-      currentPatient.dentistaId = dentistaId;
-      currentPatient.dentistaNome = nome;
-      setDentistaLabel(nome);
+      const result = await patientsApi.updateDentist({ prontuario: currentPatient.prontuario, novoDentistaId: dentistaId });
+      const savedPatient = result?.patient || result || {};
+      currentPatient = {
+        ...currentPatient,
+        ...savedPatient,
+        dentistaId: savedPatient.dentistaId || dentistaId,
+        dentistaNome: savedPatient.dentistaNome || nome,
+      };
+      setDentistaLabel(currentPatient.dentistaNome);
       safeToast('Dentista atualizado para o paciente.', 'success');
     } catch (err) {
       console.error('Erro ao transferir dentista:', err);
-      safeToast('Falha ao transferir dentista: ' + err.message, 'error');
+      safeToast(getFriendlySaveError(err), 'error');
     }
   });
 
@@ -297,6 +318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   patientForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentPatient) return;
+    if (isSavingPatient) return;
     const updated = {
       ...currentPatient,
       fullName: document.getElementById('edit-fullName').value,
@@ -332,7 +354,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       updated.dentistaNome = nomeDentista;
     }
     try {
-      await patientsApi.save(updated);
+      setSavePatientLoading(true);
+      const saveResult = await patientsApi.save(updated);
+      const savedPatient = saveResult?.patient || saveResult || {};
       if (selectedSelfieFile?.path && patientsApi.uploadSelfie) {
         const selfieResult = await patientsApi.uploadSelfie({
           prontuario: updated.prontuario,
@@ -348,12 +372,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (selfieInput) selfieInput.value = '';
         selectedSelfieFile = null;
       }
-      currentPatient = updated;
+      const refreshed = await patientsApi.read(savedPatient.prontuario || savedPatient.id || updated.prontuario).catch(() => null);
+      currentPatient = {
+        ...updated,
+        ...savedPatient,
+        ...(refreshed || {}),
+      };
+      fillForm(currentPatient);
+      if (selectDentista && currentPatient.dentistaId) {
+        selectDentista.value = dentistasList.some((item) => String(item.id || '') === String(currentPatient.dentistaId || ''))
+          ? currentPatient.dentistaId
+          : '';
+      }
       setSelfieState({ url: currentPatient.selfieUrl || '', label: currentPatient.selfieFileName || '' });
-      safeToast('Dados do paciente salvos.', 'success');
+      safeToast('Paciente atualizado com sucesso.', 'success');
     } catch (err) {
       console.error('Erro ao salvar paciente:', err);
-      safeToast('Falha ao salvar paciente: ' + err.message, 'error');
+      safeToast(getFriendlySaveError(err), 'error');
+    } finally {
+      setSavePatientLoading(false);
     }
   });
 

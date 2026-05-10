@@ -243,6 +243,36 @@ const registerPatientsHandlers = ({
 
   ipcMain.handle('patient-update-dentist', async (_event, { prontuario, novoDentistaId }) => {
     requireRole(['admin', 'recepcionista']);
+    if (isCentralEnabled()) {
+      try {
+        logCentralActive();
+        const current = await centralBackendAdapter.getPatientById(prontuario, { clinicId: getCurrentClinicId() });
+        if (!current?.id) throw new Error('Paciente nao encontrado.');
+        const centralPatient = await centralBackendAdapter.updatePatient(current.id, {
+          ...current,
+          dentistaId: String(novoDentistaId || '').trim(),
+        }, { clinicId: getCurrentClinicId() });
+
+        try {
+          await savePatient({
+            ...centralPatient,
+            id: centralPatient.id,
+            prontuario: centralPatient.prontuario || centralPatient.id,
+            clinicId: getCurrentClinicId(),
+          });
+        } catch (shadowError) {
+          console.warn('[PATIENTS] shadow dentist update local failed', shadowError?.message || shadowError);
+        }
+
+        return {
+          success: true,
+          patient: withSource(centralPatient, SOURCE.CENTRAL),
+        };
+      } catch (error) {
+        logCentralUnavailable(error);
+        if (!shouldFallbackToLocal(error)) throw error;
+      }
+    }
     return updateDentist({ prontuario, novoDentistaId });
   });
 

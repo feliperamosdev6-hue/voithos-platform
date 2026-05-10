@@ -5,9 +5,18 @@ const {
   toRequiredString,
 } = require('../types/repositoryTypes');
 
+const patientProfileInclude = {
+  clinicalRecord: {
+    select: {
+      summary: true,
+    },
+  },
+};
+
 const patientRepository = {
   findById: async (id) => prisma.patient.findUnique({
     where: { id: toRequiredString(id, 'id') },
+    include: patientProfileInclude,
   }),
 
   findByIdAndClinic: async (id, clinicId) => prisma.patient.findFirst({
@@ -15,6 +24,7 @@ const patientRepository = {
       id: toRequiredString(id, 'id'),
       clinicId: toRequiredString(clinicId, 'clinicId'),
     },
+    include: patientProfileInclude,
   }),
 
   create: async (input) => prisma.patient.create({
@@ -67,6 +77,7 @@ const patientRepository = {
     where: {
       clinicId: toRequiredString(clinicId, 'clinicId'),
     },
+    include: patientProfileInclude,
     orderBy: {
       createdAt: 'desc',
     },

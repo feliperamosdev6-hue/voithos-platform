@@ -1,6 +1,7 @@
 const { AppError } = require('../errors/AppError');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
+const { userRepository } = require('../repositories/userRepository');
 const { assertRecordBelongsToClinic, sanitizeTenantInput } = require('../utils/tenantScope');
 
 const isMissingTableError = (error) => error && error.code === 'P2021';
@@ -28,6 +29,76 @@ const buildAttachmentCountMap = (documents = []) => {
   return counts;
 };
 
+const cleanText = (value) => String(value || '').trim();
+
+const getPatientProfileSummary = (patient = {}) => {
+  const summary = patient?.clinicalRecord?.summary;
+  if (!summary || typeof summary !== 'object' || Array.isArray(summary)) return {};
+  const profile = summary.patientProfile;
+  if (profile && typeof profile === 'object' && !Array.isArray(profile)) return profile;
+  return {};
+};
+
+const decoratePatient = (patient) => {
+  if (!patient) return patient;
+  const { clinicalRecord, ...base } = patient;
+  const profile = getPatientProfileSummary(patient);
+  return {
+    ...base,
+    dentistaId: cleanText(profile.dentistaId),
+    dentistaNome: cleanText(profile.dentistaNome),
+    notes: cleanText(profile.notes || profile.observacoes),
+    observacoes: cleanText(profile.observacoes || profile.notes),
+  };
+};
+
+const hasOwn = (payload, key) => Object.prototype.hasOwnProperty.call(payload || {}, key);
+
+const buildPatientProfilePatch = (input = {}) => {
+  const patch = {};
+  if (hasOwn(input, 'dentistaId')) patch.dentistaId = cleanText(input.dentistaId);
+  if (hasOwn(input, 'dentistaNome')) patch.dentistaNome = cleanText(input.dentistaNome);
+  if (hasOwn(input, 'notes')) {
+    patch.notes = cleanText(input.notes);
+    patch.observacoes = cleanText(input.notes);
+  } else if (hasOwn(input, 'observacoes')) {
+    patch.notes = cleanText(input.observacoes);
+    patch.observacoes = cleanText(input.observacoes);
+  }
+  return patch;
+};
+
+const validateDentistPatchForClinic = async ({ clinicId, patch }) => {
+  if (!hasOwn(patch, 'dentistaId') || !patch.dentistaId) return patch;
+  const dentist = await userRepository.findById(patch.dentistaId);
+  const role = cleanText(dentist?.role).toUpperCase();
+  if (!dentist || cleanText(dentist.clinicId) !== cleanText(clinicId) || role !== 'DENTISTA' || dentist.ativo === false) {
+    throw new AppError(400, 'INVALID_DENTIST_FOR_CLINIC', 'Dentista invalido para esta clinica.');
+  }
+  return {
+    ...patch,
+    dentistaId: dentist.id,
+    dentistaNome: cleanText(dentist.nome),
+  };
+};
+
+const mergeProfileSummary = (currentPatient = {}, patch = {}) => {
+  const currentSummary = currentPatient?.clinicalRecord?.summary;
+  const safeSummary = currentSummary && typeof currentSummary === 'object' && !Array.isArray(currentSummary)
+    ? currentSummary
+    : {};
+  const currentProfile = safeSummary.patientProfile && typeof safeSummary.patientProfile === 'object' && !Array.isArray(safeSummary.patientProfile)
+    ? safeSummary.patientProfile
+    : {};
+  return {
+    ...safeSummary,
+    patientProfile: {
+      ...currentProfile,
+      ...patch,
+    },
+  };
+};
+
 const patientService = {
   listByClinic: async (clinicId) => {
     const normalizedClinicId = String(clinicId || '').trim();
@@ -45,7 +116,7 @@ const patientService = {
       ]);
       const attachmentCountMap = buildAttachmentCountMap(documentSummaries);
       return (patients || []).map((patient) => ({
-        ...patient,
+        ...decoratePatient(patient),
         attachmentCount: attachmentCountMap.get(String(patient?.id || '').trim()) || 0,
       }));
     } catch (error) {
@@ -63,7 +134,7 @@ const patientService = {
     }
 
     try {
-      return await patientRepository.findById(normalizedId);
+      return decoratePatient(await patientRepository.findById(normalizedId));
     } catch (error) {
       if (isMissingTableError(error)) {
         return null;
@@ -84,7 +155,7 @@ const patientService = {
 
     try {
       const patient = await patientRepository.findById(normalizedId);
-      return assertRecordBelongsToClinic(patient, normalizedClinicId, 'PATIENT_NOT_FOUND');
+      return decoratePatient(assertRecordBelongsToClinic(patient, normalizedClinicId, 'PATIENT_NOT_FOUND'));
     } catch (error) {
       if (isMissingTableError(error)) {
         return null;
@@ -106,7 +177,7 @@ const patientService = {
     }
 
     try {
-      return await patientRepository.create({
+      const created = await patientRepository.create({
         clinicId,
         nome,
         cpf: input?.cpf,
@@ -119,6 +190,19 @@ const patientService = {
         lastBirthdayMessageAt: input?.lastBirthdayMessageAt,
         birthdayMessageYear: input?.birthdayMessageYear,
       });
+      const profilePatch = await validateDentistPatchForClinic({
+        clinicId,
+        patch: buildPatientProfilePatch(input),
+      });
+      if (Object.keys(profilePatch).length > 0) {
+        await patientClinicalRepository.upsertClinicalRecordSummary({
+          clinicId,
+          patientId: created.id,
+          summary: mergeProfileSummary(created, profilePatch),
+        });
+        return decoratePatient(await patientRepository.findById(created.id));
+      }
+      return decoratePatient(created);
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -141,7 +225,7 @@ const patientService = {
     }
 
     try {
-      return await patientRepository.create({
+      const created = await patientRepository.create({
         clinicId: normalizedClinicId,
         nome,
         cpf: sanitizedInput?.cpf,
@@ -154,6 +238,19 @@ const patientService = {
         lastBirthdayMessageAt: sanitizedInput?.lastBirthdayMessageAt,
         birthdayMessageYear: sanitizedInput?.birthdayMessageYear,
       });
+      const profilePatch = await validateDentistPatchForClinic({
+        clinicId: normalizedClinicId,
+        patch: buildPatientProfilePatch(sanitizedInput),
+      });
+      if (Object.keys(profilePatch).length > 0) {
+        await patientClinicalRepository.upsertClinicalRecordSummary({
+          clinicId: normalizedClinicId,
+          patientId: created.id,
+          summary: mergeProfileSummary(created, profilePatch),
+        });
+        return decoratePatient(await patientRepository.findById(created.id));
+      }
+      return decoratePatient(created);
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
@@ -183,6 +280,10 @@ const patientService = {
     try {
       const current = await patientRepository.findById(normalizedId);
       assertRecordBelongsToClinic(current, normalizedClinicId, 'PATIENT_NOT_FOUND');
+      const profilePatch = await validateDentistPatchForClinic({
+        clinicId: normalizedClinicId,
+        patch: buildPatientProfilePatch(sanitizedInput),
+      });
 
       const result = await patientRepository.update({
         id: normalizedId,
@@ -205,7 +306,15 @@ const patientService = {
         throw new AppError(404, 'PATIENT_NOT_FOUND', 'Patient not found.');
       }
 
-      return patientRepository.findById(normalizedId);
+      if (Object.keys(profilePatch).length > 0) {
+        await patientClinicalRepository.upsertClinicalRecordSummary({
+          clinicId: normalizedClinicId,
+          patientId: normalizedId,
+          summary: mergeProfileSummary(current, profilePatch),
+        });
+      }
+
+      return decoratePatient(await patientRepository.findById(normalizedId));
     } catch (error) {
       if (isMissingTableError(error)) {
         throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');

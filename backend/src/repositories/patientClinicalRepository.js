@@ -17,6 +17,19 @@ const patientClinicalRepository = {
     create: { clinicId, patientId },
   }),
 
+  upsertClinicalRecordSummary: async ({ clinicId, patientId, summary }) => prisma.patientClinicalRecord.upsert({
+    where: { patientId },
+    update: {
+      clinicId,
+      summary: summary || null,
+    },
+    create: {
+      clinicId,
+      patientId,
+      summary: summary || null,
+    },
+  }),
+
   getClinicalRecord: async ({ clinicId, patientId }) => prisma.patientClinicalRecord.findFirst({
     where: { clinicId, patientId },
     include: {

@@ -130,6 +130,11 @@
     prontuario: patient.id,
     nome: patient.nome || '',
     fullName: patient.nome || '',
+    phone: patient.telefone || '',
+    address: patient.endereco || '',
+    notes: patient.notes || patient.observacoes || '',
+    dentistaId: patient.dentistaId || '',
+    dentistaNome: patient.dentistaNome || '',
     birthDate: patient.dataNascimento ? normalizeDateOnly(patient.dataNascimento) : '',
     dataNascimento: patient.dataNascimento ? normalizeDateOnly(patient.dataNascimento) : '',
     allowsMessages: patient.allowsMessages !== false,
@@ -147,6 +152,10 @@
     telefone: payload.telefone || payload.phone || payload.celular || payload.whatsapp || '',
     email: payload.email || '',
     endereco: payload.endereco || payload.address || '',
+    notes: payload.notes || payload.observacoes || '',
+    observacoes: payload.observacoes || payload.notes || '',
+    dentistaId: payload.dentistaId || '',
+    dentistaNome: payload.dentistaNome || '',
     allowsMessages: payload.allowsMessages !== undefined ? payload.allowsMessages !== false : true,
     lastBirthdayMessageAt: payload.lastBirthdayMessageAt || null,
     birthdayMessageYear: Number.isFinite(Number(payload.birthdayMessageYear))
@@ -2205,7 +2214,23 @@
     uploadSelfie: async () => {
       throw new Error('uploadSelfie ainda nao implementado no backend web.');
     },
-    updateDentist: async () => notImplemented('patients.updateDentist'),
+    updateDentist: async ({ prontuario, novoDentistaId } = {}) => {
+      const patient = await patients.read(prontuario);
+      if (!patient) throw new Error('Paciente nao encontrado.');
+      const users = await auth.listUsers();
+      const clinicId = cleanText(getStoredUser()?.clinicId || getStoredClinic()?.id || patient?.clinicId);
+      const dentist = (Array.isArray(users) ? users : []).find((user) => (
+        cleanText(user?.id) === cleanText(novoDentistaId)
+        && cleanText(user?.tipo).toLowerCase() === 'dentista'
+        && (!clinicId || cleanText(user?.clinicId) === clinicId)
+      ));
+      if (!dentist) throw new Error('Dentista invalido para esta clinica.');
+      return patients.save({
+        ...patient,
+        dentistaId: dentist.id,
+        dentistaNome: dentist.nome || dentist.fullName || dentist.login || 'Dentista',
+      });
+    },
   };
 
   const users = {
