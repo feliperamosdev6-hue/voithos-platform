@@ -272,6 +272,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'pending';
   };
 
+  const isPlanChargeEventType = (value) => [
+    'PLAN_INSTALLMENT_DUE_SOON',
+    'PLAN_INSTALLMENT_DUE_TODAY',
+    'PLAN_INSTALLMENT_OVERDUE',
+  ].includes(clean(value).toUpperCase());
+
   const getPlanMessageHistory = (planId) => {
     const key = clean(planId);
     const payload = planMessageHistoryByPlan.get(key);
@@ -446,10 +452,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const latest = findLatestHistoryByParcel(plan.planId, parcel.parcelId);
     const recommendedEventType = clean(suggestion?.recommendedEventType).toUpperCase();
     const canSend = Boolean(recommendedEventType);
-    const primaryLabel = recommendedEventType === 'PLAN_PAYMENT_CONFIRMED' ? 'Enviar confirmacao' : 'Enviar lembrete';
+    const requiresApproval = suggestion?.approvalRequired === true || isPlanChargeEventType(recommendedEventType);
+    const awaitingApproval = suggestion?.awaitingApproval === true || latest?.approvalRequired === true;
+    const primaryLabel = recommendedEventType === 'PLAN_PAYMENT_CONFIRMED'
+      ? 'Enviar confirmacao'
+      : (requiresApproval ? 'Aprovar cobranca' : 'Enviar lembrete');
 
+    const statusLabel = latest?.approvalRequired === true
+      ? 'Aguardando aprovacao'
+      : planMessageStatusLabel(latest?.status);
     const statusHtml = latest
-      ? `<span class="plan-message-chip ${planMessageStatusClass(latest.status)}">${planMessageStatusLabel(latest.status)}</span>`
+      ? `<span class="plan-message-chip ${planMessageStatusClass(latest.status)}">${statusLabel}</span>`
       : '<span class="plan-message-chip pending">Nao notificada</span>';
 
     const metaHtml = latest
@@ -457,8 +470,8 @@ document.addEventListener('DOMContentLoaded', () => {
       : `<small>${suggestion?.dueState === 'overdue' ? 'Parcela vencida.' : suggestion?.dueState === 'due_today' ? 'Parcela vence hoje.' : suggestion?.dueState === 'due_soon' ? 'Parcela a vencer.' : 'Sem evento sugerido.'}</small>`;
 
     let actionHtml = '<button type="button" class="btn ghost btn-sm plan-action plan-action--disabled" disabled>Sem acao</button>';
-    if (canSend && !suggestion?.alreadyNotified) {
-      actionHtml = `<button type="button" class="btn ghost btn-sm plan-action" data-action="send-plan-message" data-plan-id="${plan.planId}" data-parcel-id="${parcel.parcelId}" data-event-type="${recommendedEventType}">${primaryLabel}</button>`;
+    if (canSend && (!suggestion?.alreadyNotified || awaitingApproval)) {
+      actionHtml = `<button type="button" class="btn ghost btn-sm plan-action" data-action="send-plan-message" data-plan-id="${plan.planId}" data-parcel-id="${parcel.parcelId}" data-event-type="${recommendedEventType}" data-approved-by-dentist="${requiresApproval ? 'true' : 'false'}">${primaryLabel}</button>`;
     } else if (clean(latest?.id)) {
       actionHtml = `<button type="button" class="btn ghost btn-sm plan-action" data-action="resend-plan-message" data-plan-id="${plan.planId}" data-plan-message-id="${latest.id}">Reenviar</button>`;
     }
@@ -986,8 +999,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const parcel = (Array.isArray(plan?.payment?.schedule) ? plan.payment.schedule : [])
         .find((p) => clean(p.parcelId) === clean(btn.dataset.parcelId));
       const eventLabel = planMessageEventLabel(btn.dataset.eventType);
+      const requiresApproval = btn.dataset.approvedByDentist === 'true';
       const ok = window.confirm([
-        `Enviar cobranca manual para ${plan.patientName || 'paciente'}?`,
+        `${requiresApproval ? 'Aprovar e enviar cobranca' : 'Enviar mensagem'} para ${plan.patientName || 'paciente'}?`,
         `Plano: ${plan.title || '-'}`,
         `Parcela: ${parcel?.number || '-'} | Valor: ${brMoney(parcel?.value || 0)} | Vencimento: ${brDate(parcel?.dueDate)}`,
         `Tipo: ${eventLabel}`,
@@ -998,6 +1012,7 @@ document.addEventListener('DOMContentLoaded', () => {
           planId,
           installmentId: clean(btn.dataset.parcelId),
           eventType: clean(btn.dataset.eventType),
+          approvedByDentist: requiresApproval,
         });
         await loadPlanMessaging(planId, { silent: true });
         renderPlans();

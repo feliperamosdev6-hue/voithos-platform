@@ -16,6 +16,15 @@ const PLAN_MESSAGE_ORIGIN = 'TRANSACTIONAL';
 const PLAN_MESSAGE_ENTITY_TYPE = 'FINANCIAL_INSTALLMENT';
 const PLAN_MESSAGE_DISPATCH_TYPE = 'PLAN_NOTIFICATION';
 const DEFAULT_DUE_SOON_DAYS = 3;
+const PLAN_CHARGE_EVENT_TYPES = new Set([
+  'PLAN_INSTALLMENT_DUE_SOON',
+  'PLAN_INSTALLMENT_DUE_TODAY',
+  'PLAN_INSTALLMENT_OVERDUE',
+]);
+const PLAN_MESSAGE_APPROVAL_STATUS = {
+  AWAITING_DENTIST_APPROVAL: 'AWAITING_DENTIST_APPROVAL',
+  APPROVED: 'APPROVED',
+};
 const RETRYABLE_NG_ERROR_CODES = new Set([
   'WHATSAPP_NG_NOT_READY',
   'WHATSAPP_NG_TIMEOUT',
@@ -163,6 +172,19 @@ const extractEventPayload = (event = {}) => (
     : {}
 );
 
+const isPlanChargeEventType = (eventType) => PLAN_CHARGE_EVENT_TYPES.has(cleanText(eventType).toUpperCase());
+
+const getApprovalState = (event = {}) => {
+  const payload = extractEventPayload(event);
+  return payload?.approvalState && typeof payload.approvalState === 'object'
+    ? payload.approvalState
+    : {};
+};
+
+const isAwaitingDentistApproval = (event = {}) => (
+  cleanText(getApprovalState(event)?.status).toUpperCase() === PLAN_MESSAGE_APPROVAL_STATUS.AWAITING_DENTIST_APPROVAL
+);
+
 const isRetryableNgTransportError = (error = {}) => {
   const code = cleanText(error?.code).toUpperCase();
   if (RETRYABLE_NG_ERROR_CODES.has(code)) return true;
@@ -172,6 +194,7 @@ const isRetryableNgTransportError = (error = {}) => {
 
 const isRetryableBlockedEvent = (event = {}) => {
   if (normalizePlanMessageStatus(event?.status) !== 'BLOCKED') return false;
+  if (isAwaitingDentistApproval(event)) return false;
   const payload = extractEventPayload(event);
   const dispatchState = payload?.dispatchState && typeof payload.dispatchState === 'object'
     ? payload.dispatchState
@@ -196,6 +219,9 @@ const getIdempotencyBlockReason = (event = {}) => {
     return 'Evento equivalente ja possui envio registrado para esta parcela.';
   }
   if (status === 'BLOCKED' && !isRetryableBlockedEvent(event)) {
+    if (isAwaitingDentistApproval(event)) {
+      return 'Aguardando aprovacao do dentista antes de enviar cobranca ao paciente.';
+    }
     return cleanText(event?.lastError) || 'Evento equivalente ja foi bloqueado para esta parcela.';
   }
   return '';
@@ -331,6 +357,10 @@ const buildHistoryItem = ({ event, dispatch }) => ({
   lastError: cleanText(event?.lastError),
   failureCode: cleanText(extractEventPayload(event)?.dispatchState?.blockedReasonCode),
   retryable: Boolean(extractEventPayload(event)?.dispatchState?.retryable),
+  approvalRequired: isAwaitingDentistApproval(event),
+  approvalStatus: cleanText(getApprovalState(event)?.status),
+  approvedBy: cleanText(getApprovalState(event)?.approvedBy),
+  approvedAt: cleanText(getApprovalState(event)?.approvedAt),
   provider: cleanText(dispatch?.provider),
   providerMessageId: cleanText(dispatch?.providerMessageId),
   bodyPreview: cleanText(dispatch?.bodyRedacted || dispatch?.body),
@@ -525,14 +555,6 @@ const planMessageService = {
     const context = await resolvePlanContext({ clinicId, planId });
     const history = await listHistoryWithDispatches({ clinicId: context.clinicId, planId: cleanText(context.plan.id) });
 
-    await createNotificationEvent('PLAN_MESSAGE_HISTORY_LOADED', {
-      clinicId: context.clinicId,
-      patientId: cleanText(context.patient.id),
-      planId: cleanText(context.plan.id),
-      financialAccountId: cleanText(context.account.id),
-      historyCount: history.length,
-    }).catch(() => null);
-
     logPlanMessage('plan_message_history_loaded', {
       clinicId: context.clinicId,
       planId: cleanText(context.plan.id),
@@ -572,6 +594,7 @@ const planMessageService = {
         const dueState = deriveDueState(installment, dueSoonDays);
         const alreadyNotified = shouldLockEventForIdempotency(existing);
         const retryable = isRetryableBlockedEvent(existing);
+        const awaitingApproval = isAwaitingDentistApproval(existing);
 
         return {
           installmentId: cleanText(installment.id),
@@ -587,13 +610,15 @@ const planMessageService = {
           lastEventId: cleanText(existing?.id),
           blockReason: alreadyNotified ? getIdempotencyBlockReason(existing) : '',
           retryableBlocked: retryable,
+          approvalRequired: isPlanChargeEventType(recommendedEventType),
+          awaitingApproval,
           paymentUrl: context.billing.paymentUrl || '',
         };
       }),
     };
   },
 
-  send: async ({ clinicId, planId, installmentId, eventType, actorName = 'system', manualResend = false } = {}) => {
+  send: async ({ clinicId, planId, installmentId, eventType, actorName = 'system', manualResend = false, approvedByDentist = false } = {}) => {
     const context = await resolvePlanContext({ clinicId, planId });
     const installment = findInstallmentInContext(context, installmentId);
     const normalizedEventType = normalizePlanMessageEventType(eventType);
@@ -617,7 +642,10 @@ const planMessageService = {
       idempotencyKey: logicalKey,
     });
 
-    if (event && !manualResend && shouldLockEventForIdempotency(event)) {
+    const approvedForPatientSend = approvedByDentist === true || manualResend === true;
+    const requiresApproval = isPlanChargeEventType(normalizedEventType);
+
+    if (event && !approvedForPatientSend && !manualResend && shouldLockEventForIdempotency(event)) {
       const blockReason = getIdempotencyBlockReason(event) || 'IDEMPOTENT_ALREADY_NOTIFIED';
       logPlanMessage('plan_message_dispatch_blocked', {
         clinicId: context.clinicId,
@@ -632,6 +660,7 @@ const planMessageService = {
       return {
         blocked: true,
         reason: blockReason,
+        awaitingApproval: isAwaitingDentistApproval(event),
         event: buildHistoryItem({ event, dispatch: null }),
       };
     }
@@ -665,6 +694,93 @@ const planMessageService = {
           ...content.payload,
           installmentId: cleanText(installment.id),
           installmentSequence: Number(installment.sequence || 0),
+          ...(requiresApproval
+            ? {
+                approvalState: {
+                  status: PLAN_MESSAGE_APPROVAL_STATUS.AWAITING_DENTIST_APPROVAL,
+                  requestedAt: new Date().toISOString(),
+                  requestedBy: cleanText(actorName) || 'system',
+                },
+              }
+            : {}),
+        },
+      });
+    }
+
+    if (requiresApproval && !approvedForPatientSend) {
+      const approvalEvent = await planMessageRepository.update({
+        clinicId: context.clinicId,
+        planMessageId: cleanText(event.id),
+        data: {
+          status: 'BLOCKED',
+          blockedAt: event.blockedAt || new Date(),
+          lastError: 'Aguardando aprovacao do dentista antes de enviar cobranca ao paciente.',
+          payload: {
+            ...extractEventPayload(event),
+            approvalState: {
+              ...(getApprovalState(event) || {}),
+              status: PLAN_MESSAGE_APPROVAL_STATUS.AWAITING_DENTIST_APPROVAL,
+              requestedAt: cleanText(getApprovalState(event)?.requestedAt) || new Date().toISOString(),
+              requestedBy: cleanText(getApprovalState(event)?.requestedBy) || cleanText(actorName) || 'system',
+            },
+            dispatchState: {
+              retryable: false,
+              blockedReasonCode: 'DENTIST_APPROVAL_REQUIRED',
+              blockedReason: 'Aguardando aprovacao do dentista antes de enviar cobranca ao paciente.',
+              transport: 'INTERNAL_APPROVAL',
+            },
+          },
+        },
+      });
+
+      await createNotificationEvent('PLAN_MESSAGE_DENTIST_APPROVAL_REQUIRED', {
+        clinicId: context.clinicId,
+        patientId: cleanText(context.patient.id),
+        phone,
+        planId: cleanText(context.plan.id),
+        financialAccountId: cleanText(context.account.id),
+        installmentSequence: Number(installment.sequence || 0),
+        eventType: normalizedEventType,
+        status: 'AWAITING_DENTIST_APPROVAL',
+        targetRoles: ['dentista', 'dentist'],
+        approvalRequired: true,
+      }).catch(() => null);
+
+      logPlanMessage('plan_message_approval_required', {
+        clinicId: context.clinicId,
+        planId: cleanText(context.plan.id),
+        patientId: cleanText(context.patient.id),
+        financialAccountId: cleanText(context.account.id),
+        installmentSequence: Number(installment.sequence || 0),
+        eventType: normalizedEventType,
+      });
+
+      return {
+        blocked: true,
+        awaitingApproval: true,
+        approvalRequired: true,
+        reason: 'Aguardando aprovacao do dentista antes de enviar cobranca ao paciente.',
+        event: buildHistoryItem({ event: approvalEvent, dispatch: null }),
+      };
+    }
+
+    if (requiresApproval && approvedForPatientSend) {
+      event = await planMessageRepository.update({
+        clinicId: context.clinicId,
+        planMessageId: cleanText(event.id),
+        data: {
+          status: 'CREATED',
+          blockedAt: null,
+          lastError: null,
+          payload: {
+            ...extractEventPayload(event),
+            approvalState: {
+              ...(getApprovalState(event) || {}),
+              status: PLAN_MESSAGE_APPROVAL_STATUS.APPROVED,
+              approvedAt: new Date().toISOString(),
+              approvedBy: cleanText(actorName) || 'dentist',
+            },
+          },
         },
       });
     }
@@ -678,6 +794,7 @@ const planMessageService = {
       installmentSequence: Number(installment.sequence || 0),
       eventType: normalizedEventType,
       status: normalizePlanMessageStatus(event.status),
+      approvedByDentist: approvedForPatientSend,
     }).catch(() => null);
 
     logPlanMessage(manualResend ? 'plan_message_resend_requested' : 'plan_message_event_created', {

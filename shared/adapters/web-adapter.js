@@ -3038,13 +3038,14 @@
         { auth: true }
       );
     },
-    sendMessage: async ({ planId, installmentId, eventType, manualResend = false } = {}) => request(
+    sendMessage: async ({ planId, installmentId, eventType, manualResend = false, approvedByDentist = false } = {}) => request(
       'POST',
       `/financial/plans/${encodeURIComponent(cleanText(planId))}/messages/send`,
       {
         installmentId: cleanText(installmentId),
         eventType: cleanText(eventType),
         manualResend: manualResend === true,
+        approvedByDentist: approvedByDentist === true,
       },
       { auth: true }
     ),

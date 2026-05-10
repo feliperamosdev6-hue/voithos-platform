@@ -185,6 +185,7 @@ const registerPlansHandlers = ({
       installmentId: payload?.installmentId,
       eventType: payload?.eventType,
       manualResend: payload?.manualResend === true,
+      approvedByDentist: payload?.approvedByDentist === true,
     });
   });
 

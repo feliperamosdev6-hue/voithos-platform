@@ -3,6 +3,10 @@ const { notificationEventRepository } = require('../repositories/notificationEve
 const DEFAULT_SUPPRESSED_NOTIFICATION_TYPES = [
   'APPOINTMENT_ACTION_LINK_USED',
   'APPOINTMENT_REMINDER_SENT',
+  'PLAN_MESSAGE_EVENT_CREATED',
+  'PLAN_MESSAGE_DISPATCH_STARTED',
+  'PLAN_MESSAGE_DISPATCH_COMPLETED',
+  'PLAN_MESSAGE_RESEND_REQUESTED',
 ];
 
 const notificationEventService = {

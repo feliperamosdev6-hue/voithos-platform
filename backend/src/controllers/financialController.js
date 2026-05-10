@@ -253,6 +253,7 @@ const sendPlanMessage = async (req, res, next) => {
       eventType: String(req.body?.eventType || '').trim(),
       actorName: req?.auth?.userId || 'web_plans',
       manualResend: req.body?.manualResend === true,
+      approvedByDentist: req.body?.approvedByDentist === true,
     });
     return res.status(200).json({ ok: true, data });
   } catch (error) {

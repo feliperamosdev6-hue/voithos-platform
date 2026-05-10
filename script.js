@@ -1093,6 +1093,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const createdAt = String(event?.createdAt || '').trim();
             const payload = event?.payload || {};
+            const targetRoles = Array.isArray(payload?.targetRoles)
+                ? payload.targetRoles.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean)
+                : [];
+            const currentRole = String(currentUser?.tipo || currentUser?.perfil || currentUser?.role || '').trim().toLowerCase();
+            if (targetRoles.length && currentRole && !targetRoles.includes(currentRole)) {
+                return null;
+            }
             const patientLabel = resolveNotificationPatientLabel(event);
             const patientId = String(event?.patientId || payload?.patientId || '').trim();
             const appointmentId = String(event?.appointmentId || payload?.appointmentId || '').trim();
@@ -1128,6 +1135,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 title = 'Envio de plano iniciado';
                 description = `${patientLabel} recebeu disparo de parcela.`;
                 tag = 'Plano';
+            } else if (type === 'PLAN_MESSAGE_DENTIST_APPROVAL_REQUIRED') {
+                title = 'Aprovar cobranca de plano';
+                description = `${patientLabel} possui parcela pendente de aprovacao antes do envio.`;
+                tag = 'Aprovar';
             } else if (type === 'PLAN_MESSAGE_DISPATCH_COMPLETED') {
                 title = 'Parcela enviada no WhatsApp';
                 description = `${patientLabel} recebeu mensagem da parcela.`;
@@ -1881,6 +1892,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             currentUser = user;
+            refreshNotifications();
             if (userNameEl) userNameEl.textContent = getDisplayName(user);
             if (userRoleEl) {
                 const roleLabel = formatRole(user.tipo || '');

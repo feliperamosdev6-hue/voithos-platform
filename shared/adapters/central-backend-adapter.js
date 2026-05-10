@@ -2159,7 +2159,7 @@ const createCentralBackendAdapter = (options = {}) => {
     return payload?.data || { items: [] };
   };
 
-  const sendPlanMessage = async ({ clinicId, planId, installmentId, eventType, manualResend = false } = {}) => {
+  const sendPlanMessage = async ({ clinicId, planId, installmentId, eventType, manualResend = false, approvedByDentist = false } = {}) => {
     const normalizedClinicId = String(clinicId || '').trim();
     const normalizedPlanId = String(planId || '').trim();
     const payload = await requestInternalJson(`/internal/financial/plans/${encodeURIComponent(normalizedPlanId)}/messages/send`, {
@@ -2169,6 +2169,7 @@ const createCentralBackendAdapter = (options = {}) => {
         installmentId: String(installmentId || '').trim(),
         eventType: String(eventType || '').trim(),
         manualResend: manualResend === true,
+        approvedByDentist: approvedByDentist === true,
       }),
     });
     return payload?.data || null;
