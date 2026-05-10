@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const clinicStageFilter = document.getElementById('clinic-stage-filter');
   const btnLogout = document.getElementById('btn-logout');
   const btnOpenWhatsappSupport = document.getElementById('btn-open-whatsapp-support');
+  const promotionForm = document.getElementById('promotion-form');
+  const promotionList = document.getElementById('promotion-list');
+  const promotionStatus = document.getElementById('promotion-status');
+  const promotionError = document.getElementById('promotion-error');
+  const btnCreatePromotion = document.getElementById('btn-create-promotion');
+  const btnRefreshPromotions = document.getElementById('btn-refresh-promotions');
 
   const successModal = document.getElementById('success-modal');
   const successClinicName = document.getElementById('success-clinic-name');
@@ -30,7 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const clinicCredentialsCache = new Map();
   const dashboardClinicMap = new Map();
   const pendingCleanupIds = new Set();
+  const promotionActionIds = new Set();
   let clinicsCache = [];
+  let promotionOffersCache = [];
   let dashboardCache = null;
   let lastCreatedClinicId = '';
 
@@ -48,6 +56,22 @@ document.addEventListener('DOMContentLoaded', () => {
     dashboardStatus.textContent = text;
     dashboardStatus.hidden = !text;
   };
+
+  const setPromotionError = (message) => {
+    if (promotionError) promotionError.textContent = message || '';
+  };
+
+  const setPromotionStatus = (message) => {
+    if (!promotionStatus) return;
+    const text = String(message || '').trim();
+    promotionStatus.textContent = text;
+    promotionStatus.hidden = !text;
+  };
+
+  const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(value || 0));
 
   const formatDateTime = (value) => {
     const parsed = value ? new Date(value) : null;
@@ -258,6 +282,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }).join('');
   };
 
+  const getPromotionStatus = (offer = {}) => {
+    if (offer.active === false) return { label: 'Inativa', className: 'badge is-neutral' };
+    const validUntil = offer.validUntil ? new Date(offer.validUntil).getTime() : 0;
+    if (validUntil && validUntil < Date.now()) return { label: 'Expirada', className: 'badge is-danger' };
+    if (offer.maxUses !== null && offer.maxUses !== undefined && Number(offer.usedCount || 0) >= Number(offer.maxUses)) {
+      return { label: 'Limite atingido', className: 'badge is-warn' };
+    }
+    return { label: 'Ativa', className: 'badge' };
+  };
+
+  const renderPromotionOffers = (offers = []) => {
+    if (!promotionList) return;
+    const list = Array.isArray(offers) ? offers : [];
+    if (!list.length) {
+      promotionList.className = 'list-empty';
+      promotionList.textContent = 'Nenhum link promocional criado.';
+      return;
+    }
+
+    promotionList.className = 'promotion-list';
+    promotionList.innerHTML = list.map((offer) => {
+      const status = getPromotionStatus(offer);
+      const id = String(offer.id || '').trim();
+      const isBusy = promotionActionIds.has(id);
+      return `
+        <article class="promotion-item" data-promotion-id="${id}">
+          <div class="promotion-topline">
+            <div>
+              <div class="promotion-title">${offer.title || 'Oferta sem nome'}</div>
+              <div class="promotion-code">${offer.code || '-'}</div>
+            </div>
+            <span class="${status.className}">${status.label}</span>
+          </div>
+          <div class="clinic-meta">Plano: ${formatPlanLabel(offer.planType)} | Origem: ${offer.source || 'MANUAL'}</div>
+          <div class="clinic-meta">Preco: ${formatCurrency(offer.regularPrice)} por <strong>${formatCurrency(offer.promotionalPrice)}</strong></div>
+          <div class="clinic-meta">Validade: ${formatDateTime(offer.validUntil)} | Usos: ${Number(offer.usedCount || 0)}${offer.maxUses ? `/${offer.maxUses}` : ''}</div>
+          <div class="clinic-meta">Alvo: ${offer.targetEmail || offer.targetPhone || 'Livre'} | Link: ${offer.link || '-'}</div>
+          <div class="clinic-actions">
+            <button type="button" data-action="copy-promotion-link" data-promotion-id="${id}">Copiar link</button>
+            <button type="button" data-action="copy-promotion-code" data-promotion-id="${id}">Copiar codigo</button>
+            ${offer.active !== false ? `<button type="button" class="btn-outline" data-action="deactivate-promotion" data-promotion-id="${id}" ${isBusy ? 'disabled' : ''}>${isBusy ? 'Desativando...' : 'Desativar'}</button>` : ''}
+          </div>
+        </article>
+      `;
+    }).join('');
+  };
+
   const renderDashboard = (dashboard = null) => {
     dashboardCache = dashboard;
     const summary = dashboard?.summary || {};
@@ -342,8 +413,10 @@ document.addEventListener('DOMContentLoaded', () => {
           </div>
           <div class="clinic-meta">ID: ${clinicId}</div>
           <div class="clinic-meta">CNPJ/CPF: ${clinic.cnpjOuCpf || '-'}</div>
+          <div class="clinic-meta">Telefone: ${clinic.telefone || clinic.telefoneComercial || snapshot?.clinicPhone || '-'}</div>
           <div class="clinic-meta">Status: ${status}</div>
           <div class="clinic-meta">Plano: ${formatPlanLabel(snapshot?.selectedPlan)} | Perfil: ${formatOperationLabel(snapshot?.operationType)}</div>
+          <div class="clinic-meta">Origem: ${snapshot?.promotionCode ? `Promocao ${snapshot.promotionCode}` : (snapshot?.acquisitionSource || 'landing')}</div>
           <div class="clinic-meta">Admin: ${snapshot?.adminEmail || '-'}</div>
           <div class="clinic-meta">Atualizado: ${formatDateTime(snapshot?.onboardingUpdatedAt || snapshot?.updatedAt || clinic?.updatedAt)}</div>
           <div class="clinic-actions">
@@ -395,13 +468,91 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  const loadPromotionOffers = async () => {
+    if (!authApi?.listPromotionOffers) {
+      if (promotionList) promotionList.textContent = 'Links promocionais indisponiveis neste ambiente.';
+      return [];
+    }
+    try {
+      setPromotionError('');
+      const offers = await authApi.listPromotionOffers();
+      promotionOffersCache = Array.isArray(offers) ? offers : [];
+      renderPromotionOffers(promotionOffersCache);
+      return promotionOffersCache;
+    } catch (err) {
+      setPromotionError(err?.message || 'Falha ao carregar links promocionais.');
+      renderPromotionOffers([]);
+      return [];
+    }
+  };
+
   const refreshSuperAdminData = async () => {
     const [dashboard] = await Promise.all([
       loadDashboard(),
       loadClinics(),
+      loadPromotionOffers(),
     ]);
     return dashboard;
   };
+
+  const getDefaultPlanPrice = (planType) => ({
+    MONTHLY: '94.90',
+    QUARTERLY: '269.90',
+    SEMIANNUAL: '499.90',
+    ANNUAL: '899.90',
+  }[String(planType || '').trim().toUpperCase()] || '899.90');
+
+  const collectPromotionPayload = () => ({
+    title: String(document.getElementById('promotion-title')?.value || '').trim(),
+    code: String(document.getElementById('promotion-code')?.value || '').trim(),
+    planType: String(document.getElementById('promotion-plan')?.value || '').trim(),
+    regularPrice: Number(document.getElementById('promotion-regular-price')?.value || 0),
+    promotionalPrice: Number(document.getElementById('promotion-price')?.value || 0),
+    validUntil: String(document.getElementById('promotion-valid-until')?.value || '').trim(),
+    maxUses: String(document.getElementById('promotion-max-uses')?.value || '').trim(),
+    source: String(document.getElementById('promotion-source')?.value || 'MANUAL').trim(),
+    targetEmail: String(document.getElementById('promotion-target-email')?.value || '').trim(),
+    targetPhone: String(document.getElementById('promotion-target-phone')?.value || '').trim(),
+    notes: String(document.getElementById('promotion-notes')?.value || '').trim(),
+  });
+
+  document.getElementById('promotion-plan')?.addEventListener('change', (event) => {
+    const regularPriceInput = document.getElementById('promotion-regular-price');
+    if (regularPriceInput) regularPriceInput.value = getDefaultPlanPrice(event.target?.value);
+  });
+
+  btnCreatePromotion?.addEventListener('click', async () => {
+    if (!authApi?.createPromotionOffer) {
+      setPromotionError('Criacao de links promocionais indisponivel neste ambiente.');
+      return;
+    }
+    const payload = collectPromotionPayload();
+    if (!payload.title || !payload.planType || !payload.regularPrice || !payload.promotionalPrice) {
+      setPromotionError('Preencha nome, plano, preco normal e preco promocional.');
+      return;
+    }
+
+    btnCreatePromotion.disabled = true;
+    setPromotionError('');
+    setPromotionStatus('Criando oferta...');
+    try {
+      const created = await authApi.createPromotionOffer(payload);
+      promotionForm?.reset();
+      const regularPriceInput = document.getElementById('promotion-regular-price');
+      if (regularPriceInput) regularPriceInput.value = getDefaultPlanPrice('ANNUAL');
+      setPromotionStatus(`Link promocional criado: ${created?.link || created?.code || ''}`);
+      await loadPromotionOffers();
+    } catch (err) {
+      setPromotionError(err?.message || 'Falha ao criar link promocional.');
+      setPromotionStatus('');
+    } finally {
+      btnCreatePromotion.disabled = false;
+    }
+  });
+
+  btnRefreshPromotions?.addEventListener('click', () => {
+    loadPromotionOffers();
+  });
 
   btnCreate?.addEventListener('click', async () => {
     setError('');
@@ -525,6 +676,53 @@ document.addEventListener('DOMContentLoaded', () => {
     const pendingId = String(target.dataset.pendingId || '').trim();
     if (!pendingId) return;
     await handleDeletePending(pendingId);
+  });
+
+  promotionList?.addEventListener('click', async (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.action || '';
+    const promotionId = String(target.dataset.promotionId || '').trim();
+    if (!action || !promotionId) return;
+    const offer = promotionOffersCache.find((item) => String(item.id || '').trim() === promotionId);
+    if (!offer) return;
+
+    if (action === 'copy-promotion-link') {
+      try {
+        await copyText(offer.link || '');
+        setPromotionStatus('Link copiado.');
+      } catch (_error) {
+        setPromotionError('Nao foi possivel copiar o link.');
+      }
+      return;
+    }
+
+    if (action === 'copy-promotion-code') {
+      try {
+        await copyText(offer.code || '');
+        setPromotionStatus('Codigo copiado.');
+      } catch (_error) {
+        setPromotionError('Nao foi possivel copiar o codigo.');
+      }
+      return;
+    }
+
+    if (action === 'deactivate-promotion') {
+      const confirmed = window.confirm(`Desativar o link promocional ${offer.code}?`);
+      if (!confirmed) return;
+      promotionActionIds.add(promotionId);
+      renderPromotionOffers(promotionOffersCache);
+      try {
+        await authApi.deactivatePromotionOffer(promotionId);
+        setPromotionStatus('Link promocional desativado.');
+        await loadPromotionOffers();
+      } catch (err) {
+        setPromotionError(err?.message || 'Falha ao desativar link promocional.');
+      } finally {
+        promotionActionIds.delete(promotionId);
+        renderPromotionOffers(promotionOffersCache);
+      }
+    }
   });
 
   const handleDeletePending = async (pendingId) => {

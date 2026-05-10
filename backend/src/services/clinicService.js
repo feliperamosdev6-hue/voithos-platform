@@ -10,6 +10,7 @@ const { patientClinicalService } = require('./patientClinicalService');
 const { financialService } = require('./financialService');
 const { authService } = require('./authService');
 const { emailService } = require('./emailService');
+const { promotionOfferService } = require('./promotionOfferService');
 const { AppError } = require('../errors/AppError');
 const XLSX = require('xlsx');
 const JSZip = require('jszip');
@@ -2597,6 +2598,7 @@ const clinicService = {
             razaoSocial: true,
             cnpjCpf: true,
             email: true,
+            telefoneComercial: true,
             createdAt: true,
             updatedAt: true,
             operationalSettings: true,
@@ -2700,10 +2702,13 @@ const clinicService = {
           razaoSocial: String(clinic.razaoSocial || '').trim(),
           cnpjOuCpf: String(clinic.cnpjCpf || '').trim(),
           clinicEmail: normalizeEmail(clinic.email || ''),
+          clinicPhone: String(clinic.telefoneComercial || '').trim(),
           adminEmail: adminEntry.adminEmail,
           adminName: adminEntry.adminName,
           selectedPlan: stageInfo.selectedPlan,
           operationType: stageInfo.operationType,
+          acquisitionSource: operationalSettings?.onboarding?.acquisitionSource || 'landing',
+          promotionCode: operationalSettings?.onboarding?.promotion?.promotionCode || '',
           stage: stageInfo.stage,
           stageLabel: stageInfo.label,
           effectiveSubscriptionStatus: stageInfo.effectiveSubscriptionStatus,
@@ -2736,6 +2741,8 @@ const clinicService = {
           nomeClinica: String(signupData.nomeFantasia || '').trim(),
           responsavelNome: String(signupData.adminNome || '').trim(),
           selectedPlan,
+          promotionCode: String(signupData.promotion?.promotionCode || signupData.promotion?.code || '').trim(),
+          acquisitionSource: signupData.promotion?.source ? 'promotion' : 'landing',
           sendCount: Math.max(0, Number(pendingSignup.sendCount || 0)),
           verificationExpiresAt: normalizeIsoDate(pendingSignup.verificationExpiresAt),
           resendAvailableAt: normalizeIsoDate(pendingSignup.resendAvailableAt),
@@ -3652,7 +3659,15 @@ const clinicService = {
       cidade: String(payload?.cidade || payload?.city || '').trim(),
       uf: String(payload?.uf || payload?.estado || payload?.state || '').trim().toUpperCase().slice(0, 2),
     };
-    const selectedPlan = normalizeOnboardingPlan(payload?.selectedPlan || payload?.planType || payload?.plan || '');
+    const requestedPromotionCode = String(payload?.promotionCode || payload?.promo || payload?.offer || '').trim();
+    const promotionOffer = requestedPromotionCode
+      ? await promotionOfferService.resolveOfferForCheckout({
+          code: requestedPromotionCode,
+          targetEmail: adminEmail,
+          planType: payload?.selectedPlan || payload?.planType || payload?.plan || '',
+        })
+      : null;
+    const selectedPlan = promotionOffer?.planType || normalizeOnboardingPlan(payload?.selectedPlan || payload?.planType || payload?.plan || '');
     const document = validateDocument(payload?.documentType, payload?.documentNumber);
 
     if (!nomeFantasia || !adminNome || !adminEmail || !password || !passwordConfirmation) {
@@ -3752,6 +3767,15 @@ const clinicService = {
           clinicPhone,
           clinicAddress,
           selectedPlan,
+          promotion: promotionOffer ? {
+            promotionOfferId: promotionOffer.id,
+            promotionCode: promotionOffer.code,
+            code: promotionOffer.code,
+            title: promotionOffer.title,
+            source: promotionOffer.source,
+            regularPriceCents: promotionOffer.regularPriceCents,
+            promotionalPriceCents: promotionOffer.promotionalPriceCents,
+          } : null,
         },
         verificationCode: emailVerificationCode,
         verificationExpiresAt: emailVerificationExpiresAt,
@@ -3797,6 +3821,13 @@ const clinicService = {
         resendAvailableAt: pendingSignup?.resendAvailableAt || null,
         verificationExpiresAt: pendingSignup?.verificationExpiresAt || null,
         sendCount: Number(pendingSignup?.sendCount || 0),
+        promotion: promotionOffer ? {
+          code: promotionOffer.code,
+          title: promotionOffer.title,
+          planType: promotionOffer.planType,
+          regularPriceCents: promotionOffer.regularPriceCents,
+          promotionalPriceCents: promotionOffer.promotionalPriceCents,
+        } : null,
         user: {
           email: adminEmail,
           emailVerified: false,

@@ -1,6 +1,7 @@
 const { AppError } = require('../errors/AppError');
 const { authService } = require('../services/authService');
 const { clinicService } = require('../services/clinicService');
+const { promotionOfferService } = require('../services/promotionOfferService');
 const { requireSuperAdmin } = require('../utils/accessControl');
 
 const maskEmail = (email) => {
@@ -218,6 +219,18 @@ const refreshPendingSignupPaymentStatus = async (req, res, next) => {
   }
 };
 
+const validatePromotionOffer = async (req, res, next) => {
+  try {
+    const data = await promotionOfferService.validateOfferByCode({
+      code: req.params?.code || req.query?.code || '',
+      targetEmail: req.query?.email || '',
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const requestPasswordResetFlow = async (req, res, next) => {
   try {
     logPasswordReset('request_received', req, { status: 'received' });
@@ -287,6 +300,7 @@ module.exports = {
   updatePendingSignupOnboarding,
   createPendingSignupCheckout,
   refreshPendingSignupPaymentStatus,
+  validatePromotionOffer,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,

@@ -283,6 +283,49 @@ model PendingSignup {
   @@index([resendAvailableAt])
 }
 
+model PromotionOffer {
+  id                    String   @id @default(uuid())
+  code                  String   @unique
+  title                 String
+  description           String?
+  planType              SubscriptionPlanType
+  regularPriceCents     Int
+  promotionalPriceCents Int
+  billingCycle          String?
+  maxUses               Int?
+  usedCount             Int      @default(0)
+  validFrom             DateTime?
+  validUntil            DateTime?
+  active                Boolean  @default(true)
+  targetEmail           String?
+  targetPhone           String?
+  source                String?
+  notes                 String?
+  createdByUserId       String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  usages                PromotionOfferUsage[]
+
+  @@index([active, validUntil])
+  @@index([planType])
+  @@index([source])
+}
+
+model PromotionOfferUsage {
+  id               String         @id @default(uuid())
+  promotionOfferId String
+  promotionOffer   PromotionOffer @relation(fields: [promotionOfferId], references: [id], onDelete: Cascade)
+  pendingSignupId  String?
+  clinicId         String?
+  subscriptionId   String?
+  paymentExternalId String?
+  usedAt           DateTime       @default(now())
+
+  @@unique([promotionOfferId, pendingSignupId])
+  @@index([promotionOfferId, usedAt])
+  @@index([clinicId])
+}
+
 model Patient {
   id               String            @id @default(uuid())
   clinicId         String

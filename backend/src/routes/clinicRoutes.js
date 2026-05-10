@@ -4,6 +4,13 @@ const { authenticate } = require('../middlewares/authenticate');
 const { checkSubscription } = require('../middlewares/checkSubscription');
 const { authenticateOptional } = require('../middlewares/authenticateOptional');
 const {
+  listPromotionOffers,
+  createPromotionOffer,
+  updatePromotionOffer,
+  deactivatePromotionOffer,
+} = require('../controllers/promotionOfferController');
+
+const {
   listClinics,
   createClinicBootstrap,
   getSuperAdminOnboardingDashboard,
@@ -57,6 +64,10 @@ router.get('/', authenticateOptional, listClinics);
 router.use(authenticate);
 router.get('/super-admin/onboarding-dashboard', getSuperAdminOnboardingDashboard);
 router.delete('/super-admin/pending/:id', deleteSuperAdminPendingRegistration);
+router.get('/super-admin/promotion-offers', listPromotionOffers);
+router.post('/super-admin/promotion-offers', createPromotionOffer);
+router.patch('/super-admin/promotion-offers/:id', updatePromotionOffer);
+router.delete('/super-admin/promotion-offers/:id', deactivatePromotionOffer);
 router.get('/me/onboarding', getMyOnboardingState);
 router.patch('/me/onboarding', updateMyOnboardingState);
 router.use(checkSubscription);

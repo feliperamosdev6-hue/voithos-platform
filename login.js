@@ -137,6 +137,8 @@ document.addEventListener('DOMContentLoaded', () => {
     pendingSignupToken: '',
     pendingSignupEmail: '',
     pendingCheckoutMode: false,
+    promotionCode: '',
+    promotionOffer: null,
   };
   const initialFlowState = {
     requestedMode: 'login',
@@ -193,6 +195,10 @@ document.addEventListener('DOMContentLoaded', () => {
     onboardingFlowState.pendingSignupToken = '';
     onboardingFlowState.pendingSignupEmail = '';
     onboardingFlowState.pendingCheckoutMode = false;
+    if (!preservePlan) {
+      onboardingFlowState.promotionCode = '';
+      onboardingFlowState.promotionOffer = null;
+    }
     setProfileSelectionMessage('');
     setPaymentMessage('');
   };
@@ -252,11 +258,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const normalizedPlanType = normalizePlanType(planType);
     const fallback = PLAN_DEFINITIONS[normalizedPlanType] || null;
     const remoteMatch = (Array.isArray(catalog) ? catalog : []).find((item) => String(item?.planType || '').trim().toUpperCase() === normalizedPlanType);
+    const offer = onboardingFlowState.promotionOffer && normalizePlanType(onboardingFlowState.promotionOffer.planType) === normalizedPlanType
+      ? onboardingFlowState.promotionOffer
+      : null;
+    const promotionalPrice = offer?.promotionalPriceCents
+      ? `R$ ${(Number(offer.promotionalPriceCents) / 100).toFixed(2).replace('.', ',')}`
+      : '';
     return {
       planType: normalizedPlanType,
       label: fallback?.label || String(remoteMatch?.planType || '').trim() || 'Plano',
-      price: remoteMatch?.amount ? `R$ ${Number(remoteMatch.amount).toFixed(2).replace('.', ',')}` : (fallback?.price || '--'),
-      description: fallback?.description || 'Finalize a assinatura para liberar o acesso completo ao sistema.',
+      price: promotionalPrice || (remoteMatch?.amount ? `R$ ${Number(remoteMatch.amount).toFixed(2).replace('.', ',')}` : (fallback?.price || '--')),
+      description: offer?.title ? `Oferta promocional: ${offer.title}` : (fallback?.description || 'Finalize a assinatura para liberar o acesso completo ao sistema.'),
     };
   };
 
@@ -581,12 +593,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const rawMode = params.get('mode') || params.get('screen') || hashValue;
     const email = String(params.get('email') || '').trim().toLowerCase();
     const plan = String(params.get('plan') || '').trim();
+    const promo = String(params.get('promo') || params.get('offer') || params.get('promotion') || '').trim();
     const resume = String(params.get('resume') || params.get('resumeSession') || '').trim().toLowerCase();
     const payment = String(params.get('payment') || '').trim().toLowerCase();
     return {
       mode: normalizeRequestedMode(rawMode),
       email,
       plan: normalizePlanType(plan),
+      promo,
       resume: ['1', 'true', 'yes', 'on'].includes(resume),
       payment,
     };
@@ -595,7 +609,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clearInitialFlowUrl = () => {
     try {
       const url = new URL(window.location.href);
-      ['mode', 'screen', 'plan', 'email', 'payment', 'resume', 'resumeSession'].forEach((key) => url.searchParams.delete(key));
+      ['mode', 'screen', 'plan', 'email', 'promo', 'offer', 'promotion', 'payment', 'resume', 'resumeSession'].forEach((key) => url.searchParams.delete(key));
       url.hash = '';
       const normalizedPath = `${url.pathname}${url.search}${url.hash}`;
       window.history.replaceState({}, document.title, normalizedPath);
@@ -614,7 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
       await authApi.clearSession({ remote: false }).catch(() => null);
     }
 
-    if (request.mode === 'signup' || request.mode === 'recovery' || request.plan || request.email) {
+    if (request.mode === 'signup' || request.mode === 'recovery' || request.plan || request.email || request.promo) {
       clearInitialFlowUrl();
     }
 
@@ -625,8 +639,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (request.mode === 'signup') {
       onboardingFlowState.selectedPlanType = request.plan || '';
+      if (request.promo && authApi?.validatePromotionOffer) {
+        try {
+          const offer = await authApi.validatePromotionOffer(request.promo, request.email);
+          onboardingFlowState.promotionCode = String(offer?.code || request.promo || '').trim();
+          onboardingFlowState.promotionOffer = offer || null;
+          onboardingFlowState.selectedPlanType = normalizePlanType(offer?.planType || onboardingFlowState.selectedPlanType);
+        } catch (error) {
+          setSignupMessage(error?.message || 'Oferta promocional invalida ou expirada.');
+        }
+      } else {
+        onboardingFlowState.promotionCode = String(request.promo || '').trim();
+      }
       const planView = buildPlanView(onboardingFlowState.selectedPlanType);
-      const sourceLabel = planView.planType ? `Plano ${planView.label}` : '';
+      const sourceLabel = onboardingFlowState.promotionOffer?.code
+        ? `Oferta ${onboardingFlowState.promotionOffer.code}`
+        : (planView.planType ? `Plano ${planView.label}` : '');
       goToSignup({ email: request.email, sourceLabel, planType: onboardingFlowState.selectedPlanType });
       return;
     }
@@ -1335,6 +1363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         password,
         passwordConfirmation,
         selectedPlan: onboardingFlowState.selectedPlanType,
+        promotionCode: onboardingFlowState.promotionCode || onboardingFlowState.promotionOffer?.code || '',
       });
       logAuthUiDiagnostic('signup_result', {
         endpoint: '/auth/signup',

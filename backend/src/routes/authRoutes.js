@@ -10,6 +10,7 @@ const {
   updatePendingSignupOnboarding,
   createPendingSignupCheckout,
   refreshPendingSignupPaymentStatus,
+  validatePromotionOffer,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,
@@ -26,6 +27,7 @@ router.post('/email-verification/resend', resendEmailVerificationFlow);
 router.post('/pending-signup/onboarding', updatePendingSignupOnboarding);
 router.post('/pending-signup/checkout', createPendingSignupCheckout);
 router.post('/pending-signup/refresh-payment-status', refreshPendingSignupPaymentStatus);
+router.get('/promotion-offers/:code', validatePromotionOffer);
 router.post('/password-reset/request', requestPasswordResetFlow);
 router.post('/password-reset/validate', validatePasswordResetFlow);
 router.post('/password-reset/confirm', confirmPasswordResetFlow);

@@ -51,6 +51,78 @@
     </section>
 
     <section class="card">
+      <div class="section-heading">
+        <div>
+          <h2>Links Promocionais</h2>
+          <p>Crie ofertas com preco especial para eventos, parcerias ou negociacoes individuais.</p>
+        </div>
+        <button id="btn-refresh-promotions" class="btn-outline" type="button">Atualizar ofertas</button>
+      </div>
+      <form id="promotion-form" class="form-grid">
+        <label>
+          Nome da oferta *
+          <input id="promotion-title" required placeholder="Evento Odonto 2026">
+        </label>
+        <label>
+          Codigo
+          <input id="promotion-code" placeholder="Automatico se vazio">
+        </label>
+        <label>
+          Plano *
+          <select id="promotion-plan" required>
+            <option value="MONTHLY">Mensal</option>
+            <option value="QUARTERLY">Trimestral</option>
+            <option value="SEMIANNUAL">Semestral</option>
+            <option value="ANNUAL" selected>Anual</option>
+          </select>
+        </label>
+        <label>
+          Preco normal *
+          <input id="promotion-regular-price" type="number" min="0.01" step="0.01" value="899.90" required>
+        </label>
+        <label>
+          Preco promocional *
+          <input id="promotion-price" type="number" min="0.01" step="0.01" required placeholder="699.90">
+        </label>
+        <label>
+          Valido ate
+          <input id="promotion-valid-until" type="datetime-local">
+        </label>
+        <label>
+          Limite de usos
+          <input id="promotion-max-uses" type="number" min="1" step="1" placeholder="1">
+        </label>
+        <label>
+          Origem
+          <select id="promotion-source">
+            <option value="MANUAL">Manual</option>
+            <option value="INDIVIDUAL">Individual</option>
+            <option value="EVENT">Evento</option>
+            <option value="PARTNER">Parceria</option>
+          </select>
+        </label>
+        <label>
+          E-mail alvo
+          <input id="promotion-target-email" type="email" placeholder="Opcional">
+        </label>
+        <label>
+          Telefone alvo
+          <input id="promotion-target-phone" placeholder="Opcional">
+        </label>
+        <label class="span-2">
+          Observacoes internas
+          <textarea id="promotion-notes" rows="2" placeholder="Contexto comercial, vendedor, parceiro..."></textarea>
+        </label>
+      </form>
+      <div class="actions">
+        <button id="btn-create-promotion" class="btn-primary" type="button">Criar link promocional</button>
+      </div>
+      <p id="promotion-status" class="result" hidden></p>
+      <p id="promotion-error" class="error"></p>
+      <div id="promotion-list" class="list-empty">Carregando ofertas...</div>
+    </section>
+
+    <section class="card">
       <h2>Criar clinica</h2>
       <form id="clinic-form" class="form-grid">
         <label>

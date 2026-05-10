@@ -8,6 +8,7 @@ const { sessionRepository } = require('../repositories/sessionRepository');
 const { userRepository } = require('../repositories/userRepository');
 const { emailService } = require('./emailService');
 const { asaasService } = require('./payment/asaasService');
+const { promotionOfferService } = require('./promotionOfferService');
 
 const SESSION_TTL_DAYS = 7;
 const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
@@ -161,12 +162,19 @@ const buildPendingCheckoutCustomerData = (signupData) => {
   return customerData;
 };
 
-const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCount }) => {
+const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCount, promotionOffer = null }) => {
   const planType = normalizeSelectedPlan(signupData?.selectedPlan);
-  const plan = PUBLIC_SUBSCRIPTION_PLANS[planType];
-  if (!plan) {
+  const basePlan = PUBLIC_SUBSCRIPTION_PLANS[planType];
+  if (!basePlan) {
     throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
   }
+  const plan = promotionOffer
+    ? {
+        ...basePlan,
+        planType: promotionOffer.planType,
+        amount: roundMoney(Number(promotionOffer.promotionalPriceCents || 0) / 100),
+      }
+    : basePlan;
 
   const normalizedPaymentMethod = normalizePaymentMethod(paymentMethod);
   const normalizedInstallmentCount = normalizeInstallmentCount(installmentCount);
@@ -191,7 +199,9 @@ const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCou
     items: [
       {
         name: normalizeCheckoutName(`Plano ${plan.planType}`, 'Plano Voithos'),
-        description: `Assinatura Voithos ${plan.planType}`,
+        description: promotionOffer?.code
+          ? `Assinatura Voithos ${plan.planType} - oferta ${promotionOffer.code}`
+          : `Assinatura Voithos ${plan.planType}`,
         quantity: 1,
         value: roundMoney(plan.amount),
       },
@@ -209,6 +219,7 @@ const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCou
     plan,
     paymentMethod: normalizedPaymentMethod,
     installmentCount: normalizedPaymentMethod === 'INSTALLMENT' ? normalizedInstallmentCount : null,
+    promotionOffer,
   };
 };
 
@@ -395,6 +406,7 @@ const extractPendingSignupData = (pendingSignup) => {
     clinicPhone: String(rawData.clinicPhone || '').trim(),
     clinicAddress: normalizePendingSignupAddress(rawData.clinicAddress),
     selectedPlan: normalizeSelectedPlan(rawData.selectedPlan || rawData.planType || rawData.plan),
+    promotion: rawData.promotion && typeof rawData.promotion === 'object' ? rawData.promotion : null,
   };
 };
 
@@ -422,6 +434,16 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
   if (!plan) {
     throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup plan is invalid.');
   }
+  let contractedAmount = roundMoney(plan.amount);
+  let promotionForActivation = null;
+  if (signupData.promotion?.code) {
+    promotionForActivation = await promotionOfferService.resolveOfferForCheckout({
+      code: signupData.promotion.code,
+      targetEmail: signupData.adminEmail,
+      planType: signupData.selectedPlan,
+    });
+    contractedAmount = roundMoney(Number(promotionForActivation.promotionalPriceCents || 0) / 100);
+  }
 
   const created = await prisma.$transaction(async (tx) => {
     const paidAt = paymentContext?.paidAt instanceof Date ? paymentContext.paidAt : new Date(paymentContext?.paidAt || Date.now());
@@ -441,6 +463,14 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
           onboarding: {
             selectedPlan: signupData.selectedPlan,
             operationType: '',
+            acquisitionSource: promotionForActivation ? 'promotion' : 'landing',
+            promotion: promotionForActivation ? {
+              promotionOfferId: promotionForActivation.id,
+              promotionCode: promotionForActivation.code,
+              promotionalPriceCents: promotionForActivation.promotionalPriceCents,
+              regularPriceCents: promotionForActivation.regularPriceCents,
+              source: promotionForActivation.source,
+            } : null,
             startedAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             completedAt: '',
@@ -463,7 +493,7 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
       data: {
         clinicId: clinic.id,
         planType: plan.planType,
-        amount: roundMoney(plan.amount),
+        amount: contractedAmount,
         status: 'ACTIVE',
         startDate,
         endDate,
@@ -475,7 +505,7 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
       data: {
         subscriptionId: subscription.id,
         clinicId: clinic.id,
-        amount: roundMoney(plan.amount),
+        amount: contractedAmount,
         status: 'PAID',
         provider: String(paymentContext?.provider || ASAAS_CHECKOUT_PROVIDER).trim() || ASAAS_CHECKOUT_PROVIDER,
         externalPaymentId: String(paymentContext?.externalPaymentId || signupData?.paymentCheckout?.externalPaymentId || '').trim() || null,
@@ -490,6 +520,30 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
         lastPaymentId: subscriptionPayment.id,
       },
     });
+
+    if (promotionForActivation?.id) {
+      const usageRows = await tx.$queryRaw`
+        INSERT INTO "PromotionOfferUsage" ("id", "promotionOfferId", "pendingSignupId", "clinicId", "subscriptionId", "paymentExternalId", "usedAt")
+        VALUES (
+          ${crypto.randomUUID()},
+          ${promotionForActivation.id},
+          ${pendingSignup.id},
+          ${clinic.id},
+          ${subscription.id},
+          ${String(paymentContext?.externalPaymentId || signupData?.paymentCheckout?.externalPaymentId || '').trim() || null},
+          NOW()
+        )
+        ON CONFLICT ("promotionOfferId", "pendingSignupId") DO NOTHING
+        RETURNING "id"
+      `;
+      if (usageRows?.[0]?.id) {
+        await tx.$executeRaw`
+          UPDATE "PromotionOffer"
+          SET "usedCount" = "usedCount" + 1, "updatedAt" = NOW()
+          WHERE "id" = ${promotionForActivation.id}
+        `;
+      }
+    }
 
     const user = await tx.user.create({
       data: {
@@ -1066,6 +1120,9 @@ const updatePendingSignupOnboarding = async ({ email, pendingSignupToken, select
     ...signupData,
     selectedPlan: normalizedPlan || signupData.selectedPlan,
     operationType: String(operationType || signupData.operationType || '').trim().toUpperCase(),
+    promotion: selectedPlan && normalizedPlan !== normalizeSelectedPlan(signupData.selectedPlan)
+      ? null
+      : signupData.promotion,
     paymentCheckout: selectedPlan && normalizedPlan !== normalizeSelectedPlan(signupData.selectedPlan)
       ? null
       : signupData.paymentCheckout,
@@ -1096,6 +1153,13 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
   if (!PUBLIC_SUBSCRIPTION_PLANS[selectedPlan]) {
     throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
   }
+  const promotionOffer = signupData.promotion?.code
+    ? await promotionOfferService.resolveOfferForCheckout({
+        code: signupData.promotion.code,
+        targetEmail: pendingSignup.email,
+        planType: selectedPlan,
+      })
+    : null;
 
   const checkoutContext = buildPendingCheckoutPayload({
     signupData: {
@@ -1104,6 +1168,7 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
     },
     paymentMethod,
     installmentCount,
+    promotionOffer,
   });
 
   let checkout = null;
@@ -1129,6 +1194,14 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
       paymentLink: checkoutUrl,
       paymentMethod: checkoutContext.paymentMethod,
       installmentCount: checkoutContext.installmentCount,
+      amount: roundMoney(checkoutContext.plan.amount),
+      promotion: promotionOffer ? {
+        promotionOfferId: promotionOffer.id,
+        promotionCode: promotionOffer.code,
+        promotionalPriceCents: promotionOffer.promotionalPriceCents,
+        regularPriceCents: promotionOffer.regularPriceCents,
+        source: promotionOffer.source,
+      } : null,
       expiresAt,
       status: 'PENDING',
       createdAt: new Date().toISOString(),
@@ -1146,6 +1219,8 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
     paymentMethod: checkoutContext.paymentMethod,
     installmentCount: checkoutContext.installmentCount,
     planType: selectedPlan,
+    amount: roundMoney(checkoutContext.plan.amount),
+    promotion: promotionOffer,
     expiresAt,
     pendingCheckout: true,
   };

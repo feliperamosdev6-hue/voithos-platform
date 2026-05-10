@@ -68,12 +68,22 @@ label {
   color: #2f3b53;
 }
 
-input {
+input,
+textarea {
   border: 1px solid #ccd7e8;
   border-radius: 10px;
-  height: 40px;
   padding: 0 12px;
   font: inherit;
+}
+
+input {
+  height: 40px;
+}
+
+textarea {
+  min-height: 76px;
+  padding-top: 10px;
+  resize: vertical;
 }
 
 select {
@@ -86,10 +96,15 @@ select {
 }
 
 input:focus,
+textarea:focus,
 select:focus {
   outline: none;
   border-color: #1fa87a;
   box-shadow: 0 0 0 3px rgba(31, 168, 122, 0.15);
+}
+
+.span-2 {
+  grid-column: span 2;
 }
 
 .actions {
@@ -271,6 +286,39 @@ select:focus {
   margin-bottom: 10px;
 }
 
+.promotion-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.promotion-item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #dfe7f2;
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff, #f9fcff);
+}
+
+.promotion-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.promotion-title {
+  font-weight: 800;
+  color: #152442;
+}
+
+.promotion-code {
+  font-family: Consolas, "Courier New", monospace;
+  color: #1b7d5c;
+  font-weight: 800;
+}
+
 .clinic-actions {
   display: flex;
   gap: 8px;
@@ -380,6 +428,10 @@ select:focus {
 @media (max-width: 880px) {
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: span 1;
   }
 
   .metrics-grid,

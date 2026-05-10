@@ -1928,6 +1928,10 @@
     },
     updatePendingSignupOnboarding: async (payload = {}) => request('POST', '/auth/pending-signup/onboarding', payload || {}, { auth: false }),
     createPendingSignupCheckout: async (payload = {}) => request('POST', '/auth/pending-signup/checkout', payload || {}, { auth: false }),
+    validatePromotionOffer: async (code, email = '') => {
+      const query = cleanText(email) ? `?email=${encodeURIComponent(cleanText(email))}` : '';
+      return request('GET', `/auth/promotion-offers/${encodeURIComponent(cleanText(code))}${query}`, null, { auth: false });
+    },
     refreshPendingSignupPaymentStatus: async (payload = {}) => {
       const result = await request('POST', '/auth/pending-signup/refresh-payment-status', payload || {}, { auth: false });
       if (result?.token && result?.user) {
@@ -2159,6 +2163,10 @@
       return (Array.isArray(data) ? data : []).map(mapClinicSummary);
     },
     getOnboardingDashboard: async () => request('GET', '/clinics/super-admin/onboarding-dashboard', null, { auth: true }),
+    listPromotionOffers: async () => request('GET', '/clinics/super-admin/promotion-offers', null, { auth: true }),
+    createPromotionOffer: async (payload = {}) => request('POST', '/clinics/super-admin/promotion-offers', payload || {}, { auth: true }),
+    updatePromotionOffer: async (id, payload = {}) => request('PATCH', `/clinics/super-admin/promotion-offers/${encodeURIComponent(cleanText(id))}`, payload || {}, { auth: true }),
+    deactivatePromotionOffer: async (id) => request('DELETE', `/clinics/super-admin/promotion-offers/${encodeURIComponent(cleanText(id))}`, null, { auth: true }),
     deletePendingClinicRegistration: async (id) => request(
       'DELETE',
       `/clinics/super-admin/pending/${encodeURIComponent(cleanText(id))}`,
