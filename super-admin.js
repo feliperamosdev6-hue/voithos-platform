@@ -68,6 +68,26 @@ document.addEventListener('DOMContentLoaded', () => {
     promotionStatus.hidden = !text;
   };
 
+  const getPromotionCreateErrorMessage = (error) => {
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '').trim().toUpperCase();
+    const message = String(error?.message || '').trim();
+
+    if (status === 401 || code === 'UNAUTHORIZED') {
+      return 'Sessao expirada. Entre novamente como superadmin para criar links promocionais.';
+    }
+    if (status === 403 || code === 'FORBIDDEN') {
+      return 'Seu usuario autenticado nao tem permissao de superadmin para criar links promocionais.';
+    }
+    if (status === 400 || code === 'VALIDATION_ERROR') {
+      return message || 'Revise os dados da oferta promocional.';
+    }
+    if (status === 409 || code === 'PROMOTION_CODE_EXISTS') {
+      return message || 'Este codigo promocional ja existe. Use outro codigo.';
+    }
+    return message || 'Falha ao criar link promocional.';
+  };
+
   const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -543,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
       setPromotionStatus(`Link promocional criado: ${created?.link || created?.code || ''}`);
       await loadPromotionOffers();
     } catch (err) {
-      setPromotionError(err?.message || 'Falha ao criar link promocional.');
+      setPromotionError(getPromotionCreateErrorMessage(err));
       setPromotionStatus('');
     } finally {
       btnCreatePromotion.disabled = false;

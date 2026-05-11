@@ -12,6 +12,7 @@ const attachAuthContext = (req, token, user) => {
   req.auth = {
     token,
     userId: user.id,
+    email: user.email,
     clinicId: user.clinicId,
     role: user.role,
     isClinicAdmin: user.isClinicAdmin === true,

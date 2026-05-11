@@ -1493,7 +1493,7 @@
         const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
         const error = new Error(message);
         error.status = response.status;
-        error.code = 'HTTP_ERROR';
+        error.code = payload?.error?.code || payload?.code || 'HTTP_ERROR';
         logWebAuthDiagnostic('request_failed', {
           endpoint: path,
           method,
