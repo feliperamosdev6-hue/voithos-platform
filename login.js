@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const clinicApi = window.appApi?.clinic || window.clinic || {};
   const subscriptionApi = window.appApi?.subscription || window.subscription || {};
   const PAYMENT_RETURN_STORAGE_KEY = 'voithos.checkout.return';
+  const SIGNUP_DRAFT_STORAGE_KEY = 'voithos.signup.draft';
   const RESEND_WAIT_SECONDS = 5 * 60;
   const VERIFICATION_WAIT_SECONDS = 2 * 60;
   const PLAN_DEFINITIONS = {
@@ -158,6 +159,126 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const setSignupMessage = (message) => {
     if (signupMessage) signupMessage.textContent = message || '';
+  };
+
+  const SIGNUP_DRAFT_FIELDS = [
+    'documentType',
+    'documentNumber',
+    'nomeClinica',
+    'responsavelNome',
+    'adminEmail',
+    'telefone',
+    'cep',
+    'rua',
+    'numero',
+    'complemento',
+    'bairro',
+    'cidade',
+    'uf',
+  ];
+
+  const collectSignupDraft = () => {
+    const draft = {};
+    SIGNUP_DRAFT_FIELDS.forEach((fieldName) => {
+      draft[fieldName] = String(signupForm?.[fieldName]?.value || '').trim();
+    });
+    draft.selectedPlanType = String(onboardingFlowState.selectedPlanType || '').trim().toUpperCase();
+    draft.promotionCode = String(onboardingFlowState.promotionCode || onboardingFlowState.promotionOffer?.code || '').trim();
+    draft.savedAt = new Date().toISOString();
+    return draft;
+  };
+
+  const saveSignupDraft = () => {
+    if (!signupForm) return;
+    try {
+      localStorage.setItem(SIGNUP_DRAFT_STORAGE_KEY, JSON.stringify(collectSignupDraft()));
+    } catch (_error) {
+      // best-effort only
+    }
+  };
+
+  const readSignupDraft = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SIGNUP_DRAFT_STORAGE_KEY) || 'null');
+      return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const clearSignupDraft = () => {
+    try {
+      localStorage.removeItem(SIGNUP_DRAFT_STORAGE_KEY);
+    } catch (_error) {
+      // best-effort only
+    }
+  };
+
+  const restoreSignupDraft = ({ email = '', planType = '', promotionCode = null } = {}) => {
+    if (!signupForm) return;
+    const draft = readSignupDraft() || {};
+    SIGNUP_DRAFT_FIELDS.forEach((fieldName) => {
+      if (!signupForm?.[fieldName]) return;
+      const nextValue = fieldName === 'adminEmail' && email
+        ? email
+        : String(draft[fieldName] || '').trim();
+      if (nextValue) signupForm[fieldName].value = nextValue;
+    });
+    if (email && signupForm?.adminEmail) signupForm.adminEmail.value = email;
+
+    const restoredPlan = normalizePlanType(planType || draft.selectedPlanType || onboardingFlowState.selectedPlanType);
+    if (restoredPlan) onboardingFlowState.selectedPlanType = restoredPlan;
+
+    const restoredPromotion = String(promotionCode !== null ? promotionCode : (draft.promotionCode || onboardingFlowState.promotionCode || '')).trim();
+    if (restoredPromotion) onboardingFlowState.promotionCode = restoredPromotion;
+  };
+
+  const getFriendlySignupError = (error) => {
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '').trim().toUpperCase();
+    const message = String(error?.message || '').trim();
+
+    if (code === 'USER_EMAIL_EXISTS' || /email.*exists|e-mail.*existe|already exists/i.test(message)) {
+      return 'Este e-mail ja possui conta ativa. Use outro e-mail ou faca login.';
+    }
+    if (code === 'CLINIC_DOCUMENT_EXISTS' || /cpf|cnpj|document/i.test(message)) {
+      return 'Este CPF/CNPJ ja esta cadastrado. Confira o documento informado.';
+    }
+    if (code === 'PROMOTION_OFFER_INVALID') {
+      return 'Este link promocional expirou ou nao esta mais disponivel. Voce pode continuar o cadastro sem promocao.';
+    }
+    if (code === 'PROMOTION_TARGET_MISMATCH' || code === 'PROMOTION_PLAN_MISMATCH') {
+      return 'Este link promocional nao esta disponivel para este e-mail ou plano.';
+    }
+    if (code === 'VALIDATION_ERROR' || status === 400) {
+      if (/name|nome/i.test(message)) return 'Confira o nome informado.';
+      if (/password|senha/i.test(message)) return 'Confira a senha e a confirmacao.';
+      return 'Confira os dados informados e tente novamente.';
+    }
+    return message || 'Nao foi possivel criar a conta. Revise os dados e tente novamente.';
+  };
+
+  const getFriendlyCheckoutError = (error) => {
+    const status = Number(error?.status || 0);
+    const code = String(error?.code || '').trim().toUpperCase();
+    const message = String(error?.message || '').trim();
+
+    if (code === 'PENDING_CHECKOUT_EXPIRED' || status === 410) {
+      return 'Seu cadastro pendente expirou. Revise os dados e envie novamente para gerar um novo checkout.';
+    }
+    if (code === 'CHECKOUT_ADDRESS_REQUIRED') {
+      return 'Revise o endereco da clinica antes de gerar o checkout.';
+    }
+    if (code === 'PROMOTION_OFFER_INVALID') {
+      return 'Este link promocional expirou ou nao esta mais disponivel.';
+    }
+    if (code === 'ASAAS_CHECKOUT_FAILED') {
+      return 'Nao foi possivel criar o checkout. Revise os dados e tente novamente.';
+    }
+    if (code === 'VALIDATION_ERROR' || status === 400) {
+      return message || 'Revise os dados antes de gerar o checkout.';
+    }
+    return message || 'Nao foi possivel preparar o pagamento agora.';
   };
 
   const hideAllScreens = () => {
@@ -569,6 +690,11 @@ document.addEventListener('DOMContentLoaded', () => {
     updateSubtitle('Criar conta');
     hideAllScreens();
     onboardingFlowState.selectedPlanType = selectedPlanType;
+    restoreSignupDraft({
+      email: prefillEmail,
+      planType: selectedPlanType,
+      promotionCode: onboardingFlowState.promotionCode,
+    });
     setSignupPlanBanner(onboardingFlowState.selectedPlanType);
 
     if (prefillEmail) {
@@ -645,6 +771,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (request.mode === 'signup') {
       onboardingFlowState.selectedPlanType = request.plan || '';
+      let initialSignupMessage = '';
       if (request.promo && authApi?.validatePromotionOffer) {
         try {
           const offer = await authApi.validatePromotionOffer(request.promo, request.email);
@@ -652,7 +779,9 @@ document.addEventListener('DOMContentLoaded', () => {
           onboardingFlowState.promotionOffer = offer || null;
           onboardingFlowState.selectedPlanType = normalizePlanType(offer?.planType || onboardingFlowState.selectedPlanType);
         } catch (error) {
-          setSignupMessage(error?.message || 'Oferta promocional invalida ou expirada.');
+          onboardingFlowState.promotionCode = '';
+          onboardingFlowState.promotionOffer = null;
+          initialSignupMessage = getFriendlySignupError(error);
         }
       } else {
         onboardingFlowState.promotionCode = String(request.promo || '').trim();
@@ -662,6 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `Oferta ${onboardingFlowState.promotionOffer.code}`
         : (planView.planType ? `Plano ${planView.label}` : '');
       goToSignup({ email: request.email, sourceLabel, planType: onboardingFlowState.selectedPlanType });
+      if (initialSignupMessage) setSignupMessage(initialSignupMessage);
       return;
     }
 
@@ -1000,6 +1130,9 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleSignupForm(false);
     goToLogin();
   });
+
+  signupForm?.addEventListener('input', saveSignupDraft);
+  signupForm?.addEventListener('change', saveSignupDraft);
 
   backToLoginFromVerification?.addEventListener('click', goToLogin);
   backToLoginFromRecovery?.addEventListener('click', goToLogin);
@@ -1351,6 +1484,7 @@ document.addEventListener('DOMContentLoaded', () => {
       status: 'started',
     });
     try {
+      saveSignupDraft();
       const result = await authApi.signup({
         documentType,
         documentNumber,
@@ -1379,6 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (result?.success && result?.pendingVerification === true) {
+        clearSignupDraft();
         const verificationPrompt = result?.reusedActiveVerification === true
           ? `Ja existe um codigo valido para ${maskEmail(result?.user?.email || adminEmail)}. Use o codigo anterior ou aguarde para reenviar.`
           : `Enviamos um codigo para ${maskEmail(result?.user?.email || adminEmail)}. Confirme para acessar o sistema.`;
@@ -1394,6 +1529,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (result?.success && result?.user) {
+        clearSignupDraft();
         await resumeAuthenticatedExperience(result.user, { forcePayment: true });
         return;
       }
@@ -1407,7 +1543,12 @@ document.addEventListener('DOMContentLoaded', () => {
         status: 'error',
         error: err?.message || String(err || ''),
       });
-      setSignupMessage(err?.message || 'Nao foi possivel criar a conta.');
+      if (String(err?.code || '').trim().toUpperCase() === 'PROMOTION_OFFER_INVALID') {
+        onboardingFlowState.promotionCode = '';
+        onboardingFlowState.promotionOffer = null;
+        saveSignupDraft();
+      }
+      setSignupMessage(getFriendlySignupError(err));
     }
   });
 
@@ -1556,7 +1697,17 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (error) {
       console.error('Erro ao preparar assinatura', error);
-      setPaymentMessage(error?.message || 'Nao foi possivel preparar a assinatura agora.');
+      const friendlyMessage = getFriendlyCheckoutError(error);
+      if (String(error?.code || '').trim().toUpperCase() === 'PENDING_CHECKOUT_EXPIRED' || Number(error?.status || 0) === 410) {
+        goToSignup({
+          email: onboardingFlowState.pendingSignupEmail,
+          planType: onboardingFlowState.selectedPlanType,
+          sourceLabel: onboardingFlowState.promotionCode ? `Oferta ${onboardingFlowState.promotionCode}` : '',
+        });
+        setSignupMessage(friendlyMessage);
+        return;
+      }
+      setPaymentMessage(friendlyMessage);
     }
   });
 
@@ -1569,6 +1720,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   initializeAuthScreen().catch((error) => {
     console.error('Erro ao inicializar fluxo de autenticacao.', error);
+    if (initialFlowState.requestedMode === 'signup') {
+      goToSignup({ planType: onboardingFlowState.selectedPlanType });
+      setSignupMessage('Nao foi possivel iniciar automaticamente. Revise os dados e continue o cadastro.');
+      return;
+    }
     goToLogin();
   });
 });
