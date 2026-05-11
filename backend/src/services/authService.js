@@ -265,6 +265,35 @@ const sanitizeUser = (user) => {
   };
 };
 
+const isSuperAdminUser = (user = {}) => {
+  const role = String(user?.role || '').trim().toUpperCase();
+  const email = normalizeEmail(user?.email || '');
+  return role === 'SUPER_ADMIN' || role === 'SUPERADMIN' || email === SUPER_ADMIN_EMAIL;
+};
+
+const assertClinicAccessAllowed = async (user = {}) => {
+  if (!user || isSuperAdminUser(user)) return;
+  const clinicId = String(user?.clinicId || '').trim();
+  if (!clinicId) return;
+
+  let clinic;
+  try {
+    clinic = await clinicRepository.findById(clinicId);
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+    }
+    throw error;
+  }
+  if (clinic?.accessBlocked === true) {
+    throw new AppError(
+      403,
+      'CLINIC_ACCESS_BLOCKED',
+      'Acesso temporariamente bloqueado. Entre em contato com o suporte da Voithos.'
+    );
+  }
+};
+
 const hashPassword = async (password) => {
   const raw = String(password || '');
   if (!raw.trim()) {
@@ -1021,6 +1050,7 @@ const getCurrentUser = async (token) => {
   try {
     const user = await userRepository.findById(session.userId);
     if (!user || user.ativo === false) return null;
+    await assertClinicAccessAllowed(user);
     return sanitizeUser(user);
   } catch (error) {
     if (isMissingTableError(error)) {
@@ -1067,6 +1097,8 @@ const login = async ({ email, password }) => {
   if (!passwordOk) {
     throw new AppError(401, 'INVALID_CREDENTIALS', 'Invalid credentials.');
   }
+
+  await assertClinicAccessAllowed(user);
 
   const session = await createSession(user.id);
   return {

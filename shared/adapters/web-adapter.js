@@ -1422,6 +1422,12 @@
     email: cleanText(clinic?.email || clinic?.emailClinica),
     telefone: cleanText(clinic?.telefone || clinic?.telefoneComercial),
     telefoneComercial: cleanText(clinic?.telefoneComercial || clinic?.telefone),
+    accessBlocked: clinic?.accessBlocked === true,
+    accessBlockedAt: cleanText(clinic?.accessBlockedAt),
+    accessBlockedReason: cleanText(clinic?.accessBlockedReason),
+    accessBlockedByUserId: cleanText(clinic?.accessBlockedByUserId),
+    accessUnblockedAt: cleanText(clinic?.accessUnblockedAt),
+    accessUnblockedByUserId: cleanText(clinic?.accessUnblockedByUserId),
     status: cleanText(clinic?.status || 'active').toLowerCase() || 'active',
   });
 
@@ -2101,6 +2107,10 @@
         persistWebSession({ token, user: mappedUser, clinic });
         return mappedUser;
       } catch (error) {
+        if (error?.code === 'CLINIC_ACCESS_BLOCKED' || error?.status === 403) {
+          clearWebSession();
+          throw error;
+        }
         if (/unauthorized|expired|invalid/i.test(cleanText(error?.message))) {
           clearWebSession();
           return null;
@@ -2167,6 +2177,18 @@
     createPromotionOffer: async (payload = {}) => request('POST', '/clinics/super-admin/promotion-offers', payload || {}, { auth: true }),
     updatePromotionOffer: async (id, payload = {}) => request('PATCH', `/clinics/super-admin/promotion-offers/${encodeURIComponent(cleanText(id))}`, payload || {}, { auth: true }),
     deactivatePromotionOffer: async (id) => request('DELETE', `/clinics/super-admin/promotion-offers/${encodeURIComponent(cleanText(id))}`, null, { auth: true }),
+    blockClinicAccess: async (clinicId, reason = '') => request(
+      'POST',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/block`,
+      { reason: cleanText(reason) },
+      { auth: true }
+    ),
+    unblockClinicAccess: async (clinicId) => request(
+      'POST',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/unblock`,
+      {},
+      { auth: true }
+    ),
     deletePendingClinicRegistration: async (id) => request(
       'DELETE',
       `/clinics/super-admin/pending/${encodeURIComponent(cleanText(id))}`,

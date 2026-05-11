@@ -14,6 +14,12 @@ const clinicPublicSelect = {
   email: true,
   telefoneComercial: true,
   endereco: true,
+  accessBlocked: true,
+  accessBlockedAt: true,
+  accessBlockedReason: true,
+  accessBlockedByUserId: true,
+  accessUnblockedAt: true,
+  accessUnblockedByUserId: true,
   createdAt: true,
   updatedAt: true,
 };
@@ -33,6 +39,12 @@ const clinicRepository = {
       email: true,
       telefoneComercial: true,
       endereco: true,
+      accessBlocked: true,
+      accessBlockedAt: true,
+      accessBlockedReason: true,
+      accessBlockedByUserId: true,
+      accessUnblockedAt: true,
+      accessUnblockedByUserId: true,
       operationalSettings: true,
     },
   }),
@@ -112,9 +124,38 @@ const clinicRepository = {
       email: true,
       telefoneComercial: true,
       endereco: true,
+      accessBlocked: true,
+      accessBlockedAt: true,
+      accessBlockedReason: true,
+      accessBlockedByUserId: true,
+      accessUnblockedAt: true,
+      accessUnblockedByUserId: true,
       operationalSettings: true,
     },
   }),
+
+  updateAccessBlock: async ({ clinicId, blocked, reason, actorId }) => {
+    const isBlocked = blocked === true;
+    const now = new Date();
+    return prisma.clinic.update({
+      where: { id: toRequiredString(clinicId, 'clinicId') },
+      data: isBlocked
+        ? {
+            accessBlocked: true,
+            accessBlockedAt: now,
+            accessBlockedReason: toNullableString(reason),
+            accessBlockedByUserId: toNullableString(actorId),
+            accessUnblockedAt: null,
+            accessUnblockedByUserId: null,
+          }
+        : {
+            accessBlocked: false,
+            accessUnblockedAt: now,
+            accessUnblockedByUserId: toNullableString(actorId),
+          },
+      select: clinicPublicSelect,
+    });
+  },
 };
 
 module.exports = { clinicRepository };

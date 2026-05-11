@@ -2599,6 +2599,12 @@ const clinicService = {
             cnpjCpf: true,
             email: true,
             telefoneComercial: true,
+            accessBlocked: true,
+            accessBlockedAt: true,
+            accessBlockedReason: true,
+            accessBlockedByUserId: true,
+            accessUnblockedAt: true,
+            accessUnblockedByUserId: true,
             createdAt: true,
             updatedAt: true,
             operationalSettings: true,
@@ -2723,6 +2729,12 @@ const clinicService = {
           cnpjOuCpf: String(clinic.cnpjCpf || '').trim(),
           clinicEmail: normalizeEmail(clinic.email || ''),
           clinicPhone: String(clinic.telefoneComercial || '').trim(),
+          accessBlocked: clinic.accessBlocked === true,
+          accessBlockedAt: normalizeIsoDate(clinic.accessBlockedAt),
+          accessBlockedReason: String(clinic.accessBlockedReason || '').trim(),
+          accessBlockedByUserId: String(clinic.accessBlockedByUserId || '').trim(),
+          accessUnblockedAt: normalizeIsoDate(clinic.accessUnblockedAt),
+          accessUnblockedByUserId: String(clinic.accessUnblockedByUserId || '').trim(),
           adminEmail: adminEntry.adminEmail,
           adminName: adminEntry.adminName,
           selectedPlan: stageInfo.selectedPlan,
@@ -2834,6 +2846,96 @@ const clinicService = {
           pendingSignups: [],
           clinicSnapshots: [],
         };
+      }
+      throw error;
+    }
+  },
+
+  blockClinicAccess: async ({ clinicId, reason, actorId } = {}) => {
+    try {
+      const normalizedClinicId = String(clinicId || '').trim();
+      const normalizedReason = String(reason || '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      if (!normalizedClinicId) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+      }
+      if (!normalizedReason) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'Blocking reason is required.');
+      }
+
+      const clinic = await clinicRepository.findById(normalizedClinicId);
+      if (!clinic) {
+        throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+      }
+      if (clinic.accessBlocked === true) {
+        return {
+          clinic,
+          changed: false,
+        };
+      }
+
+      const updatedClinic = await clinicRepository.updateAccessBlock({
+        clinicId: normalizedClinicId,
+        blocked: true,
+        reason: normalizedReason,
+        actorId,
+      });
+
+      console.info('[super-admin][clinic-access]', {
+        action: 'block',
+        actorId: String(actorId || '').trim(),
+        clinicId: normalizedClinicId,
+        reason: normalizedReason,
+      });
+
+      return {
+        clinic: updatedClinic,
+        changed: true,
+      };
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
+      }
+      throw error;
+    }
+  },
+
+  unblockClinicAccess: async ({ clinicId, actorId } = {}) => {
+    try {
+      const normalizedClinicId = String(clinicId || '').trim();
+      if (!normalizedClinicId) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+      }
+
+      const clinic = await clinicRepository.findById(normalizedClinicId);
+      if (!clinic) {
+        throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+      }
+      if (clinic.accessBlocked !== true) {
+        return {
+          clinic,
+          changed: false,
+        };
+      }
+
+      const updatedClinic = await clinicRepository.updateAccessBlock({
+        clinicId: normalizedClinicId,
+        blocked: false,
+        actorId,
+      });
+
+      console.info('[super-admin][clinic-access]', {
+        action: 'unblock',
+        actorId: String(actorId || '').trim(),
+        clinicId: normalizedClinicId,
+      });
+
+      return {
+        clinic: updatedClinic,
+        changed: true,
+      };
+    } catch (error) {
+      if (isMissingTableError(error)) {
+        throw new AppError(503, 'RELATIONAL_SCHEMA_NOT_READY', 'Relational schema is not initialized yet.');
       }
       throw error;
     }

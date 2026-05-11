@@ -15,6 +15,8 @@ const {
   createClinicBootstrap,
   getSuperAdminOnboardingDashboard,
   deleteSuperAdminPendingRegistration,
+  blockSuperAdminClinicAccess,
+  unblockSuperAdminClinicAccess,
   getMyOperationalSettings,
   getMyOnboardingState,
   updateMyOperationalSettings,
@@ -64,6 +66,8 @@ router.get('/', authenticateOptional, listClinics);
 router.use(authenticate);
 router.get('/super-admin/onboarding-dashboard', getSuperAdminOnboardingDashboard);
 router.delete('/super-admin/pending/:id', deleteSuperAdminPendingRegistration);
+router.post('/super-admin/clinics/:clinicId/block', blockSuperAdminClinicAccess);
+router.post('/super-admin/clinics/:clinicId/unblock', unblockSuperAdminClinicAccess);
 router.get('/super-admin/promotion-offers', listPromotionOffers);
 router.post('/super-admin/promotion-offers', createPromotionOffer);
 router.patch('/super-admin/promotion-offers/:id', updatePromotionOffer);

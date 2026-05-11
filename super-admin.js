@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const dashboardClinicMap = new Map();
   const pendingCleanupIds = new Set();
   const promotionActionIds = new Set();
+  const clinicAccessActionIds = new Set();
   let clinicsCache = [];
   let promotionOffersCache = [];
   let dashboardCache = null;
@@ -188,7 +189,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return { label: formatStageLabel(stage, 'Pendente'), className: getBadgeClass(stage) };
   };
 
-  const getAccessStatus = (snapshot = {}) => {
+  const isClinicAccessBlocked = (clinic = {}, snapshot = {}) => clinic?.accessBlocked === true || snapshot?.accessBlocked === true;
+
+  const getAccessStatus = (snapshot = {}, clinic = {}) => {
+    if (isClinicAccessBlocked(clinic, snapshot)) return 'Bloqueada';
     const commercialStatus = getCommercialStatus(snapshot);
     const label = String(commercialStatus.label || '').trim();
     if (label === 'Ativa' || label === 'Vencendo em breve') return 'Liberado';
@@ -481,12 +485,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const snapshot = getClinicStageSnapshot(clinicId);
       const stageLabel = formatStageLabel(snapshot?.stage, snapshot?.stageLabel || 'Sem telemetria');
       const commercialStatus = getCommercialStatus(snapshot || {});
-      const accessStatus = getAccessStatus(snapshot || {});
+      const accessBlocked = isClinicAccessBlocked(clinic, snapshot || {});
+      const accessStatus = getAccessStatus(snapshot || {}, clinic);
+      const accessReason = String(snapshot?.accessBlockedReason || clinic?.accessBlockedReason || '').trim();
+      const accessBlockedAt = snapshot?.accessBlockedAt || clinic?.accessBlockedAt;
       const hasPaidPayment = String(snapshot?.latestPaidPaymentStatus || snapshot?.lastPaymentStatus || '').trim().toUpperCase() === 'PAID';
       const paidAmount = snapshot?.latestPaidPaymentAmount ?? snapshot?.lastPaymentAmount;
       const paidAt = snapshot?.latestPaidPaymentPaidAt || snapshot?.lastPaymentPaidAt;
       const canDeletePending = String(snapshot?.stage || '').trim().toUpperCase() === 'PAYMENT_PENDING';
       const isDeletingPending = pendingCleanupIds.has(clinicId);
+      const isAccessBusy = clinicAccessActionIds.has(clinicId);
       return `
         <article class="clinic-item" data-clinic-id="${clinicId}">
           <div class="clinic-topline">
@@ -500,14 +508,17 @@ document.addEventListener('DOMContentLoaded', () => {
           <div class="clinic-meta">Plano: ${formatPlanLabel(snapshot?.selectedPlan)} | Perfil: ${formatOperationLabel(snapshot?.operationType)}</div>
           <div class="clinic-meta">Pagamento: ${hasPaidPayment ? `${formatCurrency(paidAmount)} em ${formatDateTime(paidAt)}` : 'Sem pagamento confirmado'}</div>
           <div class="clinic-meta">Vencimento: ${formatDate(snapshot?.subscriptionEndDate)} | ${formatDaysUntil(snapshot?.subscriptionEndDate)}</div>
-          <div class="clinic-meta">Acesso: ${accessStatus} | Controle manual: em breve</div>
+          <div class="clinic-meta">Acesso: ${accessStatus}${accessBlocked ? ` | Bloqueado em ${formatDateTime(accessBlockedAt)}${accessReason ? ` | Motivo: ${accessReason}` : ''}` : ' | Controle manual disponivel'}</div>
           <div class="clinic-meta">Origem: ${snapshot?.promotionCode ? `Promocao ${snapshot.promotionCode}` : (snapshot?.acquisitionSource || 'landing')}</div>
           <div class="clinic-meta">Admin: ${snapshot?.adminEmail || '-'}</div>
           <div class="clinic-meta">Atualizado: ${formatDateTime(snapshot?.onboardingUpdatedAt || snapshot?.updatedAt || clinic?.updatedAt)}</div>
           <div class="clinic-actions">
-            <button type="button" class="btn-primary" data-action="open-clinic" data-clinic-id="${clinicId}">Abrir clinica</button>
+            <button type="button" class="btn-primary" data-action="open-clinic" data-clinic-id="${clinicId}" ${accessBlocked ? 'disabled title="Desbloqueie o acesso antes de abrir a clinica."' : ''}>Abrir clinica</button>
             <button type="button" data-action="copy-id" data-clinic-id="${clinicId}">Copiar ID</button>
             ${hasCredentials ? `<button type="button" data-action="copy-credentials" data-clinic-id="${clinicId}">Copiar credenciais</button>` : ''}
+            ${accessBlocked
+              ? `<button type="button" class="btn-outline" data-action="unblock-clinic-access" data-clinic-id="${clinicId}" ${isAccessBusy ? 'disabled' : ''}>${isAccessBusy ? 'Desbloqueando...' : 'Desbloquear acesso'}</button>`
+              : `<button type="button" class="btn-outline" data-action="block-clinic-access" data-clinic-id="${clinicId}" ${isAccessBusy ? 'disabled' : ''}>${isAccessBusy ? 'Bloqueando...' : 'Bloquear acesso'}</button>`}
             ${canDeletePending ? `<button type="button" class="btn-outline" data-action="delete-pending" data-pending-id="${clinicId}" ${isDeletingPending ? 'disabled' : ''}>${isDeletingPending ? 'Excluindo...' : 'Excluir pendente'}</button>` : ''}
           </div>
         </article>
@@ -752,6 +763,16 @@ document.addEventListener('DOMContentLoaded', () => {
       await handleDeletePending(pendingId || clinicId);
       return;
     }
+
+    if (action === 'block-clinic-access') {
+      await handleClinicAccessBlock(clinicId);
+      return;
+    }
+
+    if (action === 'unblock-clinic-access') {
+      await handleClinicAccessUnblock(clinicId);
+      return;
+    }
   });
 
   dashboardPendingSignups?.addEventListener('click', async (event) => {
@@ -840,6 +861,70 @@ document.addEventListener('DOMContentLoaded', () => {
       pendingCleanupIds.delete(normalizedId);
       renderClinics(clinicsCache);
       renderPendingSignups(Array.isArray(dashboardCache?.pendingSignups) ? dashboardCache.pendingSignups : []);
+    }
+  };
+
+  const handleClinicAccessBlock = async (clinicId) => {
+    const normalizedId = String(clinicId || '').trim();
+    if (!normalizedId) {
+      setDashboardError('Clinica invalida para bloqueio.');
+      return;
+    }
+
+    const clinic = clinicsCache.find((item) => String(item.clinicId || '').trim() === normalizedId);
+    const label = clinic?.nomeFantasia || clinic?.razaoSocial || normalizedId;
+    const reason = String(window.prompt(`Informe o motivo do bloqueio manual de acesso para:\n\n${label}`, '') || '').replace(/\s+/g, ' ').trim();
+    if (!reason) {
+      setDashboardError('Informe um motivo para bloquear o acesso.');
+      return;
+    }
+
+    const confirmed = window.confirm('Confirmar bloqueio manual? A clinica nao conseguira acessar o sistema ate ser desbloqueada.');
+    if (!confirmed) return;
+
+    clinicAccessActionIds.add(normalizedId);
+    setDashboardError('');
+    setDashboardStatus('');
+    renderClinics(clinicsCache);
+
+    try {
+      await authApi.blockClinicAccess(normalizedId, reason);
+      setDashboardStatus('Acesso da clinica bloqueado.');
+      await refreshSuperAdminData();
+    } catch (err) {
+      setDashboardError(err?.message || 'Falha ao bloquear acesso da clinica.');
+    } finally {
+      clinicAccessActionIds.delete(normalizedId);
+      renderClinics(clinicsCache);
+    }
+  };
+
+  const handleClinicAccessUnblock = async (clinicId) => {
+    const normalizedId = String(clinicId || '').trim();
+    if (!normalizedId) {
+      setDashboardError('Clinica invalida para desbloqueio.');
+      return;
+    }
+
+    const clinic = clinicsCache.find((item) => String(item.clinicId || '').trim() === normalizedId);
+    const label = clinic?.nomeFantasia || clinic?.razaoSocial || normalizedId;
+    const confirmed = window.confirm(`Desbloquear acesso da clinica?\n\n${label}`);
+    if (!confirmed) return;
+
+    clinicAccessActionIds.add(normalizedId);
+    setDashboardError('');
+    setDashboardStatus('');
+    renderClinics(clinicsCache);
+
+    try {
+      await authApi.unblockClinicAccess(normalizedId);
+      setDashboardStatus('Acesso da clinica desbloqueado.');
+      await refreshSuperAdminData();
+    } catch (err) {
+      setDashboardError(err?.message || 'Falha ao desbloquear acesso da clinica.');
+    } finally {
+      clinicAccessActionIds.delete(normalizedId);
+      renderClinics(clinicsCache);
     }
   };
 

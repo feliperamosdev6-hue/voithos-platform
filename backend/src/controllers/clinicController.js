@@ -66,6 +66,39 @@ const deleteSuperAdminPendingRegistration = async (req, res, next) => {
   }
 };
 
+const blockSuperAdminClinicAccess = async (req, res, next) => {
+  try {
+    requireSuperAdmin(req);
+    const data = await clinicService.blockClinicAccess({
+      clinicId: req?.params?.clinicId || '',
+      reason: req?.body?.reason || '',
+      actorId: req?.auth?.userId || '',
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const unblockSuperAdminClinicAccess = async (req, res, next) => {
+  try {
+    requireSuperAdmin(req);
+    const data = await clinicService.unblockClinicAccess({
+      clinicId: req?.params?.clinicId || '',
+      actorId: req?.auth?.userId || '',
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getMyOperationalSettings = async (req, res, next) => {
   try {
     const data = await clinicService.getOperationalSettings({
@@ -545,6 +578,8 @@ module.exports = {
   createClinicBootstrap,
   getSuperAdminOnboardingDashboard,
   deleteSuperAdminPendingRegistration,
+  blockSuperAdminClinicAccess,
+  unblockSuperAdminClinicAccess,
   getMyOperationalSettings,
   getMyOnboardingState,
   updateMyOperationalSettings,
