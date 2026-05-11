@@ -2624,11 +2624,28 @@ const clinicService = {
                 lastPayment: {
                   select: {
                     status: true,
+                    amount: true,
                     provider: true,
                     paymentLink: true,
                     createdAt: true,
                     paidAt: true,
                   },
+                },
+                payments: {
+                  where: {
+                    status: 'PAID',
+                  },
+                  select: {
+                    status: true,
+                    amount: true,
+                    provider: true,
+                    createdAt: true,
+                    paidAt: true,
+                  },
+                  orderBy: {
+                    paidAt: 'desc',
+                  },
+                  take: 1,
                 },
               },
             },
@@ -2695,6 +2712,9 @@ const clinicService = {
         if (Object.prototype.hasOwnProperty.call(stageBreakdown, stageInfo.stage)) {
           stageBreakdown[stageInfo.stage] += 1;
         }
+        const latestPaidPayment = Array.isArray(clinic.subscription?.payments)
+          ? clinic.subscription.payments[0] || null
+          : null;
 
         return {
           clinicId: clinic.id,
@@ -2712,6 +2732,18 @@ const clinicService = {
           stage: stageInfo.stage,
           stageLabel: stageInfo.label,
           effectiveSubscriptionStatus: stageInfo.effectiveSubscriptionStatus,
+          subscriptionStatus: String(clinic.subscription?.status || '').trim().toUpperCase(),
+          subscriptionStartDate: normalizeIsoDate(clinic.subscription?.startDate),
+          subscriptionEndDate: normalizeIsoDate(clinic.subscription?.endDate),
+          subscriptionGraceUntil: normalizeIsoDate(clinic.subscription?.graceUntil),
+          lastPaymentStatus: String(clinic.subscription?.lastPayment?.status || '').trim().toUpperCase(),
+          lastPaymentAmount: clinic.subscription?.lastPayment?.amount != null ? Number(clinic.subscription.lastPayment.amount) : null,
+          lastPaymentPaidAt: normalizeIsoDate(clinic.subscription?.lastPayment?.paidAt),
+          lastPaymentCreatedAt: normalizeIsoDate(clinic.subscription?.lastPayment?.createdAt),
+          latestPaidPaymentStatus: String(latestPaidPayment?.status || '').trim().toUpperCase(),
+          latestPaidPaymentAmount: latestPaidPayment?.amount != null ? Number(latestPaidPayment.amount) : null,
+          latestPaidPaymentPaidAt: normalizeIsoDate(latestPaidPayment?.paidAt),
+          latestPaidPaymentProvider: String(latestPaidPayment?.provider || '').trim(),
           createdAt: normalizeIsoDate(clinic.createdAt),
           updatedAt: normalizeIsoDate(clinic.updatedAt),
           onboardingStartedAt: String(onboardingState.startedAt || '').trim(),
@@ -2740,6 +2772,7 @@ const clinicService = {
           email: normalizeEmail(pendingSignup.email || ''),
           nomeClinica: String(signupData.nomeFantasia || '').trim(),
           responsavelNome: String(signupData.adminNome || '').trim(),
+          phone: String(signupData.clinicPhone || signupData.phone || '').trim(),
           selectedPlan,
           promotionCode: String(signupData.promotion?.promotionCode || signupData.promotion?.code || '').trim(),
           acquisitionSource: signupData.promotion?.source ? 'promotion' : 'landing',
@@ -2759,6 +2792,11 @@ const clinicService = {
         ...clinicSnapshots.map((item) => ({
           entryType: 'clinic_onboarding',
           sortDate: item.onboardingUpdatedAt || item.updatedAt || item.createdAt,
+          ...item,
+        })),
+        ...pendingSnapshots.map((item) => ({
+          entryType: 'pending_signup',
+          sortDate: item.updatedAt || item.createdAt,
           ...item,
         })),
       ]

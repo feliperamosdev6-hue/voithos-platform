@@ -102,6 +102,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }).format(parsed);
   };
 
+  const formatDate = (value) => {
+    const parsed = value ? new Date(value) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) return '-';
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(parsed);
+  };
+
+  const formatPhone = (value) => {
+    const digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return 'Sem telefone';
+    if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+    return String(value || '').trim() || 'Sem telefone';
+  };
+
+  const getDaysUntil = (value) => {
+    const parsed = value ? new Date(value) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    parsed.setHours(0, 0, 0, 0);
+    return Math.ceil((parsed.getTime() - today.getTime()) / 86400000);
+  };
+
+  const formatDaysUntil = (value) => {
+    const days = getDaysUntil(value);
+    if (days === null) return 'Nao definido';
+    if (days < 0) return `Vencido ha ${Math.abs(days)} dia${Math.abs(days) === 1 ? '' : 's'}`;
+    if (days === 0) return 'Vence hoje';
+    return `${days} dia${days === 1 ? '' : 's'} para vencer`;
+  };
+
   const formatPlanLabel = (plan) => {
     const labels = {
       MONTHLY: 'Mensal',
@@ -141,6 +172,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (['EMAIL_VERIFICATION_PENDING', 'PROFILE_PENDING', 'PAYMENT_PENDING', 'GRACE_PERIOD'].includes(normalized)) return 'badge is-warn';
     if (normalized === 'ACTIVE') return 'badge';
     return 'badge is-neutral';
+  };
+
+  const getCommercialStatus = (snapshot = {}) => {
+    const stage = String(snapshot?.stage || '').trim().toUpperCase();
+    const paymentStatus = String(snapshot?.lastPaymentStatus || '').trim().toUpperCase();
+    const paidPaymentStatus = String(snapshot?.latestPaidPaymentStatus || '').trim().toUpperCase();
+    const daysUntilEnd = getDaysUntil(snapshot?.subscriptionEndDate);
+
+    if (stage === 'PAYMENT_PENDING' || paymentStatus === 'PENDING') return { label: 'Aguardando pagamento', className: 'badge is-warn' };
+    if (['BLOCKED', 'CANCELED'].includes(stage)) return { label: formatStageLabel(stage), className: 'badge is-danger' };
+    if (daysUntilEnd !== null && daysUntilEnd < 0) return { label: 'Vencida', className: 'badge is-danger' };
+    if (daysUntilEnd !== null && daysUntilEnd <= 7) return { label: 'Vencendo em breve', className: 'badge is-warn' };
+    if (stage === 'ACTIVE' || paymentStatus === 'PAID' || paidPaymentStatus === 'PAID') return { label: 'Ativa', className: 'badge' };
+    return { label: formatStageLabel(stage, 'Pendente'), className: getBadgeClass(stage) };
+  };
+
+  const getAccessStatus = (snapshot = {}) => {
+    const commercialStatus = getCommercialStatus(snapshot);
+    const label = String(commercialStatus.label || '').trim();
+    if (label === 'Ativa' || label === 'Vencendo em breve') return 'Liberado';
+    if (label === 'Vencida') return 'Vencido';
+    if (label === 'Aguardando pagamento') return 'Pendente';
+    return 'Bloqueio manual/futuro';
   };
 
   const copyText = async (text) => {
@@ -262,8 +316,8 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="activity-meta">
           ${entry.entryType === 'pending_signup'
-            ? `Lead pendente | ${entry.email || '-'} | Plano ${formatPlanLabel(entry.selectedPlan)}`
-            : `Clinica ${entry.clinicId || '-'} | ${entry.adminEmail || entry.clinicEmail || '-'} | Plano ${formatPlanLabel(entry.selectedPlan)}`}
+            ? `Lead pendente | ${entry.email || '-'} | ${formatPhone(entry.phone)} | Plano ${formatPlanLabel(entry.selectedPlan)}`
+            : `Clinica ${entry.clinicId || '-'} | ${entry.adminEmail || entry.clinicEmail || '-'} | ${formatPhone(entry.clinicPhone)} | Plano ${formatPlanLabel(entry.selectedPlan)}`}
         </div>
         <div class="activity-submeta">
           ${entry.operationType ? `Perfil ${formatOperationLabel(entry.operationType)} | ` : ''}Atualizado em ${formatDateTime(entry.sortDate || entry.updatedAt || entry.createdAt)}
@@ -289,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
             <span class="${getBadgeClass(entry.stage)}">${formatStageLabel(entry.stage, entry.stageLabel)}</span>
           </div>
           <div class="activity-meta">
-            ${entry.email || '-'} | Plano ${formatPlanLabel(entry.selectedPlan)} | Responsavel ${entry.responsavelNome || '-'}
+            ${entry.email || '-'} | ${formatPhone(entry.phone)} | Plano ${formatPlanLabel(entry.selectedPlan)} | Responsavel ${entry.responsavelNome || '-'}
           </div>
           <div class="activity-submeta">
             Criado em ${formatDateTime(entry.createdAt)} | Atualizado em ${formatDateTime(entry.updatedAt)}
@@ -396,8 +450,11 @@ document.addEventListener('DOMContentLoaded', () => {
         clinic?.razaoSocial,
         clinic?.cnpjOuCpf,
         clinic?.email,
+        clinic?.telefone,
+        clinic?.telefoneComercial,
         snapshot?.adminEmail,
         snapshot?.clinicEmail,
+        snapshot?.clinicPhone,
       ].map((value) => String(value || '').trim().toLowerCase()).join(' ');
 
       if (query && !haystack.includes(query)) return false;
@@ -423,19 +480,27 @@ document.addEventListener('DOMContentLoaded', () => {
       const hasCredentials = clinicCredentialsCache.has(clinicId);
       const snapshot = getClinicStageSnapshot(clinicId);
       const stageLabel = formatStageLabel(snapshot?.stage, snapshot?.stageLabel || 'Sem telemetria');
+      const commercialStatus = getCommercialStatus(snapshot || {});
+      const accessStatus = getAccessStatus(snapshot || {});
+      const hasPaidPayment = String(snapshot?.latestPaidPaymentStatus || snapshot?.lastPaymentStatus || '').trim().toUpperCase() === 'PAID';
+      const paidAmount = snapshot?.latestPaidPaymentAmount ?? snapshot?.lastPaymentAmount;
+      const paidAt = snapshot?.latestPaidPaymentPaidAt || snapshot?.lastPaymentPaidAt;
       const canDeletePending = String(snapshot?.stage || '').trim().toUpperCase() === 'PAYMENT_PENDING';
       const isDeletingPending = pendingCleanupIds.has(clinicId);
       return `
         <article class="clinic-item" data-clinic-id="${clinicId}">
           <div class="clinic-topline">
             <div class="clinic-name">${clinic.nomeFantasia || clinic.razaoSocial || 'Sem nome'}</div>
-            <span class="${getBadgeClass(snapshot?.stage)}">${stageLabel}</span>
+            <span class="${commercialStatus.className}">${commercialStatus.label}</span>
           </div>
           <div class="clinic-meta">ID: ${clinicId}</div>
           <div class="clinic-meta">CNPJ/CPF: ${clinic.cnpjOuCpf || '-'}</div>
-          <div class="clinic-meta">Telefone: ${clinic.telefone || clinic.telefoneComercial || snapshot?.clinicPhone || '-'}</div>
-          <div class="clinic-meta">Status: ${status}</div>
+          <div class="clinic-meta">Telefone: ${formatPhone(clinic.telefone || clinic.telefoneComercial || snapshot?.clinicPhone)}</div>
+          <div class="clinic-meta">Status interno: ${status} | Funil: ${stageLabel}</div>
           <div class="clinic-meta">Plano: ${formatPlanLabel(snapshot?.selectedPlan)} | Perfil: ${formatOperationLabel(snapshot?.operationType)}</div>
+          <div class="clinic-meta">Pagamento: ${hasPaidPayment ? `${formatCurrency(paidAmount)} em ${formatDateTime(paidAt)}` : 'Sem pagamento confirmado'}</div>
+          <div class="clinic-meta">Vencimento: ${formatDate(snapshot?.subscriptionEndDate)} | ${formatDaysUntil(snapshot?.subscriptionEndDate)}</div>
+          <div class="clinic-meta">Acesso: ${accessStatus} | Controle manual: em breve</div>
           <div class="clinic-meta">Origem: ${snapshot?.promotionCode ? `Promocao ${snapshot.promotionCode}` : (snapshot?.acquisitionSource || 'landing')}</div>
           <div class="clinic-meta">Admin: ${snapshot?.adminEmail || '-'}</div>
           <div class="clinic-meta">Atualizado: ${formatDateTime(snapshot?.onboardingUpdatedAt || snapshot?.updatedAt || clinic?.updatedAt)}</div>
