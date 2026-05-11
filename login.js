@@ -92,6 +92,12 @@ document.addEventListener('DOMContentLoaded', () => {
     OTHER: 'Outros',
   };
   const PAYMENT_METHOD_DEFINITIONS = {
+    PIX: {
+      label: 'PIX',
+      shortLabel: 'PIX',
+      actionLabel: 'Gerar checkout PIX',
+      readyLabel: 'Checkout PIX pronto. Abra o Asaas e conclua com a chave ou QR Code.',
+    },
     CREDIT_CARD: {
       label: 'Cartao de credito',
       shortLabel: 'Cartao',
@@ -131,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
     subscriptionOverview: null,
     onboardingState: null,
     paymentLink: '',
-    checkoutPaymentMethod: 'CREDIT_CARD',
+    checkoutPaymentMethod: 'PIX',
     installmentCount: 6,
     paymentReturnStatus: '',
     pendingSignupToken: '',
@@ -189,7 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     onboardingFlowState.subscriptionOverview = null;
     onboardingFlowState.onboardingState = null;
     onboardingFlowState.paymentLink = '';
-    onboardingFlowState.checkoutPaymentMethod = 'CREDIT_CARD';
+    onboardingFlowState.checkoutPaymentMethod = 'PIX';
     onboardingFlowState.installmentCount = 6;
     onboardingFlowState.paymentReturnStatus = '';
     onboardingFlowState.pendingSignupToken = '';
@@ -301,7 +307,7 @@ document.addEventListener('DOMContentLoaded', () => {
     || onboardingFlowState.subscriptionOverview?.subscription?.planType
   ) === 'ANNUAL';
 
-  const getSelectedPaymentMethodDefinition = () => PAYMENT_METHOD_DEFINITIONS[onboardingFlowState.checkoutPaymentMethod] || PAYMENT_METHOD_DEFINITIONS.CREDIT_CARD;
+  const getSelectedPaymentMethodDefinition = () => PAYMENT_METHOD_DEFINITIONS[onboardingFlowState.checkoutPaymentMethod] || PAYMENT_METHOD_DEFINITIONS.PIX;
 
   const isLegacyPaymentLink = (value) => {
     const normalized = String(value || '').trim();
@@ -365,7 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const applyPaymentMethodAvailability = () => {
     const isAnnualPlan = getIsAnnualPlan();
     if (onboardingFlowState.checkoutPaymentMethod === 'INSTALLMENT' && !isAnnualPlan) {
-      onboardingFlowState.checkoutPaymentMethod = 'CREDIT_CARD';
+      onboardingFlowState.checkoutPaymentMethod = 'PIX';
     }
 
     paymentChoiceButtons.forEach((button) => {
@@ -474,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentStatusTitle) paymentStatusTitle.textContent = 'Pagamento pendente';
     if (paymentStatusCopy) {
       paymentStatusCopy.textContent = paymentLink
-        ? 'Sua assinatura esta pendente. Abra o checkout para concluir o pagamento no cartao e depois atualize o status.'
+        ? 'Sua assinatura esta pendente. Abra o checkout do Asaas para concluir o pagamento e depois atualize o status.'
         : 'Sua assinatura esta pendente. Gere um checkout seguro para concluir o pagamento.';
     }
     if (paymentReadyCard) {
@@ -484,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const selectedMethod = getSelectedPaymentMethodDefinition();
       paymentReadyCopy.textContent = paymentLink
         ? `${selectedMethod.readyLabel} Se voce ja voltou do pagamento, atualize o status para validar a liberacao.`
-        : 'Depois de gerar o checkout, voce seguira para o pagamento seguro do Asaas com os dados da clinica pre-preenchidos.';
+        : `Depois de gerar o checkout, voce seguira para o pagamento seguro do Asaas com os dados da clinica pre-preenchidos para ${selectedMethod.shortLabel.toLowerCase()}.`;
     }
     if (paymentLinkButton) {
       paymentLinkButton.classList.toggle('hidden', !paymentLink);
@@ -1530,11 +1536,16 @@ document.addEventListener('DOMContentLoaded', () => {
             paymentMethod: selectedMethod,
             installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
           });
-      onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(checkout?.paymentLink);
+      onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(
+        checkout?.paymentLink,
+        checkout?.invoiceUrl,
+        checkout?.url,
+        checkout?.checkoutUrl
+      );
       await syncOnboardingState();
       renderPaymentSummary();
       if (onboardingFlowState.paymentLink) {
-        setPaymentMessage('Checkout seguro gerado. Continue para o Asaas e finalize o pagamento.');
+        setPaymentMessage('Checkout seguro gerado. Continue para o Asaas e finalize o pagamento no metodo escolhido.');
         window.setTimeout(() => {
           openCheckoutLink(onboardingFlowState.paymentLink).catch((error) => {
             console.error('Falha ao abrir checkout Asaas', error);

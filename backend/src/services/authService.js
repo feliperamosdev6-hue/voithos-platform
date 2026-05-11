@@ -92,6 +92,7 @@ const PUBLIC_SUBSCRIPTION_PLANS = Object.freeze({
 
 const normalizePaymentMethod = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
+  if (normalized === 'PIX') return 'PIX';
   if (normalized === 'INSTALLMENT') return 'INSTALLMENT';
   return 'CREDIT_CARD';
 };
@@ -191,7 +192,7 @@ const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCou
   }
 
   const payload = {
-    billingTypes: ['CREDIT_CARD'],
+    billingTypes: normalizedPaymentMethod === 'PIX' ? ['PIX'] : ['CREDIT_CARD'],
     chargeTypes: normalizedPaymentMethod === 'INSTALLMENT' ? ['DETACHED', 'INSTALLMENT'] : ['DETACHED'],
     minutesToExpire: PENDING_CHECKOUT_TTL_HOURS * 60,
     callback: buildCheckoutCallback(),
@@ -1179,11 +1180,11 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
   }
 
   const checkoutId = String(checkout?.id || '').trim();
+  const checkoutUrl = String(checkout?.url || checkout?.invoiceUrl || checkout?.paymentLink || checkout?.checkoutUrl || '').trim()
+    || asaasService.buildCheckoutUrl(checkoutId);
   if (!checkoutId) {
     throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout did not return an id.');
   }
-
-  const checkoutUrl = asaasService.buildCheckoutUrl(checkoutId);
   const expiresAt = addMinutes(new Date(), PENDING_CHECKOUT_TTL_HOURS * 60).toISOString();
   const nextSignupData = {
     ...signupData,

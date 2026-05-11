@@ -10,6 +10,7 @@ const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
 const ENFORCEMENT_DISABLED_STATUS = 'ENFORCEMENT_DISABLED';
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
 const CHECKOUT_PAYMENT_METHODS = Object.freeze({
+  PIX: 'PIX',
   CREDIT_CARD: 'CREDIT_CARD',
   INSTALLMENT: 'INSTALLMENT',
 });
@@ -103,7 +104,7 @@ const normalizeCheckoutName = (value, fallback = 'Voithos') => {
 const normalizeCheckoutPaymentMethod = (value) => {
   const normalized = normalizeText(value).toUpperCase();
   if (!Object.prototype.hasOwnProperty.call(CHECKOUT_PAYMENT_METHODS, normalized)) {
-    throw new AppError(400, 'VALIDATION_ERROR', 'paymentMethod must be one of: CREDIT_CARD, INSTALLMENT.');
+    throw new AppError(400, 'VALIDATION_ERROR', 'paymentMethod must be one of: PIX, CREDIT_CARD, INSTALLMENT.');
   }
   return normalized;
 };
@@ -170,7 +171,7 @@ const buildCheckoutCustomerContext = ({ clinic }) => {
 };
 
 const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerContext = {} }) => {
-  const billingTypes = ['CREDIT_CARD'];
+  const billingTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.PIX ? ['PIX'] : ['CREDIT_CARD'];
   const chargeTypes = paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT
     ? ['DETACHED', 'INSTALLMENT']
     : ['DETACHED'];
@@ -520,10 +521,11 @@ const subscriptionService = {
     }
 
     const checkoutId = normalizeText(checkout?.id);
+    const checkoutUrl = normalizeText(checkout?.url || checkout?.invoiceUrl || checkout?.paymentLink || checkout?.checkoutUrl)
+      || asaasService.buildCheckoutUrl(checkoutId);
     if (!checkoutId) {
       throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout did not return an id.');
     }
-    const checkoutUrl = asaasService.buildCheckoutUrl(checkoutId);
     if (!checkoutUrl) {
       throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout link could not be generated.');
     }
