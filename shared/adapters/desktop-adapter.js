@@ -1,6 +1,20 @@
 (function () {
+  let currentUserRequestPromise = null;
+  let currentContextRequestPromise = null;
+  let clinicGetRequestPromise = null;
+
   const unavailable = async (name) => {
     throw new Error('Metodo indisponivel no desktop adapter: ' + name);
+  };
+
+  const nowMs = () => (window.performance?.now ? window.performance.now() : Date.now());
+
+  const logPerf = (stage, started, source) => {
+    console.info('[perf][header-context]', {
+      stage,
+      durationMs: Math.round(nowMs() - started),
+      source,
+    });
   };
 
   const maskEmail = (email) => {
@@ -44,11 +58,41 @@
     },
     currentUser: async () => {
       if (!window.auth?.currentUser) return null;
-      return window.auth.currentUser();
+      if (currentUserRequestPromise) return currentUserRequestPromise;
+      const started = nowMs();
+      console.info('[perf][header-context]', { stage: 'adapter_current_user_start', durationMs: 0, source: 'ipc' });
+      currentUserRequestPromise = window.auth.currentUser()
+        .then((result) => {
+          logPerf('adapter_current_user_done', started, 'ipc');
+          return result;
+        })
+        .catch((error) => {
+          logPerf('adapter_current_user_done', started, 'ipc_error');
+          throw error;
+        })
+        .finally(() => {
+          currentUserRequestPromise = null;
+        });
+      return currentUserRequestPromise;
     },
     currentContext: async () => {
       if (!window.auth?.currentContext) return null;
-      return window.auth.currentContext();
+      if (currentContextRequestPromise) return currentContextRequestPromise;
+      const started = nowMs();
+      console.info('[perf][header-context]', { stage: 'adapter_current_context_start', durationMs: 0, source: 'ipc' });
+      currentContextRequestPromise = window.auth.currentContext()
+        .then((result) => {
+          logPerf('adapter_current_context_done', started, 'ipc');
+          return result;
+        })
+        .catch((error) => {
+          logPerf('adapter_current_context_done', started, 'ipc_error');
+          throw error;
+        })
+        .finally(() => {
+          currentContextRequestPromise = null;
+        });
+      return currentContextRequestPromise;
     },
     listUsers: async () => {
       if (!window.auth?.listUsers) return [];
@@ -501,7 +545,24 @@
 
   const clinic = {
     get: async () => {
-      if (window.api?.clinic?.get) return window.api.clinic.get();
+      if (window.api?.clinic?.get) {
+        if (clinicGetRequestPromise) return clinicGetRequestPromise;
+        const started = nowMs();
+        console.info('[perf][header-context]', { stage: 'adapter_clinic_get_start', durationMs: 0, source: 'ipc' });
+        clinicGetRequestPromise = window.api.clinic.get()
+          .then((result) => {
+            logPerf('adapter_clinic_get_done', started, 'ipc');
+            return result;
+          })
+          .catch((error) => {
+            logPerf('adapter_clinic_get_done', started, 'ipc_error');
+            throw error;
+          })
+          .finally(() => {
+            clinicGetRequestPromise = null;
+          });
+        return clinicGetRequestPromise;
+      }
       return unavailable('clinic.get');
     },
     save: async (payload) => {

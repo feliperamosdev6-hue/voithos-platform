@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const gestaoDropdown = document.getElementById('gestao-dropdown');
   let currentUser = null;
   const HEADER_CACHE_PREFIX = 'voithos.header.context.v1';
+  const HEADER_CACHE_LAST_KEY = `${HEADER_CACHE_PREFIX}:last`;
   const HEADER_CACHE_TTL_MS = 10 * 60 * 1000;
   let headerContextPromise = null;
   const MOBILE_NAV_STYLE_ID = 'voithos-mobile-bottom-nav-styles';
@@ -329,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stage,
       durationMs: Number.isFinite(details.durationMs) ? Math.round(details.durationMs) : 0,
       source: String(details.source || '').trim(),
-      cacheKey: details.cacheKey ? 'scoped' : '',
+      cacheKey: details.cacheKey ? String(details.cacheKey) : '',
     });
   };
 
@@ -342,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const getHeaderCacheKeys = () => {
-    const keys = new Set();
+    const keys = [];
     let hasScopedIdentity = false;
     try {
       const rawUser = safeParseJson(localStorage.getItem('voithos.web.session.user'));
@@ -351,23 +352,29 @@ document.addEventListener('DOMContentLoaded', () => {
       const clinicId = String(rawClinic?.clinicId || rawClinic?.id || rawUser?.clinicId || '').trim();
       if (userId || clinicId) {
         hasScopedIdentity = true;
-        keys.add(`${HEADER_CACHE_PREFIX}:${userId || 'anon'}:${clinicId || 'global'}`);
+        keys.push({ storage: localStorage, key: `${HEADER_CACHE_PREFIX}:${userId || 'anon'}:${clinicId || 'global'}`, label: 'scoped' });
       }
     } catch (_error) {
       // Storage indisponivel nao deve bloquear o header.
     }
-    if (!hasScopedIdentity) keys.add(`${HEADER_CACHE_PREFIX}:last`);
-    return Array.from(keys);
+    if (!hasScopedIdentity) {
+      try {
+        keys.push({ storage: sessionStorage, key: HEADER_CACHE_LAST_KEY, label: 'session_last' });
+      } catch (_error) {
+        // sessionStorage indisponivel nao deve bloquear o header.
+      }
+    }
+    return keys;
   };
 
   const readHeaderCache = () => {
     const started = nowMs();
     try {
-      for (const key of getHeaderCacheKeys()) {
-        const record = safeParseJson(localStorage.getItem(key));
+      for (const entry of getHeaderCacheKeys()) {
+        const record = safeParseJson(entry.storage.getItem(entry.key));
         if (!record || !record.userName || !record.savedAt) continue;
         if (Date.now() - Number(record.savedAt || 0) > HEADER_CACHE_TTL_MS) continue;
-        perfLog('cache_hit', { durationMs: nowMs() - started, source: 'localStorage', cacheKey: key });
+        perfLog('cache_hit', { durationMs: nowMs() - started, source: entry.storage === sessionStorage ? 'sessionStorage' : 'localStorage', cacheKey: entry.label });
         return record;
       }
     } catch (_error) {
@@ -381,8 +388,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!context?.userName) return;
     try {
       const payload = JSON.stringify({ ...context, savedAt: Date.now() });
-      localStorage.setItem(`${HEADER_CACHE_PREFIX}:${context.userId || 'anon'}:${context.clinicId || 'global'}`, payload);
-      localStorage.setItem(`${HEADER_CACHE_PREFIX}:last`, payload);
+      if (context.userId || context.clinicId) {
+        localStorage.setItem(`${HEADER_CACHE_PREFIX}:${context.userId || 'anon'}:${context.clinicId || 'global'}`, payload);
+      }
+      sessionStorage.setItem(HEADER_CACHE_LAST_KEY, payload);
     } catch (_error) {
       // Cache indisponivel nao deve bloquear revalidacao.
     }
@@ -396,6 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (key && key.startsWith(HEADER_CACHE_PREFIX)) keys.push(key);
       }
       keys.forEach((key) => localStorage.removeItem(key));
+      sessionStorage.removeItem(HEADER_CACHE_LAST_KEY);
     } catch (_error) {
       // Ignora storage indisponivel.
     }

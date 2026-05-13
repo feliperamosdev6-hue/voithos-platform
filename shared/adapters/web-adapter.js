@@ -30,6 +30,16 @@
     storageBaseUrl: cleanText(DEFAULT_BASE || ''),
   });
 
+  const nowMs = () => (window.performance?.now ? window.performance.now() : Date.now());
+
+  const logHeaderPerf = (stage, started, source) => {
+    console.info('[perf][header-context]', {
+      stage,
+      durationMs: Number.isFinite(started) ? Math.round(nowMs() - started) : 0,
+      source,
+    });
+  };
+
   const logWebAuthDiagnostic = (stage, details = {}) => {
     console.info('[web-auth][adapter]', {
       stage,
@@ -1763,6 +1773,8 @@
   const clinicApi = {
     get: async () => {
       if (clinicGetRequestPromise) return clinicGetRequestPromise;
+      const started = nowMs();
+      console.info('[perf][header-context]', { stage: 'adapter_clinic_get_start', durationMs: 0, source: 'backend' });
       clinicGetRequestPromise = (async () => {
       const [profile, operationalSettings] = await Promise.all([
         request('GET', '/clinics/me/profile', null, { auth: true }),
@@ -1788,7 +1800,16 @@
       });
 
       return normalizedClinic;
-      })().finally(() => {
+      })()
+      .then((result) => {
+        logHeaderPerf('adapter_clinic_get_done', started, 'backend');
+        return result;
+      })
+      .catch((error) => {
+        logHeaderPerf('adapter_clinic_get_done', started, 'backend_error');
+        throw error;
+      })
+      .finally(() => {
         clinicGetRequestPromise = null;
       });
       return clinicGetRequestPromise;
@@ -2132,6 +2153,8 @@
     },
     currentUser: async () => {
       if (currentUserRequestPromise) return currentUserRequestPromise;
+      const started = nowMs();
+      console.info('[perf][header-context]', { stage: 'adapter_current_user_start', durationMs: 0, source: 'backend' });
       currentUserRequestPromise = (async () => {
       const token = getStoredToken();
       if (!token) return null;
@@ -2162,13 +2185,24 @@
         }
         return storedUser;
       }
-      })().finally(() => {
+      })()
+      .then((result) => {
+        logHeaderPerf('adapter_current_user_done', started, 'backend');
+        return result;
+      })
+      .catch((error) => {
+        logHeaderPerf('adapter_current_user_done', started, 'backend_error');
+        throw error;
+      })
+      .finally(() => {
         currentUserRequestPromise = null;
       });
       return currentUserRequestPromise;
     },
     currentContext: async () => {
       if (currentContextRequestPromise) return currentContextRequestPromise;
+      const started = nowMs();
+      console.info('[perf][header-context]', { stage: 'adapter_current_context_start', durationMs: 0, source: 'backend' });
       currentContextRequestPromise = (async () => {
       const user = await auth.currentUser();
       if (!user) return buildAuthContext(null, null);
@@ -2183,7 +2217,16 @@
       } catch (_error) {
         return buildAuthContext(user, getStoredClinic());
       }
-      })().finally(() => {
+      })()
+      .then((result) => {
+        logHeaderPerf('adapter_current_context_done', started, 'backend');
+        return result;
+      })
+      .catch((error) => {
+        logHeaderPerf('adapter_current_context_done', started, 'backend_error');
+        throw error;
+      })
+      .finally(() => {
         currentContextRequestPromise = null;
       });
       return currentContextRequestPromise;
