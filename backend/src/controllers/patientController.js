@@ -54,6 +54,40 @@ const updatePatient = async (req, res, next) => {
   }
 };
 
+const uploadPatientProfilePhoto = async (req, res, next) => {
+  try {
+    const data = await patientService.updateProfilePhotoForClinic({
+      id: req.params.id,
+      clinicId: getAuthenticatedClinicId(req),
+      buffer: Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []),
+      fileName: decodeURIComponent(String(req.header('x-file-name') || '').trim() || ''),
+      contentType: String(req.header('content-type') || 'application/octet-stream').trim(),
+    });
+    return res.status(200).json({
+      ok: true,
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const downloadPatientProfilePhoto = async (req, res, next) => {
+  try {
+    const photo = await patientService.getProfilePhotoForClinic({
+      id: req.params.id,
+      clinicId: getAuthenticatedClinicId(req),
+    });
+    res.setHeader('Content-Type', photo.contentType || 'application/octet-stream');
+    res.setHeader('Content-Length', String(photo.size || photo.buffer?.length || 0));
+    res.setHeader('x-file-name', encodeURIComponent(String(photo.fileName || '').trim()));
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return res.status(200).send(photo.buffer);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const deletePatient = async (req, res, next) => {
   try {
     const result = await patientService.deleteForClinic({
@@ -74,5 +108,7 @@ module.exports = {
   getPatientById,
   createPatient,
   updatePatient,
+  uploadPatientProfilePhoto,
+  downloadPatientProfilePhoto,
   deletePatient,
 };

@@ -530,6 +530,22 @@ const sanitizeDocumentPayload = (document = {}) => {
     ...rest
   } = document;
 
+  const stripEmbeddedFilePayload = (value) => {
+    if (!value || typeof value !== 'object') {
+      if (typeof value === 'string' && /^data:[^;]+;base64,/i.test(value)) return '';
+      return value;
+    }
+    if (Array.isArray(value)) return value.map(stripEmbeddedFilePayload);
+    return Object.entries(value).reduce((acc, [key, item]) => {
+      const normalizedKey = String(key || '').trim().toLowerCase();
+      if (['file', 'filedata', 'base64', 'dataurl', 'buffer', 'arraybuffer', 'blob'].includes(normalizedKey)) {
+        return acc;
+      }
+      acc[key] = stripEmbeddedFilePayload(item);
+      return acc;
+    }, {});
+  };
+
   const sanitizedNestedMetadata = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? (({
       clinicId: __clinicId,
@@ -539,10 +555,10 @@ const sanitizeDocumentPayload = (document = {}) => {
     }) => nestedRest)(metadata)
     : metadata;
 
-  return {
+  return stripEmbeddedFilePayload({
     ...rest,
     ...(sanitizedNestedMetadata !== undefined ? { metadata: sanitizedNestedMetadata } : {}),
-  };
+  });
 };
 
 const patientClinicalService = {

@@ -98,6 +98,133 @@ test('patientService.updateForClinic salva cadastro e dentista responsavel no te
   assert.equal(result.clinicalRecord, undefined);
 });
 
+test('patientService.updateProfilePhotoForClinic salva metadados da foto no summary do tenant', async (t) => {
+  const summaryCalls = [];
+  const patientRows = new Map([
+    ['patient-1', {
+      id: 'patient-1',
+      clinicId: 'clinic-auth',
+      nome: 'Maria',
+      clinicalRecord: { summary: { patientProfile: { dentistaId: 'dent-1' } } },
+    }],
+  ]);
+
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async (id) => patientRows.get(id) || null,
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {
+          upsertClinicalRecordSummary: async (input) => {
+            summaryCalls.push(input);
+            const current = patientRows.get(input.patientId);
+            patientRows.set(input.patientId, {
+              ...current,
+              clinicalRecord: { summary: input.summary },
+            });
+            return { id: 'record-1', ...input };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/userRepository.js')]: {
+        userRepository: {},
+      },
+      [path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js')]: {
+        patientDocumentStorageService: {
+          storePatientProfilePhoto: async (input) => {
+            assert.equal(input.clinicId, 'clinic-auth');
+            assert.equal(input.patientId, 'patient-1');
+            assert.equal(input.fileName, 'maria.webp');
+            return {
+              storageBackend: 'server_fs',
+              storageKey: 'clinic-auth/patient-1/profile-photo.webp',
+              fileName: 'maria.webp',
+              storedName: 'profile-photo.webp',
+              contentType: 'image/webp',
+              extension: '.webp',
+              size: 1234,
+              uploadedAt: '2026-05-13T12:00:00.000Z',
+            };
+          },
+        },
+      },
+    }
+  );
+  t.after(restore);
+
+  const result = await serviceModule.patientService.updateProfilePhotoForClinic({
+    id: 'patient-1',
+    clinicId: 'clinic-auth',
+    buffer: Buffer.from('fake-image'),
+    fileName: 'maria.webp',
+    contentType: 'image/webp',
+  });
+
+  assert.equal(summaryCalls.length, 1);
+  assert.equal(summaryCalls[0].clinicId, 'clinic-auth');
+  assert.equal(summaryCalls[0].patientId, 'patient-1');
+  assert.equal(summaryCalls[0].summary.patientProfile.profilePhoto.storageKey, 'clinic-auth/patient-1/profile-photo.webp');
+  assert.equal(summaryCalls[0].summary.patientProfile.selfiePath, 'clinic-auth/patient-1/profile-photo.webp');
+  assert.equal(result.patient.selfiePath, 'clinic-auth/patient-1/profile-photo.webp');
+  assert.equal(result.patient.selfieMime, 'image/webp');
+  assert.equal(result.profilePhoto.size, 1234);
+});
+
+test('patientService.getProfilePhotoForClinic bloqueia foto de paciente de outra clinica', async (t) => {
+  let storageCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => ({
+            id: 'patient-evil',
+            clinicId: 'clinic-evil',
+            clinicalRecord: {
+              summary: {
+                patientProfile: {
+                  profilePhoto: { storageKey: 'clinic-evil/patient-evil/profile-photo.webp' },
+                },
+              },
+            },
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {},
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/userRepository.js')]: {
+        userRepository: {},
+      },
+      [path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js')]: {
+        patientDocumentStorageService: {
+          getPatientProfilePhoto: async () => {
+            storageCalled = true;
+            return null;
+          },
+        },
+      },
+    }
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    () => serviceModule.patientService.getProfilePhotoForClinic({
+      id: 'patient-evil',
+      clinicId: 'clinic-auth',
+    }),
+    (error) => {
+      assert.equal(error?.code, 'PATIENT_NOT_FOUND');
+      return true;
+    }
+  );
+  assert.equal(storageCalled, false);
+});
+
 test('patientService cria, atualiza e relê dados cadastrais por aliases no tenant autenticado', async (t) => {
   const patientRows = new Map();
   let nextPatientId = 1;

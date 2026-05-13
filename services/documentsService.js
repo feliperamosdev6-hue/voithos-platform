@@ -14,10 +14,9 @@ const createDocumentsService = ({
 }) => {
   const DEFAULT_CLINIC_ID = 'defaultClinic';
   const allowedDocumentExtensions = new Set([
-    '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.heic',
-    '.doc', '.docx', '.txt', '.rtf', '.xls', '.xlsx', '.csv', '.ppt', '.pptx', '.stl', '.dcm',
+    '.pdf', '.png', '.jpg', '.jpeg', '.webp',
   ]);
-  const maxDocumentSizeBytes = 25 * 1024 * 1024;
+  const maxDocumentSizeBytes = 5 * 1024 * 1024;
 
   const generateDocumentId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 

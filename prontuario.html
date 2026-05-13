@@ -855,8 +855,8 @@
             <button class="btn outline" type="button" data-action="select-upload-file">Selecionar documento</button>
             <button class="btn ghost" type="button" data-action="capture-upload-file">Tirar foto</button>
           </div>
-          <input type="file" id="upload-file-input" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.bmp,.tif,.tiff,.heic,.doc,.docx,.txt,.rtf,.xls,.xlsx,.csv,.ppt,.pptx,.stl,.dcm">
-          <input type="file" id="upload-photo-input" hidden accept="image/*" capture="environment">
+          <input type="file" id="upload-file-input" hidden accept=".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/png,image/jpeg,image/webp">
+          <input type="file" id="upload-photo-input" hidden accept="image/png,image/jpeg,image/webp" capture="environment">
           <p id="upload-file-name" class="upload-file-name">Nenhum documento selecionado.</p>
         </div>
 
@@ -875,7 +875,7 @@
           <input type="text" id="upload-title" placeholder="Titulo do documento">
         </label>
 
-        <p class="files-helper">Aceita PDF, imagens, exames e documentos de escritorio de ate 25MB.</p>
+        <p class="files-helper">Aceita PDF, JPG, PNG e WEBP de ate 5MB.</p>
         <p id="upload-status" class="upload-status"></p>
 
         <div class="upload-drawer-footer">

@@ -347,7 +347,7 @@ const registerDocumentsHandlers = ({
 
       const stat = await fsPromises.stat(filePath);
       if (!stat.isFile()) throw new Error('Arquivo invalido.');
-      if (stat.size > maxDocumentSizeBytes) throw new Error('Arquivo excede 25MB.');
+      if (stat.size > maxDocumentSizeBytes) throw new Error('Arquivo muito grande. Limite: 5 MB.');
 
       const ext = path.extname(filePath).toLowerCase();
       if (!allowedDocumentExtensions.has(ext)) throw new Error('Tipo de arquivo nao permitido.');

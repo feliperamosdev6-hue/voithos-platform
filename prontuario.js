@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const uploadFolder = document.getElementById('upload-folder');
   const uploadTitle = document.getElementById('upload-title');
   const uploadStatus = document.getElementById('upload-status');
+  const uploadSubmitButton = uploadDrawerForm?.querySelector('button[type="submit"]');
   const infoDrawer = document.getElementById('info-drawer');
   const infoNome = document.getElementById('info-nome');
   const infoSexo = document.getElementById('info-sexo');
@@ -199,8 +200,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let facesPorDente = {};
   let suppressDrawerOpen = false;
   const faceOrder = ['D', 'L', 'M', 'O', 'V'];
-  const maxUploadBytes = 25 * 1024 * 1024;
-  const supportedUploadExt = /\.(pdf|png|jpe?g|webp|gif|bmp|tiff?|heic|docx?|txt|rtf|xlsx?|csv|pptx?|stl|dcm)$/i;
+  const maxPatientDocumentUploadBytes = 5 * 1024 * 1024;
+  const supportedUploadExt = /\.(pdf|png|jpe?g|webp)$/i;
+  const supportedUploadMimeTypes = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
 
 
   let pendingOdontogramaServices = null;
@@ -214,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let procQuickStatusSyncing = false;
   let procFinalizeSectionsReady = false;
   let patientPaymentSaving = false;
+  let uploadSaving = false;
   let editingPatientPaymentId = '';
   let proceduresCatalogLoadedAt = 0;
   let proceduresCatalogLoading = null;
@@ -308,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const avatarImageExtPattern = /\.(png|jpe?g|webp|gif|bmp|svg|avif)(?:[?#].*)?$/i;
+  const avatarImageExtPattern = /\.(png|jpe?g|webp)(?:[?#].*)?$/i;
 
   const getPatientAvatarSource = (patient = null) => {
     if (!patient || typeof patient !== 'object') return { url: '', mime: '' };
@@ -336,9 +339,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const canUsePatientAvatarImage = ({ url = '', mime = '' } = {}) => {
     if (!url) return false;
-    if (mime) return /^image\//i.test(mime);
-    if (/^data:image\//i.test(url)) return true;
+    if (mime) return /^image\/(png|jpe?g|webp)$/i.test(mime);
+    if (/^data:image\/(png|jpe?g|webp)/i.test(url)) return true;
     return avatarImageExtPattern.test(url);
+  };
+
+  const canLoadPatientAvatarAsset = (patient = {}) => Boolean(
+    patientsApi.getSelfieObjectUrl
+    && (patient?.selfiePath || patient?.profilePhotoPath || patient?.selfieUpdatedAt || patient?.profilePhotoUpdatedAt)
+    && (patient?.id || patient?._id || patient?.prontuario)
+  );
+
+  const setPatientAvatarPhotoSource = ({ url, loadToken, initial, patientNameValue }) => {
+    if (!patientAvatarPhoto || !patientAvatarFallback || !url) return;
+    patientAvatarPhoto.onload = () => {
+      if (patientAvatarLoadToken !== loadToken) return;
+      patientAvatar.classList.add('has-photo');
+      patientAvatar.title = patientNameValue ? `${patientNameValue} (foto de perfil)` : 'Foto de perfil do paciente';
+      patientAvatarFallback.hidden = true;
+      patientAvatarPhoto.hidden = false;
+    };
+    patientAvatarPhoto.onerror = () => {
+      if (patientAvatarLoadToken !== loadToken) return;
+      setPatientAvatarFallback(initial, patientNameValue);
+    };
+    patientAvatarPhoto.src = url;
   };
 
   const setPatientAvatarFallback = (initial = 'P', patientNameValue = '') => {
@@ -367,23 +392,26 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!patientAvatarPhoto || !patientAvatarFallback) return;
 
     const source = getPatientAvatarSource(patient);
-    if (!canUsePatientAvatarImage(source)) return;
+    if (canUsePatientAvatarImage(source)) {
+      const loadToken = patientAvatarLoadToken + 1;
+      patientAvatarLoadToken = loadToken;
+      setPatientAvatarPhotoSource({ url: source.url, loadToken, initial, patientNameValue });
+      return;
+    }
 
+    if (!canLoadPatientAvatarAsset(patient)) return;
     const loadToken = patientAvatarLoadToken + 1;
     patientAvatarLoadToken = loadToken;
-
-    patientAvatarPhoto.onload = () => {
+    patientsApi.getSelfieObjectUrl({
+      patientId: patient.id || patient._id || patient.prontuario,
+      selfieUpdatedAt: patient.selfieUpdatedAt || patient.profilePhotoUpdatedAt || '',
+    }).then((url) => {
       if (patientAvatarLoadToken !== loadToken) return;
-      patientAvatar.classList.add('has-photo');
-      patientAvatar.title = patientNameValue ? `${patientNameValue} (foto de perfil)` : 'Foto de perfil do paciente';
-      patientAvatarFallback.hidden = true;
-      patientAvatarPhoto.hidden = false;
-    };
-    patientAvatarPhoto.onerror = () => {
+      setPatientAvatarPhotoSource({ url, loadToken, initial, patientNameValue });
+    }).catch(() => {
       if (patientAvatarLoadToken !== loadToken) return;
       setPatientAvatarFallback(initial, patientNameValue);
-    };
-    patientAvatarPhoto.src = source.url;
+    });
   };
   const updateAnotacaoSubmitState = () => {
     if (!anotacaoSubmit) return;
@@ -2578,11 +2606,45 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadStatus.className = `upload-status ${type}`.trim();
   };
 
+  const setUploadSaving = (saving) => {
+    uploadSaving = saving === true;
+    if (uploadSubmitButton) uploadSubmitButton.disabled = uploadSaving;
+    [uploadFileInput, uploadPhotoInput].forEach((input) => {
+      if (input) input.disabled = uploadSaving;
+    });
+    document.querySelectorAll('[data-action="select-upload-file"], [data-action="capture-upload-file"]').forEach((btn) => {
+      btn.disabled = uploadSaving;
+    });
+  };
+
+  const validateUploadFile = (file) => {
+    if (!file || (!file.path && !file.name)) {
+      return 'Selecione um arquivo para adicionar.';
+    }
+    const mimeType = String(file.type || '').trim().toLowerCase();
+    const extension = String((file.name || '').split('.').pop() || '').toLowerCase();
+    const hasAllowedMime = !mimeType || supportedUploadMimeTypes.has(mimeType);
+    const hasMimeExtensionMatch = !mimeType
+      || (mimeType === 'application/pdf' && extension === 'pdf')
+      || (mimeType === 'image/webp' && extension === 'webp')
+      || (mimeType === 'image/png' && extension === 'png')
+      || ((mimeType === 'image/jpeg' || mimeType === 'image/jpg') && ['jpg', 'jpeg'].includes(extension));
+    if (!supportedUploadExt.test(file.name || '') || !hasAllowedMime || !hasMimeExtensionMatch) {
+      return 'Formato nao permitido.';
+    }
+    if ((file.size || 0) > maxPatientDocumentUploadBytes) {
+      return 'Arquivo muito grande. Limite: 5 MB.';
+    }
+    return '';
+  };
+
   const setUploadFile = (file) => {
     selectedUploadFile = file || null;
     if (uploadFileName) {
       uploadFileName.textContent = file?.name ? `${file.name} (${Math.ceil((file.size || 0) / 1024)} KB)` : 'Nenhum documento selecionado.';
     }
+    const validationError = file ? validateUploadFile(file) : '';
+    setUploadStatus(validationError, validationError ? 'error' : '');
   };
 
   const openUploadDrawer = () => {
@@ -2612,6 +2674,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (uploadPhotoInput) uploadPhotoInput.value = '';
     setUploadFile(null);
     setUploadStatus('');
+    setUploadSaving(false);
     document.body.style.overflow = '';
   };
 
@@ -3677,17 +3740,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   uploadDrawerForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (uploadSaving) return;
+    if (!documentsApi.upload) {
+      setUploadStatus('Modulo de documentos indisponivel neste ambiente.', 'error');
+      return;
+    }
     const file = selectedUploadFile;
-    if (!file || (!file.path && !file.name)) {
-      setUploadStatus('Selecione um arquivo para adicionar.', 'error');
-      return;
-    }
-    if (!supportedUploadExt.test(file.name || '')) {
-      setUploadStatus('Formato nao suportado. Use PDF, imagem, documentos de escritorio ou arquivo clinico.', 'error');
-      return;
-    }
-    if ((file.size || 0) > maxUploadBytes) {
-      setUploadStatus('Arquivo excede 25MB.', 'error');
+    const validationError = validateUploadFile(file);
+    if (validationError) {
+      setUploadStatus(validationError, 'error');
       return;
     }
     const prontuario = await ensureProntuario();
@@ -3696,8 +3757,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     try {
+      setUploadSaving(true);
       setUploadStatus('Enviando arquivo...');
-      await documentsApi.upload?.({
+      await documentsApi.upload({
         prontuario,
         pacienteId: currentPatient?.id || currentPatient?.prontuario || currentPatient?._id || '',
         category: 'arquivo_paciente',
@@ -3713,9 +3775,12 @@ document.addEventListener('DOMContentLoaded', () => {
       closeUploadDrawer();
       await loadDocuments();
       setActiveTab('arquivos');
+      alert('Documento anexado com sucesso.');
     } catch (err) {
       console.warn('[PRONTUARIO] falha ao enviar arquivo', err);
-      setUploadStatus(err?.message || 'Nao foi possivel adicionar o arquivo.', 'error');
+      setUploadStatus(err?.message || 'Nao foi possivel salvar o arquivo.', 'error');
+    } finally {
+      setUploadSaving(false);
     }
   });
 

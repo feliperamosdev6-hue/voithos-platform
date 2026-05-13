@@ -5,9 +5,11 @@ const { validate } = require('../middlewares/validate');
 const {
   createPatient,
   deletePatient,
+  downloadPatientProfilePhoto,
   getPatientById,
   listPatients,
   updatePatient,
+  uploadPatientProfilePhoto,
 } = require('../controllers/patientController');
 
 const router = express.Router();
@@ -23,6 +25,12 @@ const validateCreatePatient = validate((req) => {
 router.use(authenticate, checkSubscription);
 
 router.get('/', listPatients);
+router.put(
+  '/:id/profile-photo',
+  express.raw({ type: '*/*', limit: '2mb' }),
+  uploadPatientProfilePhoto
+);
+router.get('/:id/profile-photo', downloadPatientProfilePhoto);
 router.get('/:id', getPatientById);
 router.post('/', validateCreatePatient, createPatient);
 router.patch('/:id', validateCreatePatient, updatePatient);

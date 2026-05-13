@@ -59,15 +59,74 @@ document.addEventListener('DOMContentLoaded', async () => {
     return null;
   };
 
-  const acceptedSelfieTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml', 'application/pdf'];
-  const acceptedSelfieExt = ['.png', '.jpg', '.jpeg', '.svg', '.pdf'];
+  const maxSelfieBytes = 1 * 1024 * 1024;
+  const maxSelfieDimension = 800;
+  const acceptedSelfieTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+  const acceptedSelfieExt = ['.png', '.jpg', '.jpeg', '.webp'];
 
   const isAcceptedSelfieFile = (file) => {
     if (!file) return false;
     const type = String(file.type || '').toLowerCase();
-    if (acceptedSelfieTypes.includes(type)) return true;
     const lowerName = String(file.name || '').toLowerCase();
-    return acceptedSelfieExt.some((ext) => lowerName.endsWith(ext));
+    const hasAllowedExt = acceptedSelfieExt.some((ext) => lowerName.endsWith(ext));
+    if (!hasAllowedExt) return false;
+    return !type || acceptedSelfieTypes.includes(type);
+  };
+
+  const buildCompressedSelfieName = (name = '') => {
+    const safeName = String(name || 'profile-photo').trim() || 'profile-photo';
+    return safeName.replace(/\.[^.]+$/, '') + '.webp';
+  };
+
+  const blobToNamedFile = (blob, name) => {
+    if (typeof File !== 'undefined') {
+      return new File([blob], name, { type: blob.type || 'image/webp' });
+    }
+    blob.name = name;
+    return blob;
+  };
+
+  const loadImageFromFile = (file) => new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Nao foi possivel ler a imagem.'));
+    };
+    image.src = url;
+  });
+
+  const canvasToBlob = (canvas, type, quality) => new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+
+  const compressSelfieForWeb = async (file) => {
+    if ((file.size || 0) <= maxSelfieBytes) return file;
+    if (file.path) {
+      throw new Error('Arquivo muito grande. Limite: 1 MB.');
+    }
+    if (typeof document === 'undefined' || typeof Image === 'undefined') {
+      throw new Error('Arquivo muito grande. Limite: 1 MB.');
+    }
+    const image = await loadImageFromFile(file);
+    const ratio = Math.min(1, maxSelfieDimension / Math.max(image.width || 1, image.height || 1));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round((image.width || maxSelfieDimension) * ratio));
+    canvas.height = Math.max(1, Math.round((image.height || maxSelfieDimension) * ratio));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Arquivo muito grande. Limite: 1 MB.');
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.86, 0.78, 0.7, 0.62]) {
+      const blob = await canvasToBlob(canvas, 'image/webp', quality);
+      if (blob && blob.size <= maxSelfieBytes) {
+        return blobToNamedFile(blob, buildCompressedSelfieName(file.name));
+      }
+    }
+    throw new Error('Arquivo muito grande. Limite: 1 MB.');
   };
 
   const safeToast = (msg, type = 'info') => {
@@ -94,6 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const message = String(err?.message || '').trim();
     if (/dentista invalido|invalid_dentist/i.test(message)) return 'Dentista invalido para a clinica atual.';
     if (/outra clinica|clinic|tenant/i.test(message)) return 'Paciente nao encontrado para a clinica atual.';
+    if (/arquivo|formato|foto|upload/i.test(message)) return message;
     if (/confirmados|persist|recarregar|retorno/i.test(message)) return message;
     return 'Nao foi possivel salvar os dados do paciente.';
   };
@@ -152,13 +212,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (file) {
       selfieFileName.textContent = file.name || 'Arquivo selecionado';
-      if (String(file.type || '').toLowerCase() === 'application/pdf') {
-        selfiePreview.hidden = true;
-        selfiePreview.removeAttribute('src');
-        selfiePlaceholder.textContent = 'PDF';
-        selfiePlaceholder.hidden = false;
-        return;
-      }
       selfiePlaceholder.textContent = '+';
       selfiePreview.src = URL.createObjectURL(file);
       selfiePreview.hidden = false;
@@ -180,6 +233,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     selfiePlaceholder.hidden = false;
     selfiePlaceholder.textContent = '+';
     selfieFileName.textContent = 'Nenhum arquivo selecionado.';
+  };
+
+  const loadPersistedSelfiePreview = async (patient = {}) => {
+    if (patient.selfieUrl || !patientsApi.getSelfieObjectUrl) return;
+    if (!patient.selfiePath && !patient.profilePhotoPath) return;
+    try {
+      const url = await patientsApi.getSelfieObjectUrl({
+        patientId: patient.id || patient.prontuario || patient._id,
+        selfieUpdatedAt: patient.selfieUpdatedAt || patient.profilePhotoUpdatedAt || '',
+      });
+      const activeId = String(currentPatient?.id || currentPatient?.prontuario || currentPatient?._id || '');
+      const targetId = String(patient.id || patient.prontuario || patient._id || '');
+      if (activeId && targetId && activeId !== targetId) return;
+      setSelfieState({ url, label: patient.selfieFileName || 'Foto atual' });
+    } catch (_) {
+    }
   };
 
   const loadDentistas = async () => {
@@ -228,6 +297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('edit-notes').value = patient.notes || '';
     setDentistaLabel(patient.dentistaNome);
     setSelfieState({ url: patient.selfieUrl || '', label: patient.selfieFileName || '' });
+    loadPersistedSelfiePreview(patient);
   };
 
   const formatCurrency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -344,18 +414,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     selfieInput?.click();
   });
 
-  selfieInput?.addEventListener('change', () => {
+  selfieInput?.addEventListener('change', async () => {
     const file = selfieInput.files?.[0] || null;
     if (!file) {
       setSelfieState({ file: null, url: currentPatient?.selfieUrl || '', label: currentPatient?.selfieFileName || '' });
+      loadPersistedSelfiePreview(currentPatient || {});
       return;
     }
     if (!isAcceptedSelfieFile(file)) {
-      safeToast('Formato nao suportado para selfie. Use PNG, JPG, JPEG, SVG ou PDF.', 'error');
+      safeToast('Formato nao permitido.', 'error');
       selfieInput.value = '';
       return;
     }
-    setSelfieState({ file });
+    try {
+      if (selfieFileName && (file.size || 0) > maxSelfieBytes && !file.path) {
+        selfieFileName.textContent = 'Otimizando foto...';
+      }
+      const preparedFile = await compressSelfieForWeb(file);
+      setSelfieState({ file: preparedFile });
+    } catch (err) {
+      safeToast(err?.message || 'Arquivo muito grande. Limite: 1 MB.', 'error');
+      selfieInput.value = '';
+      setSelfieState({ file: null, url: currentPatient?.selfieUrl || '', label: currentPatient?.selfieFileName || '' });
+      loadPersistedSelfiePreview(currentPatient || {});
+    }
   });
 
   selfieRemoveBtn?.addEventListener('click', () => {
@@ -420,20 +502,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     try {
       setSavePatientLoading(true);
+      const selfieFileToUpload = selectedSelfieFile;
       const saveResult = await patientsApi.save(updated);
       const savedPatient = saveResult?.patient || saveResult || {};
-      if (selectedSelfieFile?.path && patientsApi.uploadSelfie) {
+      if (selfieFileToUpload) {
+        if (!patientsApi.uploadSelfie) {
+          throw new Error('Upload de foto indisponivel neste ambiente.');
+        }
         const selfieResult = await patientsApi.uploadSelfie({
           prontuario: updated.prontuario,
-          filePath: selectedSelfieFile.path,
-          fileName: selectedSelfieFile.name || 'selfie',
-          mimeType: selectedSelfieFile.type || '',
+          patientId: savedPatient.id || updated.id || updated.prontuario,
+          filePath: selfieFileToUpload.path || '',
+          file: selfieFileToUpload,
+          fileName: selfieFileToUpload.name || 'profile-photo',
+          mimeType: selfieFileToUpload.type || '',
         });
         updated.selfiePath = selfieResult?.selfiePath || updated.selfiePath || '';
         updated.selfieMime = selfieResult?.selfieMime || updated.selfieMime || '';
         updated.selfieUpdatedAt = selfieResult?.selfieUpdatedAt || updated.selfieUpdatedAt || '';
         updated.selfieUrl = selfieResult?.selfieUrl || updated.selfieUrl || '';
-        updated.selfieFileName = selectedSelfieFile.name || updated.selfieFileName || '';
+        updated.selfieFileName = selfieFileToUpload.name || updated.selfieFileName || '';
         if (selfieInput) selfieInput.value = '';
         selectedSelfieFile = null;
       }

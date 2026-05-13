@@ -11,6 +11,7 @@
   const WEB_SESSION_CLINIC_KEY = 'voithos.web.session.clinic';
   let staticProcedureCatalogCache = null;
   let staticProcedureCatalogLoading = null;
+  const patientProfilePhotoObjectUrls = new Map();
 
   const cleanText = (value) => String(value || '').trim();
   const getBaseUrl = () => {
@@ -142,6 +143,11 @@
     birthdayMessageYear: Number.isFinite(Number(patient.birthdayMessageYear))
       ? Math.trunc(Number(patient.birthdayMessageYear))
       : 0,
+    selfiePath: patient.selfiePath || patient.profilePhotoPath || '',
+    selfieFileName: patient.selfieFileName || '',
+    selfieMime: patient.selfieMime || patient.profilePhotoMime || '',
+    selfieUpdatedAt: patient.selfieUpdatedAt || patient.profilePhotoUpdatedAt || '',
+    selfieSize: Number(patient.selfieSize || 0) || 0,
   });
 
   const hasOwn = (payload, key) => Object.prototype.hasOwnProperty.call(payload || {}, key);
@@ -1668,6 +1674,10 @@
     createdBy = null,
     data = {},
     archived = false,
+    originalName = '',
+    storedName = '',
+    extension = '',
+    size = null,
   } = {}) => ({
     id: cleanText(id || createLocalId('doc')),
     title: cleanText(title),
@@ -1678,6 +1688,10 @@
     archived: archived === true,
     prontuario: cleanText(prontuario || patientId),
     patientId: cleanText(patientId || prontuario),
+    originalName: cleanText(originalName),
+    storedName: cleanText(storedName),
+    extension: cleanText(extension),
+    size: Number.isFinite(Number(size)) ? Math.trunc(Number(size)) : null,
     createdBy: createdBy && typeof createdBy === 'object' ? {
       id: cleanText(createdBy.id),
       nome: cleanText(createdBy.nome),
@@ -2249,8 +2263,54 @@
       return mapCentralPatientToLegacy(data || {});
     },
     remove: async (id) => request('DELETE', '/patients/' + encodeURIComponent(cleanText(id?.id || id)), null, { auth: true }),
-    uploadSelfie: async () => {
-      throw new Error('uploadSelfie ainda nao implementado no backend web.');
+    uploadSelfie: async (payload = {}) => {
+      const patientId = resolvePatientId(payload);
+      const file = payload?.file || null;
+      const isBrowserFile = (typeof File !== 'undefined' && file instanceof File)
+        || (typeof Blob !== 'undefined' && file instanceof Blob);
+      if (!patientId) throw new Error('patientId/prontuario is required.');
+      if (!isBrowserFile) throw new Error('Arquivo invalido para upload no webapp.');
+      const fileName = cleanText(payload?.fileName || file?.name || 'profile-photo');
+      const data = await requestRawBody(
+        'PUT',
+        `/patients/${encodeURIComponent(patientId)}/profile-photo`,
+        await file.arrayBuffer(),
+        {
+          auth: true,
+          contentType: cleanText(file?.type || payload?.mimeType || 'application/octet-stream'),
+          headers: {
+            'x-file-name': encodeURIComponent(fileName),
+          },
+        }
+      );
+      const previous = patientProfilePhotoObjectUrls.get(patientId);
+      if (previous?.url) URL.revokeObjectURL(previous.url);
+      patientProfilePhotoObjectUrls.delete(patientId);
+      return {
+        ...data,
+        patient: mapCentralPatientToLegacy(data?.patient || {}),
+        selfiePath: data?.profilePhoto?.storageKey || '',
+        selfieMime: data?.profilePhoto?.contentType || '',
+        selfieUpdatedAt: data?.profilePhoto?.uploadedAt || '',
+        selfieSize: data?.profilePhoto?.size || 0,
+      };
+    },
+    getSelfieObjectUrl: async (payload = {}) => {
+      const patientId = resolvePatientId(typeof payload === 'object' ? payload : { patientId: payload });
+      const version = cleanText(payload?.selfieUpdatedAt || payload?.profilePhotoUpdatedAt || '');
+      if (!patientId) throw new Error('patientId/prontuario is required.');
+      const cached = patientProfilePhotoObjectUrls.get(patientId);
+      if (cached?.url && cached.version === version) return cached.url;
+      const binary = await requestBinary(
+        'GET',
+        `/patients/${encodeURIComponent(patientId)}/profile-photo`,
+        null,
+        { auth: true, omitContentType: true }
+      );
+      const url = URL.createObjectURL(new Blob([binary.buffer], { type: binary.contentType || 'application/octet-stream' }));
+      if (cached?.url) URL.revokeObjectURL(cached.url);
+      patientProfilePhotoObjectUrls.set(patientId, { url, version });
+      return url;
     },
     updateDentist: async ({ prontuario, novoDentistaId } = {}) => {
       const patient = await patients.read(prontuario);
@@ -2414,7 +2474,25 @@
         throw new Error('Arquivo invalido para upload no webapp.');
       }
       const fileName = cleanText(payload?.fileName || file?.name || payload?.title || 'arquivo');
+      const fileExtension = cleanText(fileName.split('.').length > 1 ? `.${fileName.split('.').pop()}` : '').toLowerCase();
+      const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+      const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.pdf']);
+      const mimeType = cleanText(file?.type || payload?.mimeType || '').toLowerCase();
+      if ((file?.size || 0) > (5 * 1024 * 1024)) {
+        throw new Error('Arquivo muito grande. Limite: 5 MB.');
+      }
+      if (!allowedExtensions.has(fileExtension) || (mimeType && !allowedTypes.has(mimeType))) {
+        throw new Error('Formato nao permitido.');
+      }
       const actor = resolveDocumentActor(payload);
+      const {
+        file: _file,
+        filePath: _filePath,
+        base64: _base64,
+        dataUrl: _dataUrl,
+        buffer: _buffer,
+        ...safePayload
+      } = payload || {};
       const metadata = await request(
         'POST',
         `/clinical/patients/${encodeURIComponent(patientId)}/documents`,
@@ -2429,12 +2507,17 @@
             patientId,
             createdBy: actor,
             documentDate: payload?.documentDate || normalizeDateOnly(new Date()),
+            originalName: fileName,
+            storedName: fileName,
+            extension: fileExtension,
+            size: file?.size || 0,
             data: {
-              ...payload,
+              ...safePayload,
               prontuario: patientId,
               patientId,
               fileName,
-              mimeType: cleanText(file?.type || payload?.mimeType || ''),
+              mimeType,
+              size: file?.size || 0,
             },
           }),
         },
@@ -2447,7 +2530,7 @@
         arrayBuffer,
         {
           auth: true,
-          contentType: cleanText(file?.type || payload?.mimeType || 'application/octet-stream'),
+          contentType: mimeType || 'application/octet-stream',
           headers: {
             'x-file-name': encodeURIComponent(fileName),
           },

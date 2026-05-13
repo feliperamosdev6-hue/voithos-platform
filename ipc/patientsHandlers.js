@@ -25,7 +25,8 @@ const registerPatientsHandlers = ({
   readJsonFile,
   currentUserRef,
 }) => {
-  const allowedSelfieExt = new Set(['.png', '.jpg', '.jpeg', '.svg', '.pdf']);
+  const allowedSelfieExt = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+  const maxSelfieSizeBytes = 1 * 1024 * 1024;
   let centralLogged = false;
   const getCurrentClinicId = () => String(
     (typeof currentUserRef === 'function' ? currentUserRef()?.clinicId : '')
@@ -84,8 +85,7 @@ const registerPatientsHandlers = ({
     const mime = String(mimeType || '').toLowerCase().trim();
     if (mime === 'image/png') return '.png';
     if (mime === 'image/jpeg' || mime === 'image/jpg') return '.jpg';
-    if (mime === 'image/svg+xml') return '.svg';
-    if (mime === 'application/pdf') return '.pdf';
+    if (mime === 'image/webp') return '.webp';
     return '';
   };
 
@@ -362,20 +362,31 @@ const registerPatientsHandlers = ({
 
     const ext = resolveSelfieExt(fileName, mimeType);
     if (!ext) {
-      throw new Error('Formato de selfie nao suportado. Use PNG, JPG, JPEG, SVG ou PDF.');
+      throw new Error('Formato nao permitido.');
+    }
+    const sourceStat = await fsPromises.stat(filePath);
+    if (!sourceStat.isFile()) throw new Error('Arquivo de selfie invalido.');
+    if ((sourceStat.size || 0) > maxSelfieSizeBytes) {
+      throw new Error('Arquivo muito grande. Limite: 1 MB.');
     }
 
+    const patientFile = path.join(patientsPath, `${prontuario}.json`);
+    if (!(await pathExists(patientFile))) throw new Error('Paciente nao encontrado.');
+    const patient = await readJsonFile(patientFile);
     const patientDir = path.join(patientsPath, prontuario);
     await ensureDir(patientDir);
 
     const targetName = `selfie${ext}`;
     const targetPath = path.join(patientDir, targetName);
+    const patientsRoot = path.resolve(patientsPath);
+    const previousSelfiePath = patient.selfiePath ? path.resolve(patientsRoot, patient.selfiePath) : '';
     await fsPromises.copyFile(filePath, targetPath);
+    if (previousSelfiePath && previousSelfiePath.startsWith(`${patientsRoot}${path.sep}`) && previousSelfiePath !== targetPath) {
+      await fsPromises.unlink(previousSelfiePath).catch((error) => {
+        if (error?.code !== 'ENOENT') throw error;
+      });
+    }
     const stat = await fsPromises.stat(targetPath);
-
-    const patientFile = path.join(patientsPath, `${prontuario}.json`);
-    if (!(await pathExists(patientFile))) throw new Error('Paciente nao encontrado.');
-    const patient = await readJsonFile(patientFile);
 
     const selfieRelativePath = path.join(prontuario, targetName);
     const updated = {

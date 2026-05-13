@@ -2,6 +2,7 @@ const { AppError } = require('../errors/AppError');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
 const { userRepository } = require('../repositories/userRepository');
+const { patientDocumentStorageService } = require('./patientDocumentStorageService');
 const { assertRecordBelongsToClinic, sanitizeTenantInput } = require('../utils/tenantScope');
 
 const isMissingTableError = (error) => error && error.code === 'P2021';
@@ -62,12 +63,23 @@ const decoratePatient = (patient) => {
   if (!patient) return patient;
   const { clinicalRecord, ...base } = patient;
   const profile = getPatientProfileSummary(patient);
+  const profilePhoto = profile.profilePhoto && typeof profile.profilePhoto === 'object' && !Array.isArray(profile.profilePhoto)
+    ? profile.profilePhoto
+    : {};
   return {
     ...base,
     dentistaId: cleanText(profile.dentistaId),
     dentistaNome: cleanText(profile.dentistaNome),
     notes: cleanText(profile.notes || profile.observacoes),
     observacoes: cleanText(profile.observacoes || profile.notes),
+    selfiePath: cleanText(profile.selfiePath || profilePhoto.storageKey),
+    selfieFileName: cleanText(profile.selfieFileName || profilePhoto.fileName),
+    selfieMime: cleanText(profile.selfieMime || profilePhoto.contentType),
+    selfieUpdatedAt: cleanText(profile.selfieUpdatedAt || profilePhoto.uploadedAt),
+    selfieSize: Number(profile.selfieSize ?? profilePhoto.size ?? 0) || 0,
+    profilePhotoPath: cleanText(profile.profilePhotoPath || profilePhoto.storageKey),
+    profilePhotoMime: cleanText(profile.profilePhotoMime || profilePhoto.contentType),
+    profilePhotoUpdatedAt: cleanText(profile.profilePhotoUpdatedAt || profilePhoto.uploadedAt),
   };
 };
 
@@ -343,6 +355,79 @@ const patientService = {
       }
       throw error;
     }
+  },
+
+  updateProfilePhotoForClinic: async ({ id, clinicId, buffer, fileName, contentType }) => {
+    const normalizedId = String(id || '').trim();
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Authenticated clinic context is required.');
+    }
+    if (!normalizedId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'id is required.');
+    }
+
+    const current = await patientRepository.findById(normalizedId);
+    assertRecordBelongsToClinic(current, normalizedClinicId, 'PATIENT_NOT_FOUND');
+    const currentProfile = getPatientProfileSummary(current);
+    const currentProfilePhoto = currentProfile.profilePhoto && typeof currentProfile.profilePhoto === 'object' && !Array.isArray(currentProfile.profilePhoto)
+      ? currentProfile.profilePhoto
+      : {};
+
+    const stored = await patientDocumentStorageService.storePatientProfilePhoto({
+      clinicId: normalizedClinicId,
+      patientId: normalizedId,
+      buffer,
+      fileName,
+      contentType,
+      previousStorageKey: cleanText(currentProfilePhoto.storageKey || currentProfile.selfiePath || currentProfile.profilePhotoPath),
+    });
+
+    await patientClinicalRepository.upsertClinicalRecordSummary({
+      clinicId: normalizedClinicId,
+      patientId: normalizedId,
+      summary: mergeProfileSummary(current, {
+        profilePhoto: stored,
+        profilePhotoPath: stored.storageKey,
+        profilePhotoMime: stored.contentType,
+        profilePhotoUpdatedAt: stored.uploadedAt,
+        selfiePath: stored.storageKey,
+        selfieFileName: stored.fileName,
+        selfieMime: stored.contentType,
+        selfieUpdatedAt: stored.uploadedAt,
+        selfieSize: stored.size,
+      }),
+    });
+
+    return {
+      patient: decoratePatient(await patientRepository.findById(normalizedId)),
+      profilePhoto: stored,
+    };
+  },
+
+  getProfilePhotoForClinic: async ({ id, clinicId }) => {
+    const normalizedId = String(id || '').trim();
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      throw new AppError(401, 'UNAUTHORIZED', 'Authenticated clinic context is required.');
+    }
+    if (!normalizedId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'id is required.');
+    }
+
+    const patient = await patientRepository.findById(normalizedId);
+    assertRecordBelongsToClinic(patient, normalizedClinicId, 'PATIENT_NOT_FOUND');
+    const profile = getPatientProfileSummary(patient);
+    const profilePhoto = profile.profilePhoto && typeof profile.profilePhoto === 'object' && !Array.isArray(profile.profilePhoto)
+      ? profile.profilePhoto
+      : {};
+    return patientDocumentStorageService.getPatientProfilePhoto({
+      clinicId: normalizedClinicId,
+      patientId: normalizedId,
+      storageKey: cleanText(profilePhoto.storageKey || profile.selfiePath || profile.profilePhotoPath),
+      fileName: cleanText(profilePhoto.fileName || profile.selfieFileName),
+      contentType: cleanText(profilePhoto.contentType || profile.selfieMime || profile.profilePhotoMime),
+    });
   },
 
   deleteForClinic: async ({ id, clinicId }) => {

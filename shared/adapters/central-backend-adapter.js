@@ -876,6 +876,11 @@ const createCentralBackendAdapter = (options = {}) => {
     birthdayMessageYear: Number.isFinite(Number(patient.birthdayMessageYear))
       ? Math.trunc(Number(patient.birthdayMessageYear))
       : 0,
+    selfiePath: patient.selfiePath || patient.profilePhotoPath || '',
+    selfieFileName: patient.selfieFileName || '',
+    selfieMime: patient.selfieMime || patient.profilePhotoMime || '',
+    selfieUpdatedAt: patient.selfieUpdatedAt || patient.profilePhotoUpdatedAt || '',
+    selfieSize: Number(patient.selfieSize || 0) || 0,
   });
 
   const hasOwn = (payload, key) => Object.prototype.hasOwnProperty.call(payload || {}, key);
