@@ -30,6 +30,25 @@ const buildAttachmentCountMap = (documents = []) => {
 };
 
 const cleanText = (value) => String(value || '').trim();
+const pickInputValue = (input = {}, keys = []) => {
+  for (const key of keys) {
+    if (hasOwn(input, key) && input[key] !== undefined) return input[key];
+  }
+  return undefined;
+};
+
+const normalizePatientMainInput = (input = {}) => ({
+  nome: pickInputValue(input, ['fullName', 'name', 'nome']),
+  cpf: pickInputValue(input, ['cpf', 'document', 'cpfCnpj']),
+  rg: pickInputValue(input, ['rg']),
+  dataNascimento: pickInputValue(input, ['dataNascimento', 'birthDate', 'nascimento']),
+  telefone: pickInputValue(input, ['phone', 'telefone', 'celular', 'whatsapp']),
+  email: pickInputValue(input, ['email']),
+  endereco: pickInputValue(input, ['address', 'endereco']),
+  allowsMessages: pickInputValue(input, ['allowsMessages']),
+  lastBirthdayMessageAt: pickInputValue(input, ['lastBirthdayMessageAt']),
+  birthdayMessageYear: pickInputValue(input, ['birthdayMessageYear']),
+});
 
 const getPatientProfileSummary = (patient = {}) => {
   const summary = patient?.clinicalRecord?.summary;
@@ -166,7 +185,8 @@ const patientService = {
 
   create: async (input) => {
     const clinicId = String(input?.clinicId || '').trim();
-    const nome = String(input?.nome || '').trim();
+    const mainInput = normalizePatientMainInput(input);
+    const nome = cleanText(mainInput.nome);
 
     if (!clinicId) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
@@ -180,15 +200,15 @@ const patientService = {
       const created = await patientRepository.create({
         clinicId,
         nome,
-        cpf: input?.cpf,
-        rg: input?.rg,
-        dataNascimento: input?.dataNascimento,
-        telefone: input?.telefone,
-        email: input?.email,
-        endereco: input?.endereco,
-        allowsMessages: input?.allowsMessages,
-        lastBirthdayMessageAt: input?.lastBirthdayMessageAt,
-        birthdayMessageYear: input?.birthdayMessageYear,
+        cpf: mainInput.cpf,
+        rg: mainInput.rg,
+        dataNascimento: mainInput.dataNascimento,
+        telefone: mainInput.telefone,
+        email: mainInput.email,
+        endereco: mainInput.endereco,
+        allowsMessages: mainInput.allowsMessages,
+        lastBirthdayMessageAt: mainInput.lastBirthdayMessageAt,
+        birthdayMessageYear: mainInput.birthdayMessageYear,
       });
       const profilePatch = await validateDentistPatchForClinic({
         clinicId,
@@ -214,7 +234,8 @@ const patientService = {
   createForClinic: async (clinicId, input) => {
     const normalizedClinicId = String(clinicId || '').trim();
     const sanitizedInput = sanitizeTenantInput(input);
-    const nome = String(sanitizedInput?.nome || '').trim();
+    const mainInput = normalizePatientMainInput(sanitizedInput);
+    const nome = cleanText(mainInput.nome);
 
     if (!normalizedClinicId) {
       throw new AppError(401, 'UNAUTHORIZED', 'Authenticated clinic context is required.');
@@ -228,15 +249,15 @@ const patientService = {
       const created = await patientRepository.create({
         clinicId: normalizedClinicId,
         nome,
-        cpf: sanitizedInput?.cpf,
-        rg: sanitizedInput?.rg,
-        dataNascimento: sanitizedInput?.dataNascimento,
-        telefone: sanitizedInput?.telefone,
-        email: sanitizedInput?.email,
-        endereco: sanitizedInput?.endereco,
-        allowsMessages: sanitizedInput?.allowsMessages,
-        lastBirthdayMessageAt: sanitizedInput?.lastBirthdayMessageAt,
-        birthdayMessageYear: sanitizedInput?.birthdayMessageYear,
+        cpf: mainInput.cpf,
+        rg: mainInput.rg,
+        dataNascimento: mainInput.dataNascimento,
+        telefone: mainInput.telefone,
+        email: mainInput.email,
+        endereco: mainInput.endereco,
+        allowsMessages: mainInput.allowsMessages,
+        lastBirthdayMessageAt: mainInput.lastBirthdayMessageAt,
+        birthdayMessageYear: mainInput.birthdayMessageYear,
       });
       const profilePatch = await validateDentistPatchForClinic({
         clinicId: normalizedClinicId,
@@ -263,7 +284,8 @@ const patientService = {
     const normalizedId = String(id || '').trim();
     const normalizedClinicId = String(clinicId || '').trim();
     const sanitizedInput = sanitizeTenantInput(input);
-    const nome = String(sanitizedInput?.nome || '').trim();
+    const mainInput = normalizePatientMainInput(sanitizedInput);
+    const nome = cleanText(mainInput.nome);
 
     if (!normalizedClinicId) {
       throw new AppError(401, 'UNAUTHORIZED', 'Authenticated clinic context is required.');
@@ -290,15 +312,15 @@ const patientService = {
         clinicId: normalizedClinicId,
         data: {
           nome,
-          cpf: sanitizedInput?.cpf,
-          rg: sanitizedInput?.rg,
-          dataNascimento: sanitizedInput?.dataNascimento,
-          telefone: sanitizedInput?.telefone,
-          email: sanitizedInput?.email,
-          endereco: sanitizedInput?.endereco,
-          allowsMessages: sanitizedInput?.allowsMessages,
-          lastBirthdayMessageAt: sanitizedInput?.lastBirthdayMessageAt,
-          birthdayMessageYear: sanitizedInput?.birthdayMessageYear,
+          cpf: mainInput.cpf,
+          rg: mainInput.rg,
+          dataNascimento: mainInput.dataNascimento,
+          telefone: mainInput.telefone,
+          email: mainInput.email,
+          endereco: mainInput.endereco,
+          allowsMessages: mainInput.allowsMessages,
+          lastBirthdayMessageAt: mainInput.lastBirthdayMessageAt,
+          birthdayMessageYear: mainInput.birthdayMessageYear,
         },
       });
 

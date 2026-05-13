@@ -94,7 +94,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     const message = String(err?.message || '').trim();
     if (/dentista invalido|invalid_dentist/i.test(message)) return 'Dentista invalido para a clinica atual.';
     if (/outra clinica|clinic|tenant/i.test(message)) return 'Paciente nao encontrado para a clinica atual.';
+    if (/confirmados|persist|recarregar|retorno/i.test(message)) return message;
     return 'Nao foi possivel salvar os dados do paciente.';
+  };
+
+  const normalizeComparableValue = (value) => String(value || '').trim();
+
+  const getPatientComparableValue = (patient = {}, field) => {
+    if (field === 'nome') return patient.fullName || patient.nome || patient.name || '';
+    if (field === 'telefone') return patient.phone || patient.telefone || patient.celular || patient.whatsapp || '';
+    if (field === 'endereco') return patient.address || patient.endereco || '';
+    if (field === 'dataNascimento') return toDateInputValue(patient.dataNascimento || patient.birthDate || patient.nascimento || '');
+    return patient[field] || '';
+  };
+
+  const getChangedProfileFields = (before = {}, after = {}) => ([
+    ['nome', after.nome],
+    ['cpf', after.cpf],
+    ['telefone', after.telefone],
+    ['email', after.email],
+    ['dataNascimento', after.dataNascimento],
+    ['endereco', after.endereco],
+  ]).filter(([field, value]) => (
+    normalizeComparableValue(getPatientComparableValue(before, field)) !== normalizeComparableValue(value)
+  ));
+
+  const getPersistedProfileMismatches = (patient = {}, changedFields = []) => (
+    changedFields.filter(([field, expected]) => (
+      normalizeComparableValue(getPatientComparableValue(patient, field)) !== normalizeComparableValue(expected)
+    )).map(([field]) => field)
+  );
+
+  const persistUpdatedPatientContext = (patient = {}) => {
+    if (!patient || typeof patient !== 'object') return;
+    try {
+      sessionStorage.setItem('activeProntuarioPatient', JSON.stringify(patient));
+    } catch (_) {}
+    try {
+      ['editingPatient', 'prontuarioPatient', 'servicePatient', 'documentsPatient'].forEach((baseKey) => {
+        getClinicStorageCandidates(baseKey).forEach((key) => {
+          if (localStorage.getItem(key)) {
+            localStorage.setItem(key, JSON.stringify(patient));
+          }
+        });
+      });
+      localStorage.setItem(getClinicStorageKey('voithos-patient-updated'), JSON.stringify({
+        patientId: patient.id || patient.prontuario || '',
+        clinicId: currentUser?.clinicId || patient.clinicId || patient.clinicaId || '',
+        updatedAt: new Date().toISOString(),
+      }));
+    } catch (_) {}
   };
 
   const setSelfieState = ({ file = null, url = '', label = '' } = {}) => {
@@ -319,18 +368,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault();
     if (!currentPatient) return;
     if (isSavingPatient) return;
-    const updated = {
-      ...currentPatient,
-      fullName: document.getElementById('edit-fullName').value,
+    const formProfile = {
+      nome: document.getElementById('edit-fullName').value,
       cpf: document.getElementById('edit-cpf').value,
       rg: document.getElementById('edit-rg').value,
       dataNascimento: document.getElementById('edit-dataNascimento').value,
-      prontuario: document.getElementById('edit-prontuario').value,
-      phone: document.getElementById('edit-phone').value,
-      allowsMessages: !!document.getElementById('edit-allowsMessages').checked,
+      telefone: document.getElementById('edit-phone').value,
       email: document.getElementById('edit-email').value,
-      address: document.getElementById('edit-address').value,
+      endereco: document.getElementById('edit-address').value,
       notes: document.getElementById('edit-notes').value,
+    };
+    const changedProfileFields = getChangedProfileFields(currentPatient, formProfile);
+    const updated = {
+      ...currentPatient,
+      nome: formProfile.nome,
+      fullName: formProfile.nome,
+      cpf: formProfile.cpf,
+      rg: formProfile.rg,
+      dataNascimento: formProfile.dataNascimento,
+      birthDate: formProfile.dataNascimento,
+      prontuario: document.getElementById('edit-prontuario').value,
+      telefone: formProfile.telefone,
+      phone: formProfile.telefone,
+      allowsMessages: !!document.getElementById('edit-allowsMessages').checked,
+      email: formProfile.email,
+      endereco: formProfile.endereco,
+      address: formProfile.endereco,
+      notes: formProfile.notes,
+      observacoes: formProfile.notes,
     };
     delete updated.selfieUrl;
     if (currentUser?.tipo !== 'dentista') {
@@ -372,12 +437,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (selfieInput) selfieInput.value = '';
         selectedSelfieFile = null;
       }
-      const refreshed = await patientsApi.read(savedPatient.prontuario || savedPatient.id || updated.prontuario).catch(() => null);
+      const readPatientId = savedPatient.prontuario || savedPatient.id || updated.id || updated.prontuario;
+      if (!readPatientId) {
+        throw new Error('Backend nao retornou identificador do paciente atualizado.');
+      }
+      const refreshed = await patientsApi.read(readPatientId);
+      if (!refreshed) {
+        throw new Error('Paciente atualizado nao foi recarregado para confirmar persistencia.');
+      }
       currentPatient = {
         ...updated,
         ...savedPatient,
-        ...(refreshed || {}),
+        ...refreshed,
       };
+      const mismatches = getPersistedProfileMismatches(currentPatient, changedProfileFields);
+      if (mismatches.length > 0) {
+        throw new Error(`Dados nao foram confirmados como persistidos: ${mismatches.join(', ')}.`);
+      }
       fillForm(currentPatient);
       if (selectDentista && currentPatient.dentistaId) {
         selectDentista.value = dentistasList.some((item) => String(item.id || '') === String(currentPatient.dentistaId || ''))
@@ -385,6 +461,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           : '';
       }
       setSelfieState({ url: currentPatient.selfieUrl || '', label: currentPatient.selfieFileName || '' });
+      persistUpdatedPatientContext(currentPatient);
       safeToast('Paciente atualizado com sucesso.', 'success');
     } catch (err) {
       console.error('Erro ao salvar paciente:', err);

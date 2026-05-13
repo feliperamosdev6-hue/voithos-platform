@@ -878,20 +878,28 @@ const createCentralBackendAdapter = (options = {}) => {
       : 0,
   });
 
+  const hasOwn = (payload, key) => Object.prototype.hasOwnProperty.call(payload || {}, key);
+  const pickPatientPayloadValue = (payload = {}, keys = [], fallback = '') => {
+    for (const key of keys) {
+      if (hasOwn(payload, key) && payload[key] !== undefined) return payload[key];
+    }
+    return fallback;
+  };
+
   const normalizeLegacyPatientPayload = (payload = {}) => ({
-    nome: payload.nome || payload.fullName || '',
-    cpf: payload.cpf || '',
-    rg: payload.rg || '',
-    dataNascimento: payload.dataNascimento || payload.birthDate || null,
-    telefone: payload.telefone || payload.phone || payload.celular || payload.whatsapp || '',
-    email: payload.email || '',
-    endereco: payload.endereco || payload.address || '',
-    notes: payload.notes || payload.observacoes || '',
-    observacoes: payload.observacoes || payload.notes || '',
-    dentistaId: payload.dentistaId || '',
-    dentistaNome: payload.dentistaNome || '',
+    nome: pickPatientPayloadValue(payload, ['fullName', 'name', 'nome'], ''),
+    cpf: pickPatientPayloadValue(payload, ['cpf', 'document', 'cpfCnpj'], ''),
+    rg: pickPatientPayloadValue(payload, ['rg'], ''),
+    dataNascimento: pickPatientPayloadValue(payload, ['dataNascimento', 'birthDate', 'nascimento'], null),
+    telefone: pickPatientPayloadValue(payload, ['phone', 'telefone', 'celular', 'whatsapp'], ''),
+    email: pickPatientPayloadValue(payload, ['email'], ''),
+    endereco: pickPatientPayloadValue(payload, ['address', 'endereco'], ''),
+    notes: pickPatientPayloadValue(payload, ['notes', 'observacoes'], ''),
+    observacoes: pickPatientPayloadValue(payload, ['observacoes', 'notes'], ''),
+    dentistaId: pickPatientPayloadValue(payload, ['dentistaId'], ''),
+    dentistaNome: pickPatientPayloadValue(payload, ['dentistaNome'], ''),
     allowsMessages: payload.allowsMessages !== undefined ? payload.allowsMessages !== false : true,
-    lastBirthdayMessageAt: payload.lastBirthdayMessageAt || null,
+    lastBirthdayMessageAt: pickPatientPayloadValue(payload, ['lastBirthdayMessageAt'], null),
     birthdayMessageYear: Number.isFinite(Number(payload.birthdayMessageYear))
       ? Math.trunc(Number(payload.birthdayMessageYear))
       : null,
@@ -1040,7 +1048,7 @@ const createCentralBackendAdapter = (options = {}) => {
   };
 
   const createPatient = async (patientData = {}, clinicInput = {}) => {
-    const clinicId = getScopedClinicId({ ...clinicInput, ...patientData });
+    const clinicId = getScopedClinicId({ ...patientData, ...clinicInput });
     const payload = clinicId
       ? await requestInternalJson('/internal/patients', {
         method: 'POST',
@@ -1059,7 +1067,7 @@ const createCentralBackendAdapter = (options = {}) => {
 
   const updatePatient = async (id, patientData = {}, clinicInput = {}) => {
     const normalizedId = String(id || patientData?.id || patientData?.prontuario || '').trim();
-    const clinicId = getScopedClinicId({ ...clinicInput, ...patientData });
+    const clinicId = getScopedClinicId({ ...patientData, ...clinicInput });
     const payload = clinicId
       ? await requestInternalJson(`/internal/patients/${encodeURIComponent(normalizedId)}`, {
         method: 'PATCH',

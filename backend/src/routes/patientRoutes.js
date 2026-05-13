@@ -14,7 +14,7 @@ const router = express.Router();
 
 const validateCreatePatient = validate((req) => {
   const issues = [];
-  if (!String(req.body?.nome || '').trim()) {
+  if (!String(req.body?.nome || req.body?.fullName || req.body?.name || '').trim()) {
     issues.push({ field: 'nome', message: 'nome is required.' });
   }
   return issues;
