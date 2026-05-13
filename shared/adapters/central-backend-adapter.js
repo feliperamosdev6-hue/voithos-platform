@@ -1118,15 +1118,11 @@ const createCentralBackendAdapter = (options = {}) => {
     if (patientId) params.set('patientId', String(patientId).trim());
 
     const suffix = params.toString() ? `?${params.toString()}` : '';
-    const [appointmentsPayload, patients] = await Promise.all([
-      clinicId ? requestInternalJson(`/internal/appointments${suffix}`) : requestJson(`/appointments${suffix}`),
-      patientId
-        ? getPatientById(patientId, { clinicId }).then((patient) => (patient ? [patient] : [])).catch(() => [])
-        : getPatients({ clinicId }),
-    ]);
+    const appointmentsPayload = clinicId
+      ? await requestInternalJson(`/internal/appointments${suffix}`)
+      : await requestJson(`/appointments${suffix}`);
 
-    const patientMap = buildPatientMap(patients);
-    return (appointmentsPayload?.data || []).map((appointment) => mapCentralAppointmentToLegacy(appointment, patientMap));
+    return (appointmentsPayload?.data || []).map((appointment) => mapCentralAppointmentToLegacy(appointment));
   };
 
   const createAppointment = async (appointmentData = {}) => {

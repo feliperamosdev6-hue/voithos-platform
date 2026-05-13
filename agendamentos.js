@@ -98,6 +98,7 @@ const state = {
   dayAgendamentos: [],
   birthdaysToday: [],
   birthdayPanelDismissedDate: '',
+  rangeLoaded: false,
 };
 
 const statusText = {
@@ -170,6 +171,9 @@ const buildAttendanceBadge = (agendamento = {}, className = 'attendance-badge') 
 };
 
 let pacientesCache = [];
+let pacientesCacheClinicId = '';
+let pacientesCacheLoadedAt = 0;
+let pacientesLoadPromise = null;
 let currentEditAgendamento = null;
 let currentStatusAgendamentoId = null;
 let agendaMarkersCache = [];
@@ -208,11 +212,21 @@ const openWhatsAppChat = async (phone) => {
 const findPatientForAppointment = (appt) => {
   const key = String(appt?.pacienteId || appt?.prontuario || appt?.patientId || '').trim();
   const name = String(appt?.pacienteNome || appt?.paciente || '').trim().toLowerCase();
-  return (pacientesCache || []).find((p) => {
+  const cached = (pacientesCache || []).find((p) => {
     const pid = String(p?.id || p?.prontuario || p?._id || '').trim();
     const pname = String(p?.nome || p?.fullName || '').trim().toLowerCase();
     return (key && pid && key === pid) || (name && pname && name === pname);
-  }) || null;
+  });
+  if (cached) return cached;
+  if (!key && !name && !appt?.telefone) return null;
+  return {
+    id: key,
+    prontuario: key,
+    nome: appt?.pacienteNome || appt?.paciente || '',
+    fullName: appt?.pacienteNome || appt?.paciente || '',
+    telefone: appt?.telefone || '',
+    clinicId: appt?.clinicId || '',
+  };
 };
 
 const buildAppointmentConfirmationMessage = (appointment, patient) => {
@@ -608,7 +622,7 @@ const resolveAgendaContextPatient = () => {
     ].map((value) => String(value || '').trim()).filter(Boolean);
     const patientName = String(patient?.nome || patient?.fullName || '').trim().toLowerCase();
     return patientIds.some((id) => candidateIds.includes(id)) || (candidateName && patientName === candidateName);
-  }) || null;
+  }) || contextPatient;
 };
 
 const consumeAgendaDraftContext = () => {
@@ -1175,6 +1189,11 @@ const getDeleteErrorMessage = (err) => {
   return 'Nao foi possivel excluir.';
 };
 
+const getCachedDayAppointments = (dateStr) => {
+  const normalizedDate = normalizeDateLocal(dateStr);
+  if (!state.rangeLoaded || !normalizedDate) return null;
+  return (state.rangeAgendamentos || []).filter((appt) => normalizeDateLocal(appt?.data) === normalizedDate);
+};
 
 const renderDayList = async (dateStr) => {
   const list = document.getElementById('agenda-list');
@@ -1190,11 +1209,11 @@ const renderDayList = async (dateStr) => {
   if (!list) return;
   list.innerHTML = '<div class="no-data">Carregando...</div>';
   try {
-    await loadBirthdaysForSelectedDate();
     console.log('[AGENDA] dia selecionado', dateStr);
     const usuario = state.usuarioLogado;
-    const agendamentosDiaBrutos = await agendaApi.getDay?.(normalizedDate);
-    const agsBase = filtrarAgendamentosPorPerfil(agendamentosDiaBrutos, usuario);
+    const cachedDay = getCachedDayAppointments(normalizedDate);
+    const agendamentosDiaBrutos = cachedDay || await agendaApi.getDay?.(normalizedDate);
+    const agsBase = cachedDay || filtrarAgendamentosPorPerfil(agendamentosDiaBrutos, usuario);
     const ags = filterAgendamentosByDentist(agsBase);
     const isToday = normalizedDate === normalizeDateLocal(new Date());
     const nowMinutes = isToday ? (() => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); })() : null;
@@ -1207,6 +1226,9 @@ const renderDayList = async (dateStr) => {
     if (!ags || !ags.length) {
       list.innerHTML = '<div class="no-data">Nenhum agendamento para este dia.</div>';
       renderDayTimeline(normalizedDate, []);
+      void loadBirthdaysForSelectedDate().catch((err) => {
+        console.warn('[AGENDA] aniversariantes carregamento tardio falhou', err);
+      });
       if (isToday) {
         showToast({ mensagem: '&#8505;&#65039; Nenhum agendamento para hoje', tipo: 'info' });
       }
@@ -1289,6 +1311,9 @@ const renderDayList = async (dateStr) => {
       list.appendChild(card);
     });
     renderDayTimeline(normalizedDate, ags);
+    void loadBirthdaysForSelectedDate().catch((err) => {
+      console.warn('[AGENDA] aniversariantes carregamento tardio falhou', err);
+    });
     if (atrasoDetectado) {
       showToast({ mensagem: '&#128339; Existe agendamento em atraso', tipo: 'critico' });
     }
@@ -1726,6 +1751,7 @@ const loadRangeData = async () => {
     const agendamentosBrutos = await agendaApi.getRange?.({ start: startStr, end: endStr });
     console.log('[AGENDA] dados recebidos', agendamentosBrutos);
     state.rangeAgendamentos = filtrarAgendamentosPorPerfil(agendamentosBrutos, usuario);
+    state.rangeLoaded = true;
     if (!state.rangeAgendamentos.length) {
       const list = document.getElementById('agenda-list');
       if (list) list.innerHTML = '<div class="no-data">Nenhum agendamento encontrado para este periodo.</div>';
@@ -1733,6 +1759,7 @@ const loadRangeData = async () => {
   } catch (err) {
     console.warn('[AGENDA] erro ao carregar range', err);
     state.rangeAgendamentos = [];
+    state.rangeLoaded = false;
   }
 };
 
@@ -1946,8 +1973,24 @@ const renderPacientesOptions = (filtro = '') => {
 
 const preencherPacientesSelect = async () => {
   const { filtroPaciente } = getModalRefs();
+  const clinicId = String(currentUser?.clinicId || '').trim();
+  const cacheFresh = pacientesCacheClinicId === clinicId
+    && pacientesCacheLoadedAt
+    && (Date.now() - pacientesCacheLoadedAt) < 5 * 60 * 1000
+    && Array.isArray(pacientesCache)
+    && pacientesCache.length > 0;
   try {
-    pacientesCache = (await patientsApi.list?.()) || [];
+    if (!cacheFresh) {
+      if (!pacientesLoadPromise) {
+        pacientesLoadPromise = Promise.resolve(patientsApi.list?.())
+          .finally(() => {
+            pacientesLoadPromise = null;
+          });
+      }
+      pacientesCache = (await pacientesLoadPromise) || [];
+      pacientesCacheClinicId = clinicId;
+      pacientesCacheLoadedAt = Date.now();
+    }
   } catch (err) {
     console.warn('Pacientes nao carregados (permissao ou erro)', err);
     showToast('Nao foi possivel carregar pacientes agora.', 'info');
@@ -2347,7 +2390,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireControls();
   wireModalNovoAgendamento();
   wireStatusModal();
-  await preencherPacientesSelect();
   await initAgenda();
   await maybeOpenFromQuery();
   await openAgendaTargetFromNotification();

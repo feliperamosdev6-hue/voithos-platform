@@ -3424,12 +3424,8 @@
       if (from) params.set('from', from);
       if (to) params.set('to', to);
       const query = params.toString();
-      const [appointmentsData, patientsData] = await Promise.all([
-        request('GET', `/appointments${query ? `?${query}` : ''}`, null, { auth: true }),
-        request('GET', '/patients', null, { auth: true }),
-      ]);
-      const patientMap = buildPatientMap((Array.isArray(patientsData) ? patientsData : []).map(mapCentralPatientToLegacy));
-      return (Array.isArray(appointmentsData) ? appointmentsData : []).map((appointment) => mapCentralAppointmentToLegacy(appointment, patientMap));
+      const appointmentsData = await request('GET', `/appointments${query ? `?${query}` : ''}`, null, { auth: true });
+      return (Array.isArray(appointmentsData) ? appointmentsData : []).map((appointment) => mapCentralAppointmentToLegacy(appointment));
     },
     getRange: async ({ start, end, date, patientId } = {}) => {
       let from = normalizeRangeBoundary(start, false);
@@ -3443,16 +3439,8 @@
       if (to) params.set('to', to);
       if (patientId) params.set('patientId', cleanText(patientId));
       const query = params.toString();
-      const [appointmentsData, patientsData] = await Promise.all([
-        request('GET', `/appointments${query ? `?${query}` : ''}`, null, { auth: true }),
-        patientId
-          ? request('GET', `/patients/${encodeURIComponent(cleanText(patientId))}`, null, { auth: true })
-              .then((patient) => [patient])
-              .catch(() => [])
-          : request('GET', '/patients', null, { auth: true }),
-      ]);
-      const patientMap = buildPatientMap((Array.isArray(patientsData) ? patientsData : []).map(mapCentralPatientToLegacy));
-      return (Array.isArray(appointmentsData) ? appointmentsData : []).map((appointment) => mapCentralAppointmentToLegacy(appointment, patientMap));
+      const appointmentsData = await request('GET', `/appointments${query ? `?${query}` : ''}`, null, { auth: true });
+      return (Array.isArray(appointmentsData) ? appointmentsData : []).map((appointment) => mapCentralAppointmentToLegacy(appointment));
     },
     add: async (payload = {}) => {
       const patientId = cleanText(payload?.patientId || payload?.pacienteId || payload?.prontuario);

@@ -11,6 +11,16 @@ const appointmentRepository = {
       id: toRequiredString(id, 'id'),
       clinicId: toRequiredString(clinicId, 'clinicId'),
     },
+    include: {
+      patient: {
+        select: {
+          id: true,
+          clinicId: true,
+          nome: true,
+          telefone: true,
+        },
+      },
+    },
   }),
 
   listByClinic: async ({ clinicId, from, to, patientId }) => {
@@ -32,6 +42,16 @@ const appointmentRepository = {
 
     return prisma.appointment.findMany({
       where,
+      include: {
+        patient: {
+          select: {
+            id: true,
+            clinicId: true,
+            nome: true,
+            telefone: true,
+          },
+        },
+      },
       orderBy: {
         dataHora: 'asc',
       },
