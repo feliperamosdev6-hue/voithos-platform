@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const gestaoToggle = document.getElementById('gestao-toggle');
   const gestaoDropdown = document.getElementById('gestao-dropdown');
   let currentUser = null;
+  const HEADER_CACHE_PREFIX = 'voithos.header.context.v1';
+  const HEADER_CACHE_TTL_MS = 10 * 60 * 1000;
+  let headerContextPromise = null;
   const MOBILE_NAV_STYLE_ID = 'voithos-mobile-bottom-nav-styles';
   const MOBILE_NAV_ID = 'voithos-mobile-bottom-nav';
 
@@ -319,6 +322,130 @@ document.addEventListener('DOMContentLoaded', () => {
     return localPart.replace(/[._-]+/g, ' ').trim() || 'Usuario';
   };
 
+  const nowMs = () => (window.performance?.now ? window.performance.now() : Date.now());
+
+  const perfLog = (stage, details = {}) => {
+    console.info('[perf][header-context]', {
+      stage,
+      durationMs: Number.isFinite(details.durationMs) ? Math.round(details.durationMs) : 0,
+      source: String(details.source || '').trim(),
+      cacheKey: details.cacheKey ? 'scoped' : '',
+    });
+  };
+
+  const safeParseJson = (value) => {
+    try {
+      return value ? JSON.parse(value) : null;
+    } catch (_error) {
+      return null;
+    }
+  };
+
+  const getHeaderCacheKeys = () => {
+    const keys = new Set();
+    let hasScopedIdentity = false;
+    try {
+      const rawUser = safeParseJson(localStorage.getItem('voithos.web.session.user'));
+      const rawClinic = safeParseJson(localStorage.getItem('voithos.web.session.clinic'));
+      const userId = String(rawUser?.id || rawUser?.userId || '').trim();
+      const clinicId = String(rawClinic?.clinicId || rawClinic?.id || rawUser?.clinicId || '').trim();
+      if (userId || clinicId) {
+        hasScopedIdentity = true;
+        keys.add(`${HEADER_CACHE_PREFIX}:${userId || 'anon'}:${clinicId || 'global'}`);
+      }
+    } catch (_error) {
+      // Storage indisponivel nao deve bloquear o header.
+    }
+    if (!hasScopedIdentity) keys.add(`${HEADER_CACHE_PREFIX}:last`);
+    return Array.from(keys);
+  };
+
+  const readHeaderCache = () => {
+    const started = nowMs();
+    try {
+      for (const key of getHeaderCacheKeys()) {
+        const record = safeParseJson(localStorage.getItem(key));
+        if (!record || !record.userName || !record.savedAt) continue;
+        if (Date.now() - Number(record.savedAt || 0) > HEADER_CACHE_TTL_MS) continue;
+        perfLog('cache_hit', { durationMs: nowMs() - started, source: 'localStorage', cacheKey: key });
+        return record;
+      }
+    } catch (_error) {
+      // Ignora falha de storage.
+    }
+    perfLog('cache_miss', { durationMs: nowMs() - started, source: 'localStorage' });
+    return null;
+  };
+
+  const writeHeaderCache = (context) => {
+    if (!context?.userName) return;
+    try {
+      const payload = JSON.stringify({ ...context, savedAt: Date.now() });
+      localStorage.setItem(`${HEADER_CACHE_PREFIX}:${context.userId || 'anon'}:${context.clinicId || 'global'}`, payload);
+      localStorage.setItem(`${HEADER_CACHE_PREFIX}:last`, payload);
+    } catch (_error) {
+      // Cache indisponivel nao deve bloquear revalidacao.
+    }
+  };
+
+  const clearHeaderCache = () => {
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(HEADER_CACHE_PREFIX)) keys.push(key);
+      }
+      keys.forEach((key) => localStorage.removeItem(key));
+    } catch (_error) {
+      // Ignora storage indisponivel.
+    }
+  };
+
+  const normalizeHeaderContext = ({ user = null, authContext = null } = {}) => {
+    if (!user || typeof user !== 'object') return null;
+    const clinic = authContext?.clinic || user?.clinic || {};
+    return {
+      userId: String(user?.id || user?.userId || '').trim(),
+      clinicId: String(authContext?.clinicId || user?.clinicId || clinic?.clinicId || clinic?.id || '').trim(),
+      userName: getDisplayName(user),
+      role: String(user?.tipo || user?.perfil || user?.role || '').trim(),
+      clinicName: String(clinic?.nomeFantasia || clinic?.nomeClinica || clinic?.razaoSocial || user?.clinicName || user?.nomeClinica || '').trim(),
+      isClinicAdmin: user?.isClinicAdmin === true,
+      permissions: user?.permissions && typeof user.permissions === 'object' ? { ...user.permissions } : {},
+      mustChangePassword: user?.mustChangePassword === true,
+      isImpersonatedSession: user?.isImpersonatedSession === true || authContext?.isImpersonatedSession === true,
+      savedAt: Date.now(),
+    };
+  };
+
+  const userFromHeaderContext = (context = {}) => ({
+    id: context.userId || '',
+    userId: context.userId || '',
+    clinicId: context.clinicId || '',
+    nome: context.userName || '',
+    tipo: context.role || '',
+    perfil: context.role || '',
+    role: context.role || '',
+    isClinicAdmin: context.isClinicAdmin === true,
+    permissions: context.permissions || {},
+    mustChangePassword: context.mustChangePassword === true,
+    isImpersonatedSession: context.isImpersonatedSession === true,
+  });
+
+  const renderHeaderContext = (context, { source = '' } = {}) => {
+    const started = nowMs();
+    if (!context?.userName) return;
+    currentUser = userFromHeaderContext(context);
+    if (userNameEl) userNameEl.textContent = context.userName;
+    if (userRoleEl) {
+      const roleLabel = formatRole(context.role || '');
+      const clinicSuffix = context.clinicName ? ` · ${context.clinicName}` : '';
+      const supportSuffix = context.isImpersonatedSession ? ' • suporte' : '';
+      userRoleEl.textContent = `${roleLabel}${clinicSuffix}${supportSuffix}`;
+    }
+    perfLog('render_done', { durationMs: nowMs() - started, source });
+  };
+
   const handleChangePassword = async () => {
     const senhaAtual = window.prompt('Senha atual:');
     if (!senhaAtual) return;
@@ -357,17 +484,47 @@ document.addEventListener('DOMContentLoaded', () => {
     return { user: null, error: lastError };
   };
 
+  const resolveHeaderContextSafely = async () => {
+    if (headerContextPromise) return headerContextPromise;
+    const started = nowMs();
+    const source = authApi.currentContext ? 'context' : 'currentUser';
+    perfLog('fetch_start', { source });
+    headerContextPromise = (async () => {
+      if (authApi.currentContext) {
+        const authContext = await authApi.currentContext();
+        return { user: authContext?.user || null, authContext, error: null };
+      }
+      const result = await resolveCurrentUserSafely();
+      return { user: result.user, authContext: null, error: result.error };
+    })()
+      .then((result) => {
+        perfLog('fetch_done', { durationMs: nowMs() - started, source });
+        return result;
+      })
+      .catch((error) => {
+        perfLog('fetch_done', { durationMs: nowMs() - started, source: 'error' });
+        return { user: null, authContext: null, error };
+      })
+      .finally(() => {
+        headerContextPromise = null;
+      });
+    return headerContextPromise;
+  };
+
   const setupUser = async () => {
     if (!authApi.currentUser) return;
     try {
-      const { user, error } = await resolveCurrentUserSafely();
+      const cachedHeader = readHeaderCache();
+      if (cachedHeader) renderHeaderContext(cachedHeader, { source: 'cache' });
+
+      const { user, authContext, error } = await resolveHeaderContextSafely();
       if (error) {
         console.warn('[HEADER] falha ao resolver sessao do usuario', error);
         return;
       }
       currentUser = user;
-      const authContext = authApi.currentContext ? await authApi.currentContext().catch(() => null) : null;
       if (!user) {
+        clearHeaderCache();
         window.location.href = 'login.html';
         return;
       }
@@ -385,11 +542,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (userNameEl) userNameEl.textContent = getDisplayName(user);
-      if (userRoleEl) {
-        const roleLabel = formatRole(user.tipo || '');
-        const supportSuffix = authContext?.isImpersonatedSession ? ' • suporte' : '';
-        userRoleEl.textContent = `${roleLabel}${supportSuffix}`;
+      const freshHeader = normalizeHeaderContext({ user, authContext });
+      if (freshHeader) {
+        writeHeaderCache(freshHeader);
+        renderHeaderContext(freshHeader, { source: 'backend' });
       }
 
       if (userMenuDropdown && !clinicItem) {
@@ -432,6 +588,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logoutItem.addEventListener('click', async () => {
           closeDropdowns();
             try {
+            clearHeaderCache();
             await authApi.logout?.();
           } finally {
             window.location.href = 'login.html';

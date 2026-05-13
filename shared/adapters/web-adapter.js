@@ -9,8 +9,12 @@
   const WEB_SESSION_TOKEN_KEY = 'voithos.web.session.token';
   const WEB_SESSION_USER_KEY = 'voithos.web.session.user';
   const WEB_SESSION_CLINIC_KEY = 'voithos.web.session.clinic';
+  const HEADER_CONTEXT_CACHE_PREFIX = 'voithos.header.context.v1';
   let staticProcedureCatalogCache = null;
   let staticProcedureCatalogLoading = null;
+  let currentUserRequestPromise = null;
+  let currentContextRequestPromise = null;
+  let clinicGetRequestPromise = null;
   const patientProfilePhotoObjectUrls = new Map();
 
   const cleanText = (value) => String(value || '').trim();
@@ -1096,6 +1100,12 @@
       localStorage.removeItem(WEB_SESSION_TOKEN_KEY);
       localStorage.removeItem(WEB_SESSION_USER_KEY);
       localStorage.removeItem(WEB_SESSION_CLINIC_KEY);
+      const headerKeys = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(HEADER_CONTEXT_CACHE_PREFIX)) headerKeys.push(key);
+      }
+      headerKeys.forEach((key) => localStorage.removeItem(key));
     } catch (_error) {
       // localStorage indisponível - não quebra execução
     }
@@ -1752,6 +1762,8 @@
 
   const clinicApi = {
     get: async () => {
+      if (clinicGetRequestPromise) return clinicGetRequestPromise;
+      clinicGetRequestPromise = (async () => {
       const [profile, operationalSettings] = await Promise.all([
         request('GET', '/clinics/me/profile', null, { auth: true }),
         request('GET', '/clinics/me/operational-settings', null, { auth: true }),
@@ -1776,6 +1788,10 @@
       });
 
       return normalizedClinic;
+      })().finally(() => {
+        clinicGetRequestPromise = null;
+      });
+      return clinicGetRequestPromise;
     },
     getOnboardingState: async () => request('GET', '/clinics/me/onboarding', null, { auth: true }),
     updateOnboardingState: async (payload = {}) => request('PATCH', '/clinics/me/onboarding', payload || {}, { auth: true }),
@@ -2115,6 +2131,8 @@
       return { success: true };
     },
     currentUser: async () => {
+      if (currentUserRequestPromise) return currentUserRequestPromise;
+      currentUserRequestPromise = (async () => {
       const token = getStoredToken();
       if (!token) return null;
 
@@ -2144,8 +2162,14 @@
         }
         return storedUser;
       }
+      })().finally(() => {
+        currentUserRequestPromise = null;
+      });
+      return currentUserRequestPromise;
     },
     currentContext: async () => {
+      if (currentContextRequestPromise) return currentContextRequestPromise;
+      currentContextRequestPromise = (async () => {
       const user = await auth.currentUser();
       if (!user) return buildAuthContext(null, null);
       try {
@@ -2159,6 +2183,10 @@
       } catch (_error) {
         return buildAuthContext(user, getStoredClinic());
       }
+      })().finally(() => {
+        currentContextRequestPromise = null;
+      });
+      return currentContextRequestPromise;
     },
     listUsers: async () => {
       const data = await request('GET', '/users', null, { auth: true });
