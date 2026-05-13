@@ -46,11 +46,34 @@ const sanitizeFileName = (value, fallback = 'document.bin') => {
   return normalized || fallback;
 };
 
-const getStorageRoot = () =>
-  path.resolve(
-    String(appEnv.clinicalDocumentsStorageRoot || '').trim()
-      || path.join(process.cwd(), 'storage', 'patient-documents')
-  );
+const getConfiguredStorageRoot = () => {
+  const configured = String(appEnv.clinicalDocumentsStorageRoot || '').trim();
+  return configured ? path.resolve(configured) : '';
+};
+
+const getFallbackStorageRoot = () => path.resolve(process.cwd(), 'storage', 'patient-documents');
+
+const getStorageRootCandidates = () => {
+  const candidates = [getConfiguredStorageRoot(), getFallbackStorageRoot()].filter(Boolean);
+  return candidates.filter((item, index) => candidates.indexOf(item) === index);
+};
+
+const resolveWritableStorageRoot = async () => {
+  const candidates = getStorageRootCandidates();
+  let lastError = null;
+  for (const candidate of candidates) {
+    try {
+      await fs.promises.mkdir(candidate, { recursive: true });
+      return candidate;
+    } catch (error) {
+      lastError = error;
+      if (!['EACCES', 'EPERM', 'EROFS'].includes(String(error?.code || '').trim().toUpperCase())) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new AppError(500, 'STORAGE_ROOT_UNAVAILABLE', 'Storage root is unavailable.');
+};
 
 const ensurePatientDocumentContext = async ({ clinicId, patientId, externalDocumentId }) => {
   const normalizedClinicId = String(clinicId || '').trim();
@@ -125,11 +148,14 @@ const buildStorageKey = ({ clinicId, patientId, externalDocumentId, role, fileNa
   );
 };
 
-const resolveAbsolutePath = (storageKey) => {
-  const root = getStorageRoot();
-  const absolutePath = path.resolve(root, String(storageKey || '').trim());
-  const rootWithSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
-  if (absolutePath !== root && !absolutePath.startsWith(rootWithSep)) {
+const resolveAbsolutePath = (storageKey, root) => {
+  const normalizedRoot = String(root || '').trim();
+  if (!normalizedRoot) {
+    throw new AppError(500, 'STORAGE_ROOT_UNAVAILABLE', 'Storage root is unavailable.');
+  }
+  const absolutePath = path.resolve(normalizedRoot, String(storageKey || '').trim());
+  const rootWithSep = normalizedRoot.endsWith(path.sep) ? normalizedRoot : `${normalizedRoot}${path.sep}`;
+  if (absolutePath !== normalizedRoot && !absolutePath.startsWith(rootWithSep)) {
     throw new AppError(400, 'INVALID_STORAGE_KEY', 'Invalid storage key.');
   }
   return absolutePath;
@@ -294,7 +320,8 @@ const storeDocumentAsset = async ({
     role: resolvedRole,
     fileName: resolvedFileName,
   });
-  const absolutePath = resolveAbsolutePath(storageKey);
+  const storageRoot = await resolveWritableStorageRoot();
+  const absolutePath = resolveAbsolutePath(storageKey, storageRoot);
   await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
   await fs.promises.writeFile(absolutePath, buffer);
 
@@ -364,7 +391,7 @@ const getDocumentAsset = async ({
     clinicId: context.clinicId,
     patientId: context.patientId,
   });
-  const absolutePath = resolveAbsolutePath(storageKey);
+  const absolutePath = resolveAbsolutePath(storageKey, await resolveWritableStorageRoot());
   if (!fs.existsSync(absolutePath)) {
     throw new AppError(404, 'DOCUMENT_FILE_NOT_FOUND', 'Stored document file not found.');
   }
@@ -382,7 +409,7 @@ const getDocumentAsset = async ({
 
 const removeStoredFile = async (storageKey = '') => {
   if (!storageKey) return;
-  const absolutePath = resolveAbsolutePath(storageKey);
+  const absolutePath = resolveAbsolutePath(storageKey, await resolveWritableStorageRoot());
   await fs.promises.unlink(absolutePath).catch((error) => {
     if (error?.code !== 'ENOENT') throw error;
   });
@@ -427,7 +454,8 @@ const storePatientProfilePhoto = async ({
     sanitizeSegment(normalizedPatientId, 'patient'),
     storedName
   );
-  const absolutePath = resolveAbsolutePath(storageKey);
+  const storageRoot = await resolveWritableStorageRoot();
+  const absolutePath = resolveAbsolutePath(storageKey, storageRoot);
   await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
   await fs.promises.writeFile(absolutePath, buffer);
 
@@ -478,7 +506,7 @@ const getPatientProfilePhoto = async ({
     clinicId: normalizedClinicId,
     patientId: normalizedPatientId,
   });
-  const absolutePath = resolveAbsolutePath(normalizedStorageKey);
+  const absolutePath = resolveAbsolutePath(normalizedStorageKey, await resolveWritableStorageRoot());
   if (!fs.existsSync(absolutePath)) {
     throw new AppError(404, 'PROFILE_PHOTO_NOT_FOUND', 'Profile photo not found.');
   }

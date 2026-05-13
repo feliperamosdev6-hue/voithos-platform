@@ -424,3 +424,77 @@ test('patientDocumentStorageService rejeita foto com storageKey fora da pasta do
     }
   );
 });
+
+test('patientDocumentStorageService usa fallback gravavel quando o root configurado e negado', async (t) => {
+  const realFs = fs;
+  const storageRoot = path.join(process.cwd(), 'storage', 'patient-documents');
+  const blockedRoot = path.resolve('/var/data');
+  const mockFs = {
+    ...realFs,
+    promises: {
+      ...realFs.promises,
+      mkdir: async (dir, options) => {
+        const normalizedDir = String(dir || '').replace(/\\/g, '/');
+        const normalizedBlocked = String(blockedRoot || '').replace(/\\/g, '/');
+        if (normalizedDir.startsWith(normalizedBlocked)) {
+          const error = new Error(`EACCES: permission denied, mkdir '${dir}'`);
+          error.code = 'EACCES';
+          error.errno = -13;
+          error.syscall = 'mkdir';
+          error.path = dir;
+          throw error;
+        }
+        return realFs.promises.mkdir(dir, options);
+      },
+    },
+  };
+  const { module: storageModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js'),
+    {
+      fs: mockFs,
+      [path.resolve(__dirname, '../../backend/src/config/appEnv.js')]: {
+        appEnv: { clinicalDocumentsStorageRoot: '/var/data' },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+          findByIdAndClinic: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {
+          findDocumentByExternalId: async () => ({
+            id: 'row-1',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            externalDocumentId: 'doc-1',
+            type: 'ARQUIVO',
+            category: 'ARQUIVO_PACIENTE',
+            metadata: {},
+          }),
+          updateDocument: async () => ({ count: 1 }),
+        },
+      },
+    }
+  );
+  t.after(async () => {
+    restore();
+    await realFs.promises.rm(storageRoot, { recursive: true, force: true });
+  });
+
+  const pdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+  const result = await storageModule.patientDocumentStorageService.storeDocumentAsset({
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+    externalDocumentId: 'doc-1',
+    role: 'primary',
+    buffer: pdfBuffer,
+    fileName: 'exame.pdf',
+    contentType: 'application/pdf',
+  });
+
+  assert.equal(result.contentType, 'application/pdf');
+  assert.ok(String(result.storageKey || '').replace(/\\/g, '/').includes('clinic-auth/patient-1/'));
+  const fallbackStored = path.join(storageRoot, result.storageKey);
+  assert.equal(await realFs.promises.readFile(fallbackStored, 'utf8'), pdfBuffer.toString('utf8'));
+});
