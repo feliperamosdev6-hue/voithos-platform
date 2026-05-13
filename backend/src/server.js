@@ -91,7 +91,14 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json({ limit: '40mb' }));
+const shouldParseJsonBody = (req) => {
+  const url = String(req?.originalUrl || req?.url || '').toLowerCase();
+  if (url.includes('/profile-photo')) return false;
+  if (url.includes('/documents/') && url.includes('/file')) return false;
+  return true;
+};
+
+app.use(express.json({ limit: '40mb', type: shouldParseJsonBody }));
 
 app.get('/health', (_req, res) => {
   res.json({
