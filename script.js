@@ -1947,28 +1947,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            if (userMenuToggle) {
-                userMenuToggle.addEventListener('click', (ev) => {
-                    ev.stopPropagation();
-                    toggleDropdown();
-                });
-            }
-
-            if (attnToggle) {
-                attnToggle.addEventListener('click', (ev) => {
-                    ev.stopPropagation();
-                    toggleExclusive(attnDropdown, attnToggle);
-                });
-            }
-
-    if (gestaoToggle) {
-        gestaoToggle.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            if (!canManageClinic(user)) return;
-            toggleExclusive(gestaoDropdown, gestaoToggle);
-        });
-    }
-
     if (actionsToggle) {
         actionsToggle.addEventListener('click', (ev) => {
             ev.stopPropagation();

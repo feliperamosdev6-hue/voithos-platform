@@ -128,6 +128,17 @@
         });
     };
 
+    const cleanupDriverArtifacts = () => {
+        document.documentElement.classList.remove('driver-active', 'driver-fade', 'driver-simple');
+        document.body?.classList.remove('driver-active', 'driver-fade', 'driver-simple');
+        document.querySelectorAll('.driver-active-element, .driver-no-interaction').forEach((element) => {
+            element.classList.remove('driver-active-element', 'driver-no-interaction');
+        });
+        document.querySelectorAll('.driver-overlay, .driver-popover').forEach((element) => {
+            element.remove();
+        });
+    };
+
     const startTour = async (name, options = {}) => {
         const tour = tours[name];
         if (!tour) return false;
@@ -140,6 +151,7 @@
         if (!driver) return false;
 
         activeDriver?.destroy?.();
+        cleanupDriverArtifacts();
         activeDriver = driver({
             allowClose: true,
             animate: true,
@@ -158,6 +170,7 @@
             onDestroyed: () => {
                 markCompleted(tour);
                 activeDriver = null;
+                window.setTimeout(cleanupDriverArtifacts, 0);
             },
             onPopoverRender: (popover) => {
                 popover.closeButton.setAttribute('aria-label', 'Pular tutorial');
@@ -210,6 +223,7 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+        cleanupDriverArtifacts();
         bindTutorialTriggers();
         scheduleHomeTour();
     });
