@@ -1,7 +1,7 @@
 const { appEnv } = require('../config/appEnv');
 const { AppError } = require('../errors/AppError');
 
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = Math.max(15000, Number(appEnv.whatsappNgRequestTimeoutMs) || 60000);
 const HEALTHCHECK_TIMEOUT_MS = 2500;
 
 const buildTransportDetails = (error) => ({
@@ -190,7 +190,8 @@ const whatsappNgClient = {
   },
   refreshConnectionByClinic: async ({ clinicId }) => {
     const connection = await whatsappNgClient.getConnectionByClinic({ clinicId });
-    if (!connection.instanceId || connection.operationalStatus === 'CONNECTED') return connection;
+    const status = String(connection.operationalStatus || connection.status || '').trim().toUpperCase();
+    if (!connection.instanceId || status === 'CONNECTED' || status === 'READY') return connection;
     const qr = await request(`/instances/${encodeURIComponent(connection.instanceId)}/qr`);
     return normalizeConnection({ ...connection, ...qr }, clinicId);
   },

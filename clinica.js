@@ -398,7 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearWhatsAppPoll();
     const normalized = String(status || '').trim().toUpperCase();
     if (!clinicApi.refreshWhatsAppConnection) return;
-    if (normalized === 'CONNECTED' || normalized === 'ERROR' || normalized === 'NOT_CONFIGURED') return;
+    if (normalized === 'CONNECTED' || normalized === 'READY' || normalized === 'ERROR' || normalized === 'NOT_CONFIGURED') return;
     whatsAppPollTimer = window.setTimeout(() => {
       void loadWhatsAppConnection(true);
       void loadWhatsAppEngineHealth(true);
@@ -421,10 +421,16 @@ document.addEventListener('DOMContentLoaded', () => {
     switch (normalized) {
       case 'CONNECTED':
         return 'Conectado';
+      case 'READY':
+        return 'Pronto';
       case 'CONNECTING':
         return 'Conectando';
       case 'DISCONNECTED':
         return 'Desconectado';
+      case 'DEGRADED':
+        return 'Degradado';
+      case 'FAILED':
+        return 'Falha no envio';
       case 'ERROR':
         return 'Com erro';
       case 'QR_REQUIRED':
@@ -444,11 +450,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const normalized = String(status || '').trim().toUpperCase();
     switch (normalized) {
       case 'CONNECTED':
+      case 'READY':
         return 'status-connected';
       case 'CONNECTING':
         return 'status-connecting';
       case 'DISCONNECTED':
         return 'status-disconnected';
+      case 'DEGRADED':
+      case 'FAILED':
       case 'QR_REQUIRED':
       case 'SESSION_INVALID':
       case 'ERROR':
@@ -709,8 +718,9 @@ document.addEventListener('DOMContentLoaded', () => {
       whatsAppConnection.instance.textContent = connection?.instanceId || 'Sera criada ao conectar';
     }
     if (whatsAppConnection.connectButton) {
-      whatsAppConnection.connectButton.textContent = status === 'CONNECTED' ? 'Conectado' : 'Conectar WhatsApp';
-      whatsAppConnection.connectButton.disabled = status === 'CONNECTED';
+      const connectedLike = status === 'CONNECTED' || status === 'READY';
+      whatsAppConnection.connectButton.textContent = connectedLike ? 'Conectado' : 'Conectar WhatsApp';
+      whatsAppConnection.connectButton.disabled = connectedLike;
     }
     if (whatsAppConnection.disconnectButton) {
       const canDisconnect = Boolean(connection?.instanceId) && status !== 'NOT_CONFIGURED';
@@ -732,7 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
         qrMessage: incomingQrMessage,
         status,
       };
-    } else if (status === 'CONNECTED' || status === 'ERROR' || status === 'NOT_CONFIGURED') {
+    } else if (['CONNECTED', 'READY', 'DEGRADED', 'FAILED', 'ERROR', 'NOT_CONFIGURED'].includes(status)) {
       whatsAppQrState = {
         qrDataUrl: '',
         pairingCode: '',
@@ -748,7 +758,7 @@ document.addEventListener('DOMContentLoaded', () => {
       whatsAppConnection.qrImage.style.display = qrDataUrl ? 'block' : 'none';
     }
     if (whatsAppConnection.qrPlaceholder) {
-      const defaultText = status === 'CONNECTED'
+      const defaultText = (status === 'CONNECTED' || status === 'READY')
         ? 'WhatsApp conectado com sucesso. Nao e necessario gerar um novo QR Code.'
         : status === 'CONNECTING'
           ? 'A instancia esta sendo preparada. Aguarde alguns segundos ou atualize o status para carregar o QR Code.'
@@ -784,8 +794,10 @@ document.addEventListener('DOMContentLoaded', () => {
       await loadWhatsAppDiagnostics();
       if (!silent) {
         const status = String(data?.operationalStatus || data?.status || '').trim().toUpperCase();
-        if (status === 'CONNECTED') {
+        if (status === 'CONNECTED' || status === 'READY') {
           setWhatsAppFeedback('WhatsApp da clinica conectado e pronto para uso.', 'success');
+        } else if (status === 'DEGRADED' || status === 'FAILED') {
+          setWhatsAppFeedback('WhatsApp conectado, mas os ultimos envios falharam. Verifique a conexao antes de novas confirmacoes.', 'error');
         } else if (String(data?.persistedStatus || '').trim().toUpperCase() === 'CONNECTED' && data?.connectedInRuntime !== true) {
           setWhatsAppFeedback('O WhatsApp salvo anteriormente nao esta operacional agora. Reconecte a instancia para voltar a enviar mensagens.', 'error');
         } else if (status === 'NOT_CONFIGURED') {
@@ -822,7 +834,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ? 'Escaneie o QR Code no WhatsApp da clinica para concluir a conexao.'
           : 'A instancia foi preparada. Atualize o status se o QR ainda nao apareceu.',
       });
-      if (String(data?.status || '').trim().toUpperCase() === 'CONNECTED') {
+      if (['CONNECTED', 'READY'].includes(String(data?.operationalStatus || data?.status || '').trim().toUpperCase())) {
         setWhatsAppFeedback('WhatsApp da clinica ja estava conectado.', 'success');
       } else if (data?.qrDataUrl) {
         setWhatsAppFeedback('QR Code atualizado. Escaneie no celular da clinica.', 'success');

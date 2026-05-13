@@ -21,6 +21,12 @@ import { instanceRepository } from '../../repositories/instanceRepository';
 import { createBodySummary, operationalEventRepository } from '../../repositories/operationalEventRepository';
 import { restoreSessionDirFromBlob, serializeSessionDir } from '../../lib/baileys/authBlobStore';
 import { centralBackendService } from '../integration/centralBackendService';
+import {
+  enqueueInstanceSend,
+  getInstanceSendHealthSnapshot,
+  recordInstanceConnectionUpdate,
+  recordInstanceHeartbeat,
+} from './instanceSendCoordinator';
 
 type RuntimeSocket = {
   socket: WASocket;
@@ -28,6 +34,8 @@ type RuntimeSocket = {
   qrUpdatedAt?: Date;
   pairingCode?: string;
 };
+
+type OperationalHealthStatus = 'created' | 'connecting' | 'disconnected' | 'connected' | 'ready' | 'degraded' | 'failed';
 
 type ReconnectScheduleMeta = {
   attempt: number;
@@ -454,6 +462,7 @@ const buildRuntimeDiagnostics = (instance: WhatsAppInstance, runtime: RuntimeSoc
   const runtimeSocketState = getRuntimeSocketState(runtime);
   const connectedInRuntime = isRuntimeReadyForSend(runtime);
   const reconnectMeta = reconnectScheduleMeta.get(instance.id) || null;
+  const sendHealth = getInstanceSendHealthSnapshot(instance.id, instance.clinicId);
   const qrAvailable = Boolean(runtime?.qr);
   const pairingCodeAvailable = Boolean(runtime?.pairingCode);
   const qrUpdatedAt = runtime?.qrUpdatedAt || null;
@@ -462,6 +471,7 @@ const buildRuntimeDiagnostics = (instance: WhatsAppInstance, runtime: RuntimeSoc
   const reconnectScheduled = Boolean(reconnectMeta);
   const coolingDown = Boolean(reconnectMeta && reconnectMeta.nextAttemptAt.getTime() > Date.now());
   const status = toOperationalStatus(instance.status, runtime);
+  const healthStatus = toOperationalHealthStatus(status, runtime, sendHealth);
   const qrPending = Boolean(
     !connectedInRuntime
     && status === InstanceStatus.CONNECTING
@@ -472,9 +482,13 @@ const buildRuntimeDiagnostics = (instance: WhatsAppInstance, runtime: RuntimeSoc
     (!connectedInRuntime && runtimeSocketState !== 'OPEN')
     || status === InstanceStatus.ERROR
     || reconnectScheduled
+    || healthStatus === 'degraded'
+    || healthStatus === 'failed'
   );
 
   return {
+    healthStatus,
+    operationalStatus: healthStatus.toUpperCase(),
     runtimeSocketState,
     connectedInRuntime,
     reconnectAttempt,
@@ -489,6 +503,15 @@ const buildRuntimeDiagnostics = (instance: WhatsAppInstance, runtime: RuntimeSoc
     qrAgeSeconds,
     pairingCodeAvailable,
     runtimeDegraded,
+    lastSendSuccessAt: sendHealth.lastSendSuccessAt,
+    lastSendErrorAt: sendHealth.lastSendErrorAt,
+    lastSendError: sendHealth.lastSendError || null,
+    lastHeartbeatAt: sendHealth.lastHeartbeatAt,
+    lastConnectionUpdateAt: sendHealth.lastConnectionUpdateAt,
+    consecutiveSendFailures: sendHealth.consecutiveSendFailures,
+    sendQueueDepth: sendHealth.queueDepth,
+    sendProcessing: sendHealth.processing,
+    sendHealth,
   };
 };
 
@@ -543,6 +566,27 @@ const toOperationalStatus = (
   return persistedStatus === InstanceStatus.CONNECTED ? InstanceStatus.DISCONNECTED : persistedStatus;
 };
 
+const toOperationalHealthStatus = (
+  status: InstanceStatus,
+  runtime: RuntimeSocket | null | undefined,
+  sendHealth: ReturnType<typeof getInstanceSendHealthSnapshot>,
+): OperationalHealthStatus => {
+  if (status === InstanceStatus.CREATED) return 'created';
+  if (status === InstanceStatus.CONNECTING) return 'connecting';
+  if (status === InstanceStatus.DISCONNECTED) return 'disconnected';
+  if (status === InstanceStatus.ERROR) return 'failed';
+
+  if (status === InstanceStatus.CONNECTED) {
+    if (!isRuntimeReadyForSend(runtime)) return 'connected';
+    const consecutiveFailures = Number(sendHealth.consecutiveSendFailures || 0);
+    if (consecutiveFailures >= Math.max(1, env.instanceHealthFailureThreshold)) return 'failed';
+    if (consecutiveFailures > 0) return 'degraded';
+    return 'ready';
+  }
+
+  return 'disconnected';
+};
+
 const markRuntimeUnavailable = async (
   instance: WhatsAppInstance,
   runtime: RuntimeSocket | null | undefined,
@@ -551,6 +595,19 @@ const markRuntimeUnavailable = async (
   const runtimeState = getRuntimeSocketState(runtime);
   runtimeSockets.delete(instance.id);
   clearReconnectTimer(instance.id);
+
+  try {
+    const ws = (runtime?.socket as any)?.ws;
+    if (ws?.readyState === 0 || ws?.readyState === 1 || ws?.isOpen || ws?.isConnecting) {
+      ws.close();
+    }
+  } catch (_error) {
+    logger.warn({
+      instanceId: instance.id,
+      clinicId: instance.clinicId,
+      reason,
+    }, 'failed to close unavailable runtime websocket');
+  }
 
   if (instance.status !== InstanceStatus.ERROR) {
     await instanceRepository.updateStatus(instance.id, InstanceStatus.DISCONNECTED).catch(() => null);
@@ -692,6 +749,7 @@ const startSocket = async (instance: WhatsAppInstance, pairingPhone?: string): P
 
   socket.ev.on('connection.update', async (update) => {
     const reasonCode = (update.lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
+    recordInstanceConnectionUpdate(instance.id, instance.clinicId);
     logger.info({
       instanceId: instance.id,
       clinicId: instance.clinicId,
@@ -730,6 +788,7 @@ const startSocket = async (instance: WhatsAppInstance, pairingPhone?: string): P
       }
 
       if (update.connection === 'open') {
+        recordInstanceHeartbeat(instance.id, instance.clinicId);
         resetReconnectState(instance.id);
         const phone = parsePhoneFromJid(socket.user?.id);
         const authenticated = Boolean(phone) && Boolean(socket.user?.id);
@@ -866,6 +925,7 @@ const startSocket = async (instance: WhatsAppInstance, pairingPhone?: string): P
 
   socket.ev.on('messages.upsert', async ({ messages, type }) => {
     if (!Array.isArray(messages) || !messages.length) return;
+    recordInstanceHeartbeat(instance.id, instance.clinicId);
 
     const upsertType = String(type || '').trim().toLowerCase();
     if (!['notify', 'append', 'replace'].includes(upsertType)) {
@@ -1083,6 +1143,136 @@ const startSocket = async (instance: WhatsAppInstance, pairingPhone?: string): P
         }, 'pairing code request failed; waiting for QR fallback');
       }
     })();
+  }
+};
+
+const isRetriableSendError = (error: unknown): boolean => {
+  const statusCode = typeof error === 'object' && error && 'statusCode' in error
+    ? Number((error as { statusCode?: number }).statusCode)
+    : 0;
+  const code = typeof error === 'object' && error && 'code' in error
+    ? String((error as { code?: string }).code || '').trim().toUpperCase()
+    : '';
+  const message = error instanceof Error ? error.message : String(error || '');
+
+  if (statusCode && statusCode < 408) return false;
+  if ([408, 409, 425, 429, 500, 502, 503, 504].includes(statusCode)) return true;
+  if (code === 'INSTANCE_SEND_TIMEOUT') return true;
+
+  return /connection closed|socket closed|not connected|stream errored|runtime|timed out|timeout|precondition required|websocket error/i.test(message);
+};
+
+const sendTextDirect = async (instanceId: string, toPhone: string, body: string, options?: {
+  appointmentId?: string | null;
+}) => {
+  let instance = await instanceRepository.findById(instanceId);
+  if (!instance) throw new HttpError(404, 'Instance not found.');
+
+  let runtime: RuntimeSocket | null = runtimeSockets.get(instanceId) || null;
+  if (!runtime) {
+    logger.warn({
+      instanceId,
+      clinicId: instance.clinicId,
+    }, 'sendText requested without runtime socket; attempting runtime recovery');
+    await instanceService.connect(instanceId);
+    runtime = await waitForConnectedRuntime(instanceId);
+  }
+  if (!runtime) {
+    logger.error({
+      instanceId,
+      clinicId: instance.clinicId,
+    }, 'runtime recovery did not reach connected state before send');
+    throw new HttpError(409, 'WhatsApp instance runtime is unavailable. Reconnect is in progress.');
+  }
+
+  const latest = await instanceRepository.findById(instanceId);
+  if (latest) instance = latest;
+
+  if (instance.status !== InstanceStatus.CONNECTED) {
+    logger.warn({
+      instanceId,
+      clinicId: instance.clinicId,
+      status: instance.status,
+      runtimeState: getRuntimeSocketState(runtime),
+    }, 'sendText blocked because instance is not connected after runtime recovery');
+    throw new HttpError(409, 'WhatsApp instance is not connected.');
+  }
+
+  if (!isRuntimeReadyForSend(runtime)) {
+    await markRuntimeUnavailable(instance, runtime, 'runtime socket is not open for send');
+    throw new HttpError(409, 'WhatsApp instance runtime socket is closed. Reconnect started.');
+  }
+
+  const normalizedTo = normalizeBrPhone(toPhone);
+  if (!normalizedTo) throw new HttpError(400, 'Invalid recipient phone.');
+
+  const jid = `${normalizedTo}@s.whatsapp.net`;
+  try {
+    let providerMessageId: string | null = null;
+    let remoteJid = jid;
+    const shouldSendQuickReplies = shouldUseAppointmentQuickReplies({
+      appointmentId: options?.appointmentId,
+      body,
+    });
+
+    if (shouldSendQuickReplies) {
+      try {
+        const userJid = String(runtime.socket.user?.id || '').trim();
+        if (!userJid) {
+          throw new Error('runtime userJid unavailable for interactive appointment prompt');
+        }
+
+        const interactiveMessage = buildAppointmentQuickReplyMessage(body);
+        const fullMsg = generateWAMessageFromContent(jid, interactiveMessage, {
+          userJid,
+        });
+        if (!fullMsg.message) {
+          throw new Error('interactive appointment prompt did not generate a message payload');
+        }
+
+        await runtime.socket.relayMessage(jid, fullMsg.message, {
+          messageId: fullMsg.key.id || undefined,
+        });
+
+        providerMessageId = fullMsg.key.id || null;
+        remoteJid = fullMsg.key.remoteJid || jid;
+      } catch (interactiveError) {
+        logger.warn({
+          interactiveError,
+          instanceId,
+          clinicId: instance.clinicId,
+          appointmentId: options?.appointmentId || null,
+        }, 'interactive appointment prompt failed; falling back to plain text');
+
+        const fallbackResponse = await runtime.socket.sendMessage(jid, { text: body });
+        providerMessageId = fallbackResponse?.key?.id || null;
+        remoteJid = fallbackResponse?.key?.remoteJid || jid;
+      }
+    } else {
+      const response = await runtime.socket.sendMessage(jid, { text: body });
+      providerMessageId = response?.key?.id || null;
+      remoteJid = response?.key?.remoteJid || jid;
+    }
+
+    recordInstanceHeartbeat(instance.id, instance.clinicId);
+    return {
+      providerMessageId,
+      remoteJid,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown send error';
+    const looksLikeClosedConnection = /connection closed|socket closed|not connected|stream errored/i.test(message);
+    logger.error({
+      error,
+      instanceId,
+      clinicId: instance.clinicId,
+      runtimeState: getRuntimeSocketState(runtime),
+    }, 'sendText failed');
+    if (looksLikeClosedConnection) {
+      await markRuntimeUnavailable(instance, runtime, message);
+      throw new HttpError(409, 'WhatsApp connection closed during send. Reconnect started.');
+    }
+    throw error;
   }
 };
 
@@ -1325,7 +1515,6 @@ export const instanceService = {
     return {
       instanceId: instance.id,
       status: operationalStatus,
-      operationalStatus,
       persistedStatus,
       qr: qr || null,
       qrDataUrl: qrDataUrl || null,
@@ -1347,108 +1536,34 @@ export const instanceService = {
     const instance = await instanceRepository.findById(instanceId);
     if (!instance) throw new HttpError(404, 'Instance not found.');
 
-    let runtime: RuntimeSocket | null = runtimeSockets.get(instanceId) || null;
-    if (!runtime) {
-      logger.warn({
-        instanceId,
-        clinicId: instance.clinicId,
-      }, 'sendText requested without runtime socket; attempting runtime recovery');
-      await instanceService.connect(instanceId);
-      runtime = await waitForConnectedRuntime(instanceId);
-    }
-    if (!runtime) {
-      logger.error({
-        instanceId,
-        clinicId: instance.clinicId,
-      }, 'runtime recovery did not reach connected state before send');
-      throw new HttpError(409, 'WhatsApp instance runtime is unavailable. Reconnect is in progress.');
-    }
-
-    if (instance.status !== InstanceStatus.CONNECTED) {
-      logger.warn({
-        instanceId,
-        clinicId: instance.clinicId,
-        status: instance.status,
-        runtimeState: getRuntimeSocketState(runtime),
-      }, 'sendText blocked because instance is not connected after runtime recovery');
-      throw new HttpError(409, 'WhatsApp instance is not connected.');
-    }
-
-    if (!isRuntimeReadyForSend(runtime)) {
-      await markRuntimeUnavailable(instance, runtime, 'runtime socket is not open for send');
-      throw new HttpError(409, 'WhatsApp instance runtime socket is closed. Reconnect started.');
-    }
-
-    const normalizedTo = normalizeBrPhone(toPhone);
-    if (!normalizedTo) throw new HttpError(400, 'Invalid recipient phone.');
-
-    const jid = `${normalizedTo}@s.whatsapp.net`;
-    try {
-      let providerMessageId: string | null = null;
-      let remoteJid = jid;
-      const shouldSendQuickReplies = shouldUseAppointmentQuickReplies({
-        appointmentId: options?.appointmentId,
-        body,
-      });
-
-      if (shouldSendQuickReplies) {
-        try {
-          const userJid = String(runtime.socket.user?.id || '').trim();
-          if (!userJid) {
-            throw new Error('runtime userJid unavailable for interactive appointment prompt');
-          }
-
-          const interactiveMessage = buildAppointmentQuickReplyMessage(body);
-          const fullMsg = generateWAMessageFromContent(jid, interactiveMessage, {
-            userJid,
-          });
-          if (!fullMsg.message) {
-            throw new Error('interactive appointment prompt did not generate a message payload');
-          }
-
-          await runtime.socket.relayMessage(jid, fullMsg.message, {
-            messageId: fullMsg.key.id || undefined,
-          });
-
-          providerMessageId = fullMsg.key.id || null;
-          remoteJid = fullMsg.key.remoteJid || jid;
-        } catch (interactiveError) {
-          logger.warn({
-            interactiveError,
-            instanceId,
-            clinicId: instance.clinicId,
-            appointmentId: options?.appointmentId || null,
-          }, 'interactive appointment prompt failed; falling back to plain text');
-
-          const fallbackResponse = await runtime.socket.sendMessage(jid, { text: body });
-          providerMessageId = fallbackResponse?.key?.id || null;
-          remoteJid = fallbackResponse?.key?.remoteJid || jid;
+    return enqueueInstanceSend({
+      instanceId,
+      clinicId: instance.clinicId,
+      shouldRetry: isRetriableSendError,
+      operation: () => sendTextDirect(instanceId, toPhone, body, options),
+      onAttemptFailure: async ({ error, attempt, willRetry, timedOut }) => {
+        const message = error instanceof Error ? error.message : 'Unknown send error';
+        if (timedOut) {
+          const latest = await instanceRepository.findById(instanceId).catch(() => null);
+          await markRuntimeUnavailable(latest || instance, runtimeSockets.get(instanceId) || null, message);
         }
-      } else {
-        const response = await runtime.socket.sendMessage(jid, { text: body });
-        providerMessageId = response?.key?.id || null;
-        remoteJid = response?.key?.remoteJid || jid;
-      }
-
-      return {
-        providerMessageId,
-        remoteJid,
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown send error';
-      const looksLikeClosedConnection = /connection closed|socket closed|not connected|stream errored/i.test(message);
-      logger.error({
-        error,
-        instanceId,
-        clinicId: instance.clinicId,
-        runtimeState: getRuntimeSocketState(runtime),
-      }, 'sendText failed');
-      if (looksLikeClosedConnection) {
-        await markRuntimeUnavailable(instance, runtime, message);
-        throw new HttpError(409, 'WhatsApp connection closed during send. Reconnect started.');
-      }
-      throw error;
-    }
+        await operationalEventRepository.append({
+          eventType: timedOut ? 'MESSAGE_SEND_TIMEOUT' : 'MESSAGE_SEND_ATTEMPT_FAILED',
+          clinicId: instance.clinicId,
+          instanceId,
+          phone: normalizeBrPhone(toPhone) || toPhone,
+          status: willRetry ? 'RETRYING' : 'FAILED',
+          appointmentId: options?.appointmentId || null,
+          summary: message,
+          payload: {
+            attempt,
+            willRetry,
+            timedOut,
+            queue: getInstanceSendHealthSnapshot(instanceId, instance.clinicId),
+          },
+        }).catch(() => null);
+      },
+    });
   },
 
   recoverRuntimeSessions: async (): Promise<void> => {

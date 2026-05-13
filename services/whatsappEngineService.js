@@ -4,6 +4,7 @@ const path = require('path');
 const DEFAULT_ENGINE_PORT = 8099;
 const DEFAULT_ENGINE_BASE_URL = `http://127.0.0.1:${DEFAULT_ENGINE_PORT}`;
 const DEFAULT_REQUEST_TIMEOUT_MS = 8000;
+const DEFAULT_SEND_TIMEOUT_MS = 60000;
 const DEFAULT_STATUS_TIMEOUT_MS = 12000;
 const DEFAULT_QR_TIMEOUT_MS = 45000;
 const DEFAULT_HEALTH_TIMEOUT_MS = 2500;
@@ -38,6 +39,13 @@ const createTaggedError = (message, code, details = {}) => {
   error.code = code;
   error.details = details;
   return error;
+};
+
+const normalizeStatus = (value) => String(value || '').trim().toUpperCase();
+
+const isConnectedLikeStatus = (value) => {
+  const normalized = normalizeStatus(value);
+  return normalized === 'CONNECTED' || normalized === 'READY';
 };
 
 const classifyEngineMessage = (message, baseUrl) => {
@@ -177,6 +185,13 @@ const createWhatsAppEngineService = () => {
     qrUpdatedAt: status?.qrUpdatedAt || null,
     pairingCodeAvailable: status?.pairingCodeAvailable === true,
     runtimeDegraded: status?.runtimeDegraded === true,
+    healthStatus: status?.healthStatus || '',
+    lastSendSuccessAt: status?.lastSendSuccessAt || null,
+    lastSendErrorAt: status?.lastSendErrorAt || null,
+    lastSendError: status?.lastSendError || '',
+    consecutiveSendFailures: Number(status?.consecutiveSendFailures || 0),
+    sendQueueDepth: Number(status?.sendQueueDepth || 0),
+    sendProcessing: status?.sendProcessing === true,
     stale,
     staleReason: staleReason || '',
     engineHealth,
@@ -447,8 +462,8 @@ const createWhatsAppEngineService = () => {
       createdAt: connection.createdAt,
     });
 
-    const normalizedStatus = String(connection.status || '').trim().toUpperCase();
-    if (!includeQr || normalizedStatus === 'CONNECTED' || connection.stale === true) {
+    const normalizedStatus = normalizeStatus(connection.status);
+    if (!includeQr || isConnectedLikeStatus(normalizedStatus) || connection.stale === true) {
       return connection;
     }
 
@@ -469,7 +484,7 @@ const createWhatsAppEngineService = () => {
 
     let qr = await readQrSnapshot(connection.instanceId, connection);
     for (const delayMs of QR_RETRY_DELAYS_MS) {
-      if (qr?.qrDataUrl || String(qr?.status || '').trim().toUpperCase() === 'CONNECTED') break;
+      if (qr?.qrDataUrl || isConnectedLikeStatus(qr?.status)) break;
       await new Promise((resolve) => setTimeout(resolve, delayMs));
       qr = await readQrSnapshot(connection.instanceId, connection).catch(() => qr);
     }
@@ -500,7 +515,7 @@ const createWhatsAppEngineService = () => {
       throw createTaggedError('A clinica ainda nao conectou um WhatsApp no sistema.', 'ENGINE_INSTANCE_MISSING', { clinicId });
     }
 
-    if (String(connection.status || '').trim().toUpperCase() !== 'CONNECTED') {
+    if (!isConnectedLikeStatus(connection.status)) {
       throw createTaggedError('O WhatsApp da clinica ainda nao esta conectado. Gere e escaneie o QR Code antes de enviar mensagens.', 'ENGINE_INSTANCE_NOT_CONNECTED', {
         clinicId,
         instanceId: connection.instanceId,
@@ -510,6 +525,7 @@ const createWhatsAppEngineService = () => {
 
     return request('/messages/send', {
       method: 'POST',
+      timeoutMs: DEFAULT_SEND_TIMEOUT_MS,
       body: {
         clinicId,
         toPhone,

@@ -35,6 +35,11 @@ const parseBoolean = (value, fallback = false) => {
   return ['1', 'true', 'yes', 'on'].includes(normalized);
 };
 
+const parseNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const parseOptionalDate = (value) => {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -54,6 +59,7 @@ const appEnv = {
   publicAppBaseUrl: normalizeBaseUrl(readValue('PUBLIC_APP_BASE_URL', 'http://127.0.0.1:4000')),
   whatsappNgBaseUrl: normalizeBaseUrl(readValue('WHATSAPP_NG_BASE_URL', 'http://127.0.0.1:8099')),
   whatsappNgServiceToken: String(readValue('WHATSAPP_NG_SERVICE_TOKEN', '')).trim(),
+  whatsappNgRequestTimeoutMs: Math.max(15000, parseNumber(readValue('WHATSAPP_NG_REQUEST_TIMEOUT_MS', '60000'), 60000)),
   backendInternalApiToken: String(readValue('BACKEND_INTERNAL_API_TOKEN', '')).trim(),
   clinicalDocumentsStorageRoot: String(readValue('CLINICAL_DOCUMENTS_STORAGE_ROOT', '')).trim(),
   appointmentReminderSchedulerEnabled: String(readValue('APPOINTMENT_REMINDER_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',

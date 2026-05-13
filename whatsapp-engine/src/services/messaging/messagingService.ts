@@ -16,6 +16,9 @@ const dispatchMessageThroughApi = async (payload: {
   appointmentId?: string | null;
 }) => {
   const baseUrl = `http://127.0.0.1:${env.port}`;
+  const timeoutMs = Math.max(1000, env.instanceSendTimeoutMs + 5000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -26,15 +29,26 @@ const dispatchMessageThroughApi = async (payload: {
     headers['x-internal-token'] = env.internalApiToken;
   }
 
-  const response = await fetch(`${baseUrl}/instances/${encodeURIComponent(payload.instanceId)}/messages/send-internal`, {
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/instances/${encodeURIComponent(payload.instanceId)}/messages/send-internal`, {
         method: 'POST',
         headers,
+        signal: controller.signal,
         body: JSON.stringify({
           toPhone: payload.toPhone,
           body: payload.body,
           appointmentId: payload.appointmentId || undefined,
         }),
       });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new HttpError(504, `Internal API dispatch timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const result = await response.json().catch(() => ({}));
   if (!response.ok || result?.success === false) {
