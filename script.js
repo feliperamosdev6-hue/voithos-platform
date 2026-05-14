@@ -150,6 +150,19 @@ document.addEventListener('DOMContentLoaded', () => {
             hint.as = 'document';
             document.head.appendChild(hint);
         });
+        [
+            { href: 'agendamentos.css', as: 'style' },
+            { href: 'agendamentos.js', as: 'script' },
+            { href: 'timepicker.css', as: 'style' },
+            { href: 'timepicker.js', as: 'script' },
+        ].forEach(({ href, as }) => {
+            if (document.querySelector(`link[rel="prefetch"][href="${href}"]`)) return;
+            const hint = document.createElement('link');
+            hint.rel = 'prefetch';
+            hint.href = href;
+            hint.as = as;
+            document.head.appendChild(hint);
+        });
     };
 
     const scheduleHomePrefetch = () => {
@@ -222,6 +235,17 @@ document.addEventListener('DOMContentLoaded', () => {
         closeDropdown();
         if (!isOpen) setDropdownState(dropdown, toggle, true);
     };
+
+    const setupActionsMenu = () => {
+        if (!actionsToggle || actionsToggle.dataset.bound === 'true') return;
+        actionsToggle.dataset.bound = 'true';
+        actionsToggle.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            toggleExclusive(actionsMenu, actionsToggle);
+        });
+    };
+
     const closeNotif = () => {
         if (!notifPanel) return;
         notifPanel.hidden = true;
@@ -1947,12 +1971,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-    if (actionsToggle) {
-        actionsToggle.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            toggleExclusive(actionsMenu, actionsToggle);
-        });
-    }
             document.addEventListener('keydown', (ev) => {
                 if (ev.key === 'Escape') closeDropdown();
             });
@@ -1969,6 +1987,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     setupHomeNavigationFeedback();
+    setupActionsMenu();
     scheduleHomePrefetch();
     setupUserMenu();
     loadAgendaMini();

@@ -39,6 +39,15 @@ const AGENDA_PREFILL_DRAFT_KEY = 'agendaPrefillDraft';
 const AGENDA_NOTIFICATION_TARGET_KEY = 'agendaNotificationTarget';
 const AGENDA_AUTO_REFRESH_MS = 30000;
 
+const agendaNowMs = () => (window.performance?.now ? window.performance.now() : Date.now());
+const agendaPerfLog = (stage, started = null, extra = {}) => {
+  console.info('[perf][agenda-open]', {
+    stage,
+    durationMs: Number.isFinite(started) ? Math.round(agendaNowMs() - started) : 0,
+    ...extra,
+  });
+};
+
 const getClinicStorageKey = (baseKey) => {
   const clinicId = String(currentUser?.clinicId || '').trim();
   return clinicId ? `${baseKey}:${clinicId}` : `${baseKey}:global`;
@@ -182,6 +191,8 @@ let currentUser = null;
 let dentistasCache = [];
 let currentDrawerAppt = null;
 let agendaAutoRefreshTimer = null;
+let agendaRangePromise = null;
+let agendaRangeRequestKey = '';
 const appApi = window.appApi || {};
 const authApi = appApi.auth || window.auth || {};
 const patientsApi = appApi.patients || window.api?.patients || {};
@@ -1746,21 +1757,36 @@ const loadRangeData = async () => {
   const { start, end } = getViewRange();
   const startStr = normalizeDateLocal(start);
   const endStr = normalizeDateLocal(end);
-  try {
+  const requestKey = `${state.viewMode}:${startStr}:${endStr}:${String(currentUser?.clinicId || '')}:${String(currentUser?.id || '')}`;
+  if (agendaRangePromise && agendaRangeRequestKey === requestKey) {
+    return agendaRangePromise;
+  }
+  agendaRangeRequestKey = requestKey;
+  const started = agendaNowMs();
+  agendaPerfLog('range_fetch_start', null, { range: `${startStr}:${endStr}` });
+  agendaRangePromise = (async () => {
     const usuario = state.usuarioLogado;
     const agendamentosBrutos = await agendaApi.getRange?.({ start: startStr, end: endStr });
     console.log('[AGENDA] dados recebidos', agendamentosBrutos);
     state.rangeAgendamentos = filtrarAgendamentosPorPerfil(agendamentosBrutos, usuario);
     state.rangeLoaded = true;
+    agendaPerfLog('range_fetch_done', started, { count: state.rangeAgendamentos.length });
     if (!state.rangeAgendamentos.length) {
       const list = document.getElementById('agenda-list');
       if (list) list.innerHTML = '<div class="no-data">Nenhum agendamento encontrado para este periodo.</div>';
     }
-  } catch (err) {
+  })()
+  .catch((err) => {
     console.warn('[AGENDA] erro ao carregar range', err);
     state.rangeAgendamentos = [];
     state.rangeLoaded = false;
-  }
+    agendaPerfLog('range_fetch_error', started);
+  })
+  .finally(() => {
+    agendaRangePromise = null;
+    agendaRangeRequestKey = '';
+  });
+  return agendaRangePromise;
 };
 
 const render = async () => {
@@ -1791,6 +1817,50 @@ const render = async () => {
   setMonthLabel(ref);
   renderCalendarMes(ref.getFullYear(), ref.getMonth());
   await renderDayList(state.selectedDate);
+};
+
+const renderAgendaShell = () => {
+  const started = agendaNowMs();
+  const ref = state.viewMode === 'semana'
+    ? toDateLocal(state.selectedDate)
+    : getMonthStartEnd().start;
+  const agendaList = document.getElementById('agenda-list');
+  const agendaWeek = document.getElementById('agenda-week');
+  const agendaDay = document.getElementById('agenda-day');
+  const calendarGrid = document.getElementById('calendar-grid');
+
+  setSubtitle();
+  updateViewButtons();
+
+  if (state.viewMode === 'semana') {
+    setWeekLabel(ref);
+    if (calendarGrid) calendarGrid.style.display = 'none';
+    if (agendaWeek) agendaWeek.hidden = false;
+    if (agendaDay) agendaDay.hidden = false;
+    if (agendaList) agendaList.style.display = 'none';
+    renderWeekAgenda(ref);
+    renderDayTimeline(state.selectedDate, []);
+  } else {
+    if (calendarGrid) calendarGrid.style.display = '';
+    if (agendaWeek) agendaWeek.hidden = true;
+    if (agendaDay) agendaDay.hidden = false;
+    if (agendaList) agendaList.style.display = 'none';
+    setMonthLabel(ref);
+    renderCalendarMes(ref.getFullYear(), ref.getMonth());
+    renderDayTimeline(state.selectedDate, []);
+  }
+
+  const dayLabel = document.getElementById('selected-date-label');
+  const subtitle = document.getElementById('selected-day-label');
+  if (dayLabel) {
+    dayLabel.textContent = new Date(`${state.selectedDate}T00:00:00`).toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+    });
+  }
+  if (subtitle) subtitle.textContent = 'Carregando agendamentos...';
+  agendaPerfLog('shell_render_done', started, { viewMode: state.viewMode });
 };
 
 const wireControls = () => {
@@ -2361,8 +2431,14 @@ const startAgendaAutoRefresh = () => {
 };
 
 const initAgenda = async () => {
+  const started = agendaNowMs();
   console.log('[AGENDA] initAgenda executada');
+  state.rangeLoaded = false;
+  state.rangeAgendamentos = [];
+  state.dayAgendamentos = [];
+  renderAgendaShell();
   await refreshData();
+  agendaPerfLog('init_done', started, { viewMode: state.viewMode });
   startAgendaAutoRefresh();
 }
 
