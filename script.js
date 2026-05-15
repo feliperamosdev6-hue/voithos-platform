@@ -153,6 +153,8 @@ document.addEventListener('DOMContentLoaded', () => {
         [
             { href: 'agendamentos.css', as: 'style' },
             { href: 'agendamentos.js', as: 'script' },
+            { href: 'gestao.css', as: 'style' },
+            { href: 'gestao.js', as: 'script' },
             { href: 'timepicker.css', as: 'style' },
             { href: 'timepicker.js', as: 'script' },
         ].forEach(({ href, as }) => {

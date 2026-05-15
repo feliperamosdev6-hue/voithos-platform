@@ -14,6 +14,15 @@
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
+  const gestaoNowMs = () => (window.performance?.now ? window.performance.now() : Date.now());
+  const gestaoPerfLog = (stage, started = null, extra = {}) => {
+    console.info('[perf][gestao-open]', {
+      stage,
+      durationMs: Number.isFinite(started) ? Math.round(gestaoNowMs() - started) : 0,
+      ...extra,
+    });
+  };
+
   const formatMetodoPagamento = (value) => {
     const key = String(value || '').toLowerCase();
     if (key === 'pix') return 'Pix';
@@ -722,6 +731,11 @@
   let gestaoLancamentosLoading = false;
   let gestaoDashboardLoading = false;
   let gestaoLucratividadeLoading = false;
+  let adminAccessPromise = null;
+  let financeListPromise = null;
+  let dashboardPromise = null;
+  let estoqueLoadPromise = null;
+  let estoqueLoaded = false;
 
   const ensureGestaoLoadingStyles = (() => {
     let injected = false;
@@ -994,10 +1008,12 @@
   };
 
   const loadEstoqueForCurrentClinic = async () => {
-    if (estoqueLoadInFlight) return estoqueProdutos;
+    if (estoqueLoadPromise) return estoqueLoadPromise;
     estoqueLoadInFlight = true;
     const clinicId = String(usuarioLogado?.clinicId || '').trim();
-    try {
+    const started = gestaoNowMs();
+    gestaoPerfLog('stock_fetch_start', null, { source: stockApi?.list ? 'backend' : 'local' });
+    estoqueLoadPromise = (async () => {
       if (stockApi?.list) {
         const remote = await stockApi.list({ clinicId });
         estoqueProdutos = (Array.isArray(remote) ? remote : []).map((item) => normalizeStockItem(item)).filter((item) => item.active !== false);
@@ -1007,15 +1023,35 @@
         estoqueProdutos = readEstoqueStorage();
         setStockSourceLabel('local');
       }
-    } catch (err) {
+      estoqueLoaded = true;
+      gestaoPerfLog('stock_fetch_done', started, { count: estoqueProdutos.length });
+      return estoqueProdutos;
+    })().catch((err) => {
       console.warn('Falha ao carregar estoque central.', err);
       estoqueProdutos = readEstoqueStorage();
       setStockSourceLabel('local');
-    } finally {
+      estoqueLoaded = true;
+      gestaoPerfLog('stock_fetch_error', started, { fallback: 'local' });
+      return estoqueProdutos;
+    }).finally(() => {
       estoqueLoadInFlight = false;
+      estoqueLoadPromise = null;
+      renderEstoque();
+    });
+    return estoqueLoadPromise;
+  };
+
+  const scheduleEstoqueBackgroundLoad = () => {
+    if (estoqueLoaded || estoqueLoadPromise) return;
+    const cached = readEstoqueStorage();
+    if (cached.length) {
+      estoqueProdutos = cached;
+      setStockSourceLabel('local');
       renderEstoque();
     }
-    return estoqueProdutos;
+    setTimeout(() => {
+      loadEstoqueForCurrentClinic().catch((err) => console.warn('Falha ao carregar estoque em background.', err));
+    }, 0);
   };
 
   const setEstoqueFeedback = (message = '', type = '') => {
@@ -1698,6 +1734,7 @@
       const placeholder = document.getElementById('gestao-operacional-estoque-placeholder');
       if (!placeholder) return;
       placeholder.classList.remove('hidden');
+      scheduleEstoqueBackgroundLoad();
       const navLab = document.getElementById('nav-operacional-laboratorio');
       const navEstoque = document.getElementById('btn-operacional-open-estoque');
       navLab?.classList.remove('active');
@@ -1708,7 +1745,10 @@
   };
 
   const ensureAdmin = async () => {
-    try {
+    if (isFinanceAdmin && usuarioLogado) return true;
+    if (adminAccessPromise) return adminAccessPromise;
+    const started = gestaoNowMs();
+    adminAccessPromise = (async () => {
       usuarioLogado = await authApi.currentUser?.();
       const profile = String(usuarioLogado?.tipo || usuarioLogado?.role || '').trim().toLowerCase();
       const canViewFinance = canManageGestao(usuarioLogado);
@@ -1718,12 +1758,15 @@
         window.location.href = 'index.html';
         return false;
       }
-      await loadEstoqueForCurrentClinic();
+      gestaoPerfLog('auth_done', started, { role: profile || 'unknown' });
       return true;
-    } catch (err) {
+    })().catch((err) => {
       console.warn('Falha ao obter usuario atual.', err);
       return false;
-    }
+    }).finally(() => {
+      adminAccessPromise = null;
+    });
+    return adminAccessPromise;
   };
 
   const ensureGestaoAccess = async () => {
@@ -1741,13 +1784,22 @@
     atualizarResumoDashboard();
     atualizarResumoGerencialPeriodo();
     try {
-      const isAdmin = await ensureAdmin();
+      const isAdmin = await ensureGestaoAccess();
       if (!isAdmin) return;
       let dashRaw = null;
       try {
-        dashRaw = await financeApi.getDashboard?.();
+        const started = gestaoNowMs();
+        if (!dashboardPromise) {
+          gestaoPerfLog('dashboard_fetch_start');
+          dashboardPromise = Promise.resolve(financeApi.getDashboard?.()).finally(() => {
+            dashboardPromise = null;
+          });
+        }
+        dashRaw = await dashboardPromise;
+        gestaoPerfLog('dashboard_fetch_done', started);
       } catch (dashboardError) {
         console.warn('Falha ao carregar dashboard financeiro consolidado. Seguindo com a lista de lancamentos.', dashboardError);
+        gestaoPerfLog('dashboard_fetch_error');
       }
       const dash = dashRaw || {
         hoje: { receitas: 0, despesas: 0, saldo: 0 },
@@ -2117,25 +2169,46 @@
   }
 
   async function carregarLancamentos() {
+    const started = gestaoNowMs();
     gestaoLancamentosLoading = true;
     preencherTabelas();
     atualizarRelatorioAtual();
     try {
       const isAdmin = await ensureAdmin();
       if (!isAdmin) return;
-      await carregarDentistasGestao();
-      const list = await financeApi.list?.();
+      const clinicId = String(usuarioLogado?.clinicId || '').trim();
+      const requestKey = `${clinicId}:${String(usuarioLogado?.id || '')}`;
+      if (!financeListPromise || financeListPromise.requestKey !== requestKey) {
+        gestaoPerfLog('finance_list_fetch_start');
+        financeListPromise = Promise.resolve(financeApi.list?.());
+        financeListPromise.requestKey = requestKey;
+      }
+      const [dentistasResult, listResult] = await Promise.allSettled([
+        carregarDentistasGestao(),
+        financeListPromise,
+      ]);
+      if (dentistasResult.status === 'rejected') {
+        console.warn('Falha ao carregar dentistas da Gestao.', dentistasResult.reason);
+      }
+      if (listResult.status === 'rejected') {
+        console.warn('Falha ao carregar lancamentos financeiros.', listResult.reason);
+      }
+      const list = listResult.status === 'fulfilled' ? listResult.value : [];
+      financeListPromise = null;
       lancamentos = dedupeProcedureLancamentos((Array.isArray(list) ? list : []).map(normalizeLancamentoForGestao));
+      gestaoPerfLog('finance_list_fetch_done', started, { count: lancamentos.length });
       preencherTabelas();
       atualizarRelatorioAtual();
-      await carregarDashboard();
-      await carregarProcedimentosLucratividade();
+      scheduleEstoqueBackgroundLoad();
+      carregarDashboard().catch((err) => console.error('Erro ao atualizar dashboard em background:', err));
+      carregarProcedimentosLucratividade().catch((err) => console.error('Erro ao atualizar lucratividade em background:', err));
     } catch (err) {
       console.error('Erro ao carregar lancamentos financeiros:', err);
     } finally {
       gestaoLancamentosLoading = false;
       preencherTabelas();
       atualizarRelatorioAtual();
+      gestaoPerfLog('initial_render_done', started);
     }
   }
 
@@ -2677,7 +2750,7 @@
     modal.classList.remove('hidden');
   };
 
-  const setPeriodoAtual = (periodo) => {
+  const setPeriodoAtual = (periodo, options = {}) => {
     periodoAtual = periodo || 'mes';
     document.querySelectorAll('.btn-periodo').forEach((b) => {
       b.classList.toggle('active', b.dataset.period === periodoAtual);
@@ -2685,7 +2758,7 @@
     document.querySelectorAll('[data-quick-period]').forEach((chip) => {
       chip.classList.toggle('active', chip.getAttribute('data-quick-period') === periodoAtual);
     });
-    carregarDashboard();
+    if (!options.skipReload) carregarDashboard();
     preencherTabelas();
     atualizarRelatorioAtual();
   };
@@ -3467,7 +3540,9 @@
     });
   };
   function initGestao() {
-    setPeriodoAtual(periodoAtual);
+    const started = gestaoNowMs();
+    gestaoPerfLog('init_start');
+    setPeriodoAtual(periodoAtual, { skipReload: true });
     configurarBotoesPeriodo();
     configurarMenuLateral();
     configurarNavegacaoAuxiliar();
@@ -3493,6 +3568,7 @@
       setGestaoView('financeiro');
     }
     aplicarContextoInicialFinanceiro();
+    gestaoPerfLog('shell_render_done', started);
     carregarLancamentos();
   }
 
