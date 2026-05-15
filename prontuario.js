@@ -227,6 +227,25 @@ document.addEventListener('DOMContentLoaded', () => {
   let patientAvatarLoadToken = 0;
   let documentsLoadToken = 0;
   let consultaStatusUpdating = false;
+  let currentUserPromise = null;
+  let patientFetchPromise = null;
+  let patientFetchKey = '';
+  let patientFinancePromise = null;
+  let patientFinancePromiseKey = '';
+  let documentsPromise = null;
+  let documentsPromiseKey = '';
+  let procedimentosRefreshPromise = null;
+  let procedimentosRefreshKey = '';
+  const PRONTUARIO_CACHE_TTL_MS = 60 * 1000;
+
+  const prontuarioNowMs = () => (window.performance?.now ? window.performance.now() : Date.now());
+  const prontuarioPerfLog = (stage, started = null, extra = {}) => {
+    console.info('[perf][prontuario-open]', {
+      stage,
+      durationMs: Number.isFinite(started) ? Math.round(prontuarioNowMs() - started) : 0,
+      ...extra,
+    });
+  };
 
   const ensureLoadingStyles = (() => {
     let injected = false;
@@ -292,6 +311,77 @@ document.addEventListener('DOMContentLoaded', () => {
   const getCurrentPatientKey = () => {
     if (!currentPatient) return '';
     return String(currentPatient?.id || currentPatient?._id || currentPatient?.prontuario || '').trim();
+  };
+
+  const getPatientKey = (patient = null) => String(patient?.id || patient?._id || patient?.prontuario || '').trim();
+  const getPatientHeaderCacheKey = (patient = null) => {
+    const clinicId = String(currentUser?.clinicId || patient?.clinicId || patient?.clinicaId || '').trim() || 'global';
+    const userId = String(currentUser?.id || currentUser?._id || currentUser?.login || '').trim() || 'user';
+    const patientKey = getPatientKey(patient);
+    return patientKey ? `voithos-prontuario-patient-header:v1:${clinicId}:${userId}:${patientKey}` : '';
+  };
+
+  const pickPatientHeaderCache = (patient = {}) => ({
+    id: patient.id || patient._id || '',
+    _id: patient._id || patient.id || '',
+    prontuario: patient.prontuario || '',
+    clinicId: patient.clinicId || patient.clinicaId || '',
+    clinicaId: patient.clinicaId || patient.clinicId || '',
+    fullName: patient.fullName || patient.nome || '',
+    nome: patient.nome || patient.fullName || '',
+    telefone: patient.telefone || patient.phone || patient.celular || patient.whatsapp || '',
+    phone: patient.phone || patient.telefone || '',
+    celular: patient.celular || '',
+    whatsapp: patient.whatsapp || '',
+    cpf: patient.cpf || '',
+    temAnamnese: Boolean(patient.temAnamnese),
+    selfieUrl: patient.selfieUrl || '',
+    profilePhotoUrl: patient.profilePhotoUrl || '',
+    fotoPerfilUrl: patient.fotoPerfilUrl || '',
+    avatarUrl: patient.avatarUrl || '',
+    photoUrl: patient.photoUrl || '',
+    fotoUrl: patient.fotoUrl || '',
+    selfieMime: patient.selfieMime || '',
+    profilePhotoMime: patient.profilePhotoMime || '',
+    selfiePath: patient.selfiePath || '',
+    profilePhotoPath: patient.profilePhotoPath || '',
+    selfieUpdatedAt: patient.selfieUpdatedAt || '',
+    profilePhotoUpdatedAt: patient.profilePhotoUpdatedAt || '',
+  });
+
+  const readPatientHeaderCache = (patient = null) => {
+    const key = getPatientHeaderCacheKey(patient);
+    if (!key) return null;
+    try {
+      const parsed = JSON.parse(sessionStorage.getItem(key) || 'null');
+      if (!parsed || Number(parsed.expiresAt || 0) < Date.now()) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      return parsed.patient || null;
+    } catch (_) {
+      sessionStorage.removeItem(key);
+      return null;
+    }
+  };
+
+  const writePatientHeaderCache = (patient = null) => {
+    const key = getPatientHeaderCacheKey(patient);
+    if (!key || !patient) return;
+    try {
+      sessionStorage.setItem(key, JSON.stringify({
+        expiresAt: Date.now() + PRONTUARIO_CACHE_TTL_MS,
+        patient: pickPatientHeaderCache(patient),
+      }));
+    } catch (_) {}
+  };
+
+  const invalidatePatientHeaderCache = (patient = null) => {
+    const key = getPatientHeaderCacheKey(patient);
+    if (!key) return;
+    try {
+      sessionStorage.removeItem(key);
+    } catch (_) {}
   };
 
   const setAnotacaoStatus = (text = '', isError = false) => {
@@ -516,12 +606,25 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const loadCurrentUser = async () => {
-    try {
-      currentUser = await authApi.currentUser?.();
-    } catch (err) {
-      console.warn('[PRONTUARIO] nao foi possivel carregar usuario atual', err);
-      currentUser = null;
-    }
+    if (currentUser) return currentUser;
+    if (currentUserPromise) return currentUserPromise;
+    const started = prontuarioNowMs();
+    currentUserPromise = (async () => {
+      try {
+        prontuarioPerfLog('current_user_start');
+        currentUser = await authApi.currentUser?.();
+        prontuarioPerfLog('current_user_done', started, { source: 'auth' });
+        return currentUser;
+      } catch (err) {
+        console.warn('[PRONTUARIO] nao foi possivel carregar usuario atual', err);
+        currentUser = null;
+        prontuarioPerfLog('current_user_error', started);
+        return null;
+      } finally {
+        currentUserPromise = null;
+      }
+    })();
+    return currentUserPromise;
   };
 
   const renderServiceDrawerProcedureOptions = () => {
@@ -1531,27 +1634,42 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     const patientKey = getCurrentPatientKey();
+    const requestKey = `${String(currentUser?.clinicId || '')}:${patientKey}`;
+    if (patientFinancePromise && patientFinancePromiseKey === requestKey) return patientFinancePromise;
     if (patientKey && patientKey !== lastPatientFinanceKey) {
       patientFinanceDataLoading = true;
       renderPatientFinance([], { loading: true });
     }
-    try {
-      const rows = await financeApi.listByPatient({
-        patientId: currentPatient.id || currentPatient._id || '',
-        prontuario: currentPatient.prontuario || '',
-      });
-      lastPatientFinanceKey = patientKey;
-      patientFinanceDataLoading = false;
-      renderPatientFinance(rows || []);
-      updateFinanceMetrics(currentPatient?.servicos || []);
-    } catch (err) {
-      console.warn('[PRONTUARIO] falha ao carregar financeiro do paciente', err);
-      patientFinanceDataLoading = false;
-      renderPatientFinance([], {
-        error: err?.message || 'Nao foi possivel carregar o financeiro do paciente.',
-      });
-      updateFinanceMetrics(currentPatient?.servicos || []);
-    }
+    const started = prontuarioNowMs();
+    prontuarioPerfLog('patient_finance_fetch_start');
+    patientFinancePromiseKey = requestKey;
+    patientFinancePromise = (async () => {
+      try {
+        const rows = await financeApi.listByPatient({
+          patientId: currentPatient.id || currentPatient._id || '',
+          prontuario: currentPatient.prontuario || '',
+        });
+        lastPatientFinanceKey = patientKey;
+        patientFinanceDataLoading = false;
+        renderPatientFinance(rows || []);
+        updateFinanceMetrics(currentPatient?.servicos || []);
+        prontuarioPerfLog('patient_finance_fetch_done', started, { count: Array.isArray(rows) ? rows.length : 0 });
+        return rows || [];
+      } catch (err) {
+        console.warn('[PRONTUARIO] falha ao carregar financeiro do paciente', err);
+        patientFinanceDataLoading = false;
+        renderPatientFinance([], {
+          error: err?.message || 'Nao foi possivel carregar o financeiro do paciente.',
+        });
+        updateFinanceMetrics(currentPatient?.servicos || []);
+        prontuarioPerfLog('patient_finance_fetch_error', started);
+        return [];
+      } finally {
+        patientFinancePromise = null;
+        patientFinancePromiseKey = '';
+      }
+    })();
+    return patientFinancePromise;
   };
   const nowIso = () => new Date().toISOString();
   const ensureArray = (value) => (Array.isArray(value) ? value : []);
@@ -2180,35 +2298,54 @@ document.addEventListener('DOMContentLoaded', () => {
     return map[key] || 'ficha';
   };
 
-  const refreshProcedimentos = async () => {
+  const refreshProcedimentos = async (options = {}) => {
     if (!currentPatient?.prontuario || !servicesApi.listForPatient) return;
+    const { awaitFinance = true } = options;
     const now = Date.now();
-    if (financeSyncRefreshInFlight || (now - financeSyncLastRefreshAt) < 250) return;
-    financeSyncRefreshInFlight = true;
     const patientKey = getCurrentPatientKey();
+    const requestKey = `${String(currentUser?.clinicId || '')}:${patientKey}:${getActiveProcedimentosFilter()}`;
+    if (procedimentosRefreshPromise && procedimentosRefreshKey === requestKey) return procedimentosRefreshPromise;
+    if (financeSyncRefreshInFlight || (now - financeSyncLastRefreshAt) < 250) return procedimentosRefreshPromise;
+    financeSyncRefreshInFlight = true;
+    procedimentosRefreshKey = requestKey;
+    const started = prontuarioNowMs();
     if (patientKey && patientKey !== lastProcedimentosPatientKey) {
       procedimentosDataLoading = true;
       renderProcedimentos(currentPatient.servicos || [], getActiveProcedimentosFilter(), { loading: true });
     }
-    try {
-      const resp = await servicesApi.listForPatient(currentPatient.prontuario);
-      currentPatient.servicos = resp?.servicos || [];
-      lastProcedimentosPatientKey = patientKey;
-      procedimentosDataLoading = false;
-      renderProcedimentos(currentPatient.servicos, getActiveProcedimentosFilter());
-      updateFinanceMetrics(currentPatient.servicos);
-      applyOdontogramaSelections(currentPatient.servicos);
-      await refreshPatientFinance();
-      financeSyncLastRefreshAt = Date.now();
-    } catch (err) {
-      console.warn('[PRONTUARIO] nao foi possivel atualizar procedimentos', err);
-      procedimentosDataLoading = false;
-      renderProcedimentos(currentPatient.servicos || [], getActiveProcedimentosFilter(), {
-        error: err?.message || 'Nao foi possivel carregar os procedimentos do paciente.',
-      });
-    } finally {
-      financeSyncRefreshInFlight = false;
-    }
+    prontuarioPerfLog('procedures_fetch_start');
+    procedimentosRefreshPromise = (async () => {
+      try {
+        const resp = await servicesApi.listForPatient(currentPatient.prontuario);
+        currentPatient.servicos = resp?.servicos || [];
+        lastProcedimentosPatientKey = patientKey;
+        procedimentosDataLoading = false;
+        renderProcedimentos(currentPatient.servicos, getActiveProcedimentosFilter());
+        updateFinanceMetrics(currentPatient.servicos);
+        applyOdontogramaSelections(currentPatient.servicos);
+        prontuarioPerfLog('procedures_fetch_done', started, { count: currentPatient.servicos.length });
+        if (awaitFinance) {
+          await refreshPatientFinance();
+        } else {
+          refreshPatientFinance().catch((err) => console.warn('[PRONTUARIO] falha ao carregar financeiro em background', err));
+        }
+        financeSyncLastRefreshAt = Date.now();
+        return currentPatient.servicos;
+      } catch (err) {
+        console.warn('[PRONTUARIO] nao foi possivel atualizar procedimentos', err);
+        procedimentosDataLoading = false;
+        renderProcedimentos(currentPatient.servicos || [], getActiveProcedimentosFilter(), {
+          error: err?.message || 'Nao foi possivel carregar os procedimentos do paciente.',
+        });
+        prontuarioPerfLog('procedures_fetch_error', started);
+        return currentPatient.servicos || [];
+      } finally {
+        financeSyncRefreshInFlight = false;
+        procedimentosRefreshPromise = null;
+        procedimentosRefreshKey = '';
+      }
+    })();
+    return procedimentosRefreshPromise;
   };
 
   let financeSyncLastRefreshAt = 0;
@@ -2560,6 +2697,63 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
+  const renderDocumentsLoading = () => {
+    const loadingHtml = buildLoadingStateHtml(
+      'Carregando documentos...',
+      'Buscando anexos, anamneses e documentos clinicos do paciente.',
+      3
+    );
+    if (docsList) docsList.innerHTML = '';
+    if (docsEmpty) {
+      docsEmpty.innerHTML = loadingHtml;
+      docsEmpty.classList.add('show');
+    }
+    if (arquivosList) arquivosList.innerHTML = '';
+    if (arquivosEmpty) {
+      arquivosEmpty.innerHTML = loadingHtml;
+      arquivosEmpty.classList.add('show');
+    }
+    if (anamneseList) anamneseList.innerHTML = '';
+    if (anamneseEmpty) {
+      anamneseEmpty.innerHTML = loadingHtml;
+      anamneseEmpty.style.display = 'block';
+    }
+    renderAnotacoes([], { loading: true });
+  };
+
+  const renderProntuarioShell = () => {
+    const started = prontuarioNowMs();
+    if (patientName) patientName.textContent = 'Carregando paciente...';
+    if (patientPhone) patientPhone.textContent = 'Telefone: carregando...';
+    if (patientCpf) patientCpf.textContent = 'CPF: carregando...';
+    if (patientProntuario) patientProntuario.textContent = 'Prontuario: carregando...';
+    if (patientStatus) patientStatus.textContent = 'Carregando dados clinicos';
+    setPatientAvatarFallback('P', 'Carregando paciente');
+    renderConsultas([]);
+    renderProcedimentos([], getActiveProcedimentosFilter(), { loading: true });
+    renderPatientFinance([], { loading: true });
+    renderDocumentsLoading();
+    prontuarioPerfLog('shell_render_done', started);
+  };
+
+  const renderProntuarioNoPatient = () => {
+    if (patientName) patientName.textContent = 'Selecione um paciente';
+    if (patientPhone) patientPhone.textContent = 'Telefone: -';
+    if (patientCpf) patientCpf.textContent = 'CPF: -';
+    if (patientProntuario) patientProntuario.textContent = 'Prontuario: -';
+    if (patientStatus) patientStatus.textContent = 'Nenhum paciente selecionado';
+    setPatientAvatarFallback('P', 'Nenhum paciente selecionado');
+    renderConsultas([]);
+    renderProcedimentos([], getActiveProcedimentosFilter());
+    renderPatientFinance([], {
+      error: 'Selecione um paciente para carregar o financeiro.',
+    });
+    renderDocuments([]);
+    renderArquivos([]);
+    renderAnamneseDocuments([]);
+    renderAnotacoes([]);
+  };
+
   const getCurrentUserRole = () => String(currentUser?.tipo || currentUser?.role || '').trim().toLowerCase();
   const hasCurrentUserPermission = (key) => Boolean(currentUser?.permissions?.[key]);
 
@@ -2728,7 +2922,7 @@ document.addEventListener('DOMContentLoaded', () => {
         data,
         category: 'clinicos',
       });
-      await loadDocuments();
+      await loadDocuments({ force: true });
       setActiveTab('documentos');
       alert('Documento customizavel salvo com sucesso.');
     } catch (err) {
@@ -2754,7 +2948,7 @@ document.addEventListener('DOMContentLoaded', () => {
         docs: docs || [],
         systemVersion: 'voithos-desktop',
       });
-      await loadDocuments();
+      await loadDocuments({ force: true });
       setActiveTab('documentos');
       if (result?.record?.id) {
         await documentsApi.open?.({ prontuario, documentId: result.record.id });
@@ -2943,7 +3137,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderConsultas(consultas);
   };
 
-  const loadDocuments = async () => {
+  const loadDocuments = async (options = {}) => {
+    const { force = false } = options;
     if (!documentsApi.list) {
       docsCache = [];
       renderAnotacoes([], { error: 'Modulo de documentos indisponivel neste ambiente.' });
@@ -2951,27 +3146,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const prontuario = await ensureProntuario();
     if (!prontuario) return;
+    const requestKey = `${String(currentUser?.clinicId || '')}:${prontuario}`;
+    if (!force && documentsPromise && documentsPromiseKey === requestKey) return documentsPromise;
     const loadToken = ++documentsLoadToken;
+    const started = prontuarioNowMs();
+    documentsPromiseKey = requestKey;
+    prontuarioPerfLog('documents_fetch_start');
     renderAnotacoes([], { loading: true });
-    try {
-      const docs = await documentsApi.list({ prontuario, includeArchived: false });
-      if (loadToken !== documentsLoadToken) return;
-      docsCache = Array.isArray(docs) ? docs : [];
-      renderDocuments(docs || []);
-      renderArquivos(docs || []);
-      renderAnamneseDocuments(docs || []);
-      renderAnotacoes(docs || []);
-    } catch (err) {
-      if (loadToken !== documentsLoadToken) return;
-      console.warn('[PRONTUARIO] falha ao carregar documentos', err);
-      docsCache = [];
-      renderDocuments([]);
-      renderArquivos([]);
-      renderAnamneseDocuments([]);
-      renderAnotacoes([], {
-        error: err?.message || 'Verifique sua conexao e tente novamente.',
-      });
-    }
+    documentsPromise = (async () => {
+      try {
+        const docs = await documentsApi.list({ prontuario, includeArchived: false });
+        if (loadToken !== documentsLoadToken) return [];
+        docsCache = Array.isArray(docs) ? docs : [];
+        renderDocuments(docs || []);
+        renderArquivos(docs || []);
+        renderAnamneseDocuments(docs || []);
+        renderAnotacoes(docs || []);
+        prontuarioPerfLog('documents_fetch_done', started, { count: docsCache.length });
+        return docsCache;
+      } catch (err) {
+        if (loadToken !== documentsLoadToken) return [];
+        console.warn('[PRONTUARIO] falha ao carregar documentos', err);
+        docsCache = [];
+        renderDocuments([]);
+        renderArquivos([]);
+        renderAnamneseDocuments([]);
+        renderAnotacoes([], {
+          error: err?.message || 'Verifique sua conexao e tente novamente.',
+        });
+        prontuarioPerfLog('documents_fetch_error', started);
+        return [];
+      } finally {
+        documentsPromise = null;
+        documentsPromiseKey = '';
+      }
+    })();
+    return documentsPromise;
   };
 
   const setActiveTab = (tabId) => {
@@ -3096,19 +3306,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const fetchPatient = async (patient) => {
     const prontuario = patient?.prontuario || patient?.id || patient?._id || '';
     if (!prontuario) return patient;
-    try {
-      const full = await patientsApi.read?.(prontuario);
-      const canonicalPatient = mergePatientShadowFields(patient, full || patient);
-      persistActiveProntuarioContext(canonicalPatient, 'central');
-      console.info('[PRONTUARIO] prontuario_patient_rehydrated_from_central=true', {
-        clinicId: String(currentUser?.clinicId || canonicalPatient?.clinicId || canonicalPatient?.clinicaId || '').trim(),
-        patientId: canonicalPatient?.id || canonicalPatient?.prontuario || '',
-      });
-      return canonicalPatient;
-    } catch (err) {
-      console.warn('[PRONTUARIO] nao foi possivel atualizar paciente', err);
-      return patient;
-    }
+    const requestKey = `${String(currentUser?.clinicId || patient?.clinicId || patient?.clinicaId || '')}:${prontuario}`;
+    if (patientFetchPromise && patientFetchKey === requestKey) return patientFetchPromise;
+    patientFetchKey = requestKey;
+    const started = prontuarioNowMs();
+    prontuarioPerfLog('patient_fetch_start', null, { source: 'patientsApi.read' });
+    patientFetchPromise = (async () => {
+      try {
+        const full = await patientsApi.read?.(prontuario);
+        const canonicalPatient = mergePatientShadowFields(patient, full || patient);
+        persistActiveProntuarioContext(canonicalPatient, 'central');
+        writePatientHeaderCache(canonicalPatient);
+        console.info('[PRONTUARIO] prontuario_patient_rehydrated_from_central=true', {
+          clinicId: String(currentUser?.clinicId || canonicalPatient?.clinicId || canonicalPatient?.clinicaId || '').trim(),
+          patientId: canonicalPatient?.id || canonicalPatient?.prontuario || '',
+        });
+        prontuarioPerfLog('patient_fetch_done', started);
+        return canonicalPatient;
+      } catch (err) {
+        console.warn('[PRONTUARIO] nao foi possivel atualizar paciente', err);
+        prontuarioPerfLog('patient_fetch_error', started);
+        return patient;
+      }
+    })().finally(() => {
+      patientFetchPromise = null;
+      patientFetchKey = '';
+    });
+    return patientFetchPromise;
   };
 
   const openServicePage = () => {
@@ -3137,6 +3361,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const openEditProfile = () => {
     if (!currentPatient) return;
+    invalidatePatientHeaderCache(currentPatient);
     localStorage.setItem(getClinicStorageKey('editingPatient'), JSON.stringify(currentPatient));
     window.location.href = 'editar-paciente.html';
   };
@@ -3727,7 +3952,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         await documentsApi.saveEvolucao?.(basePayload);
       }
-      await loadDocuments();
+      await loadDocuments({ force: true });
       closeAnotacaoModal();
       showAnotacaoToast(wasEditing ? 'Anotacao atualizada com sucesso!' : 'Anotacao salva com sucesso!');
     } catch (err) {
@@ -3773,7 +3998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mimeType: file.type || '',
       });
       closeUploadDrawer();
-      await loadDocuments();
+      await loadDocuments({ force: true });
       setActiveTab('arquivos');
       alert('Documento anexado com sucesso.');
     } catch (err) {
@@ -3804,7 +4029,7 @@ document.addEventListener('DOMContentLoaded', () => {
           documentId: docId,
           archived: true,
         });
-        await loadDocuments();
+        await loadDocuments({ force: true });
       }
     } catch (err) {
       console.warn('[PRONTUARIO] nao foi possivel executar acao do documento', err);
@@ -3832,7 +4057,7 @@ document.addEventListener('DOMContentLoaded', () => {
           documentId: docId,
           archived: true,
         });
-        await loadDocuments();
+        await loadDocuments({ force: true });
       }
     } catch (err) {
       console.warn('[PRONTUARIO] nao foi possivel executar acao do arquivo', err);
@@ -3860,7 +4085,7 @@ document.addEventListener('DOMContentLoaded', () => {
           documentId: docId,
           archived: true,
         });
-        await loadDocuments();
+        await loadDocuments({ force: true });
       }
     } catch (err) {
       console.warn('[PRONTUARIO] falha ao abrir anamnese', err);
@@ -4158,24 +4383,55 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   (async () => {
+    const started = prontuarioNowMs();
+    renderProntuarioShell();
     try {
       await loadCurrentUser();
       syncDocumentsUiPermissions();
-      await loadProcedures();
       const storedPatient = await loadPatientFromStorage();
       if (storedPatient) {
-        const full = await fetchPatient(storedPatient);
-        currentPatient = full || storedPatient;
+        const cachedHeader = readPatientHeaderCache(storedPatient);
+        currentPatient = cachedHeader ? { ...cachedHeader, ...storedPatient } : storedPatient;
         updateHeader(currentPatient);
         renderConsultas(currentPatient?.consultas || []);
-        await refreshProcedimentos();
-        await loadDocuments();
-        applyProntuarioEntryNavigation();
-        if (document.getElementById('tab-consultas')?.classList.contains('active')) {
-          await loadConsultasTab({ sync: true });
+        if (Array.isArray(currentPatient?.servicos) && currentPatient.servicos.length) {
+          renderProcedimentos(currentPatient.servicos, getActiveProcedimentosFilter());
+          updateFinanceMetrics(currentPatient.servicos);
+          applyOdontogramaSelections(currentPatient.servicos);
         }
+        applyProntuarioEntryNavigation();
+        prontuarioPerfLog(cachedHeader ? 'patient_cache_hit' : 'patient_cache_miss', started, {
+          patientId: getPatientKey(currentPatient),
+        });
+        loadProcedures().catch((err) => console.warn('[PRONTUARIO] catalogo carregara sob demanda', err));
+        fetchPatient(storedPatient).then((full) => {
+          currentPatient = full || currentPatient;
+          updateHeader(currentPatient);
+          renderConsultas(currentPatient?.consultas || []);
+          refreshProcedimentos({ awaitFinance: false }).catch((err) => {
+            console.warn('[PRONTUARIO] nao foi possivel carregar procedimentos em background', err);
+          });
+          loadDocuments().catch((err) => {
+            console.warn('[PRONTUARIO] nao foi possivel carregar documentos em background', err);
+          });
+          if (document.getElementById('tab-consultas')?.classList.contains('active')) {
+            loadConsultasTab({ sync: true }).catch((err) => {
+              console.warn('[PRONTUARIO] nao foi possivel carregar consultas na entrada', err);
+            });
+          }
+          if (document.getElementById('tab-financeiro')?.classList.contains('active')) {
+            refreshPatientFinance().catch((err) => {
+              console.warn('[PRONTUARIO] nao foi possivel carregar financeiro na entrada', err);
+            });
+          }
+        }).catch((err) => {
+          console.warn('[PRONTUARIO] falha ao revalidar paciente em background', err);
+        });
+        prontuarioPerfLog('init_done', started, { mode: 'background_revalidate' });
         return;
       }
+      renderProntuarioNoPatient();
+      prontuarioPerfLog('init_no_patient', started);
     } catch (err) {
       console.warn('[PRONTUARIO] falha ao inicializar prontuario', err);
       renderProcedimentos(currentPatient?.servicos || [], getActiveProcedimentosFilter(), {
