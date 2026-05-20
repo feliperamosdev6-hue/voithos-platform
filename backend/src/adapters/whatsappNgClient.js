@@ -7,7 +7,6 @@ const HEALTHCHECK_TIMEOUT_MS = 2500;
 const buildTransportDetails = (error) => ({
   name: error?.name || null,
   message: error?.message || null,
-  stack: error?.stack || null,
   cause: error?.cause ? {
     name: error.cause?.name || null,
     code: error.cause?.code || null,

@@ -1,7 +1,10 @@
 const { appEnv } = require('../config/appEnv');
 const { AppError } = require('../errors/AppError');
 
-const SUPER_ADMIN_EMAIL = String(process.env.VOITHOS_SUPERADMIN_EMAIL || 'superadmin@voithos.local').trim().toLowerCase();
+const isProductionEnv = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+const SUPER_ADMIN_EMAIL = String(
+  process.env.VOITHOS_SUPERADMIN_EMAIL || (isProductionEnv ? '' : 'superadmin@voithos.local')
+).trim().toLowerCase();
 
 const isInternalServiceRequest = (req) => {
   const expected = String(appEnv.backendInternalApiToken || '').trim();

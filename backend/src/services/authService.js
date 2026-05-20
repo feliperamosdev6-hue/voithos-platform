@@ -17,9 +17,16 @@ const SIGNUP_RESEND_LIMIT = 3;
 const SIGNUP_RESEND_BLOCK_MINUTES = 15;
 const PENDING_CHECKOUT_TTL_HOURS = 12;
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
-const SUPER_ADMIN_EMAIL = String(process.env.VOITHOS_SUPERADMIN_EMAIL || 'superadmin@voithos.local').trim().toLowerCase();
-const SUPER_ADMIN_PASSWORD = String(process.env.VOITHOS_SUPERADMIN_PASSWORD || 'voithos@2026').trim();
-const SUPER_ADMIN_CLINIC_EMAIL = String(process.env.VOITHOS_SUPERADMIN_CLINIC_EMAIL || 'superadmin-clinic@voithos.local').trim().toLowerCase();
+const isProductionEnv = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
+const SUPER_ADMIN_EMAIL = String(
+  process.env.VOITHOS_SUPERADMIN_EMAIL || (isProductionEnv ? '' : 'superadmin@voithos.local')
+).trim().toLowerCase();
+const SUPER_ADMIN_PASSWORD = String(
+  process.env.VOITHOS_SUPERADMIN_PASSWORD || (isProductionEnv ? '' : 'voithos@2026')
+).trim();
+const SUPER_ADMIN_CLINIC_EMAIL = String(
+  process.env.VOITHOS_SUPERADMIN_CLINIC_EMAIL || (isProductionEnv ? '' : 'superadmin-clinic@voithos.local')
+).trim().toLowerCase();
 const SUPER_ADMIN_CLINIC_NAME = String(process.env.VOITHOS_SUPERADMIN_CLINIC_NAME || 'Voithos Platform').trim();
 
 const isMissingTableError = (error) => error && error.code === 'P2021';

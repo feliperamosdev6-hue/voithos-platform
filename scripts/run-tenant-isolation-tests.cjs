@@ -1032,19 +1032,57 @@ register('inboundMessageService.receiveWhatsappInbound saneia rawPayload tenant-
             return { id: 'inbound-1', clinicId: input.clinicId };
           },
           updateProcessing: async () => ({ count: 1 }),
-          findByIdAndClinic: async () => ({ id: 'inbound-1', clinicId: 'clinic-auth', status: 'IGNORED' }),
+          findByIdAndClinic: async ({ id, clinicId }) => ({ id, clinicId, status: 'PROCESSED' }),
         },
       },
       [path.resolve(__dirname, '../backend/src/repositories/outboundMessageRepository.js')]: {
         outboundMessageRepository: {
-          findLatestReplyEnabledByClinicAndPhone: async () => null,
+          findActiveReplyContextByClinicAndProviderMessageId: async () => null,
+          findLatestReplyEnabledByClinicAndPhone: async () => ({
+            id: 'out-1',
+            patientId: 'patient-1',
+            appointmentId: 'appt-1',
+          }),
+          closeActiveReplyContexts: async () => ({ count: 1 }),
         },
       },
-      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: { appointmentRepository: {} },
-      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: { patientRepository: {} },
-      [path.resolve(__dirname, '../backend/src/services/notificationEventService.js')]: {
-        notificationEventService: {
-          create: async () => null,
+      [path.resolve(__dirname, '../backend/src/repositories/appointmentRepository.js')]: {
+        appointmentRepository: {
+          findByIdAndClinic: async () => ({
+            id: 'appt-1',
+            clinicId: 'clinic-auth',
+            status: 'AGENDADO',
+            confirmado: false,
+            dataHora: '2026-05-04T13:00:00.000Z',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findByIdAndClinic: async () => ({
+            id: 'patient-1',
+            clinicId: 'clinic-auth',
+            nome: 'Paciente Teste',
+            telefone: '5511999999999',
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/db/prisma.js')]: {
+        prisma: {
+          $transaction: async (callback) => callback({
+            outboundMessage: {
+              updateMany: async () => ({ count: 1 }),
+            },
+            appointment: {
+              updateMany: async () => ({ count: 1 }),
+            },
+            inboundMessage: {
+              updateMany: async () => ({ count: 1 }),
+            },
+            notificationEvent: {
+              create: async () => null,
+            },
+          }),
         },
       },
     }
@@ -1054,7 +1092,7 @@ register('inboundMessageService.receiveWhatsappInbound saneia rawPayload tenant-
     await serviceModule.inboundMessageService.receiveWhatsappInbound({
       clinicId: 'clinic-auth',
       fromPhone: '11999999999',
-      body: 'oi',
+      body: '1',
       rawPayload: {
         clinicId: 'clinic-evil',
         dispatchId: 'dispatch-evil',
@@ -1295,7 +1333,7 @@ register('outboundMessageService.sendAppointmentConfirmation usa lookups scoped 
             clinicId: 'clinic-auth',
             patientId: 'patient-1',
             appointmentId: 'appt-1',
-            createdAt: new Date('2026-04-13T09:00:00.000Z'),
+            createdAt: new Date(),
             status: 'SENT',
           }),
         },

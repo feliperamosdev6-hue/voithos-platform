@@ -89,7 +89,7 @@ const readAdminSessionToken = (token: string): AdminSessionInfo | null => {
 };
 
 export const isValidServiceToken = (token: string): boolean => {
-  if (!env.serviceInternalApiToken) return true;
+  if (!env.serviceInternalApiToken) return env.nodeEnv !== 'production';
   return String(token || '').trim() === env.serviceInternalApiToken;
 };
 
@@ -169,6 +169,17 @@ export const internalAuthMiddleware = (req: Request, res: Response, next: NextFu
     return;
   }
 
+  if (!env.serviceInternalApiToken && env.nodeEnv === 'production') {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'SERVICE_AUTH_NOT_CONFIGURED',
+        message: 'Internal service authentication is not configured.',
+      },
+    });
+    return;
+  }
+
   if (!env.serviceInternalApiToken) {
     next();
     return;
@@ -190,6 +201,17 @@ export const internalAuthMiddleware = (req: Request, res: Response, next: NextFu
 };
 
 export const adminSessionMiddleware = (req: Request, res: Response, next: NextFunction): void => {
+  if (!env.adminPanelToken && !env.adminPanelReadOnlyToken && env.nodeEnv === 'production') {
+    res.status(503).json({
+      success: false,
+      error: {
+        code: 'ADMIN_AUTH_NOT_CONFIGURED',
+        message: 'Admin authentication is not configured.',
+      },
+    });
+    return;
+  }
+
   if (!env.adminPanelToken && !env.adminPanelReadOnlyToken) {
     next();
     return;

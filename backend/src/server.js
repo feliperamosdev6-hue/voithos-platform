@@ -87,7 +87,7 @@ app.use(cors({
       callback(null, true);
       return;
     }
-    callback(new AppError(403, 'CORS_ORIGIN_BLOCKED', `CORS origin blocked: ${origin}`));
+    callback(new AppError(403, 'CORS_ORIGIN_BLOCKED', 'CORS origin blocked.'));
   },
   credentials: true,
 }));

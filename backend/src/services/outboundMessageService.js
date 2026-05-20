@@ -35,6 +35,12 @@ const normalizePhone = (value) => {
   return digits;
 };
 
+const maskPhone = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length <= 4 ? digits : `***${digits.slice(-4)}`;
+};
+
 const formatDateTime = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
@@ -166,7 +172,7 @@ const dispatchOutboundRecord = async ({ outbound, clinicId, patientId, appointme
     clinicId,
     patientId,
     appointmentId,
-    phone,
+    phone: maskPhone(phone),
     type,
   }));
 

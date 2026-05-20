@@ -5,7 +5,7 @@ services:
     plan: starter
     rootDir: .
     buildCommand: npm ci && npx prisma generate
-    preDeployCommand: npx prisma db push --accept-data-loss
+    preDeployCommand: npx prisma migrate deploy
     startCommand: npm run backend:start
     healthCheckPath: /health
     envVars:
@@ -30,6 +30,8 @@ services:
       - key: PUBLIC_APP_BASE_URL
         sync: false
       - key: PUBLIC_APP_ALLOWED_ORIGINS
+        sync: false
+      - key: ASAAS_WEBHOOK_TOKEN
         sync: false
       - key: APPOINTMENT_ACTION_BASE_URL
         fromService:

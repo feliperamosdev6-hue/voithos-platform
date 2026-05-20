@@ -8,6 +8,11 @@ const handleAsaasWebhook = async (req, res) => {
   const requestToken = normalizeText(req.get('asaas-access-token'));
   const expectedToken = normalizeText(process.env.ASAAS_WEBHOOK_TOKEN || '');
 
+  if (!expectedToken && String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production') {
+    console.error('[asaas][webhook] auth token is not configured');
+    return res.status(503).json({ ok: false, error: { code: 'WEBHOOK_AUTH_NOT_CONFIGURED', message: 'Webhook authentication is not configured.' } });
+  }
+
   if (expectedToken && requestToken !== expectedToken) {
     console.warn('[asaas][webhook] invalid auth token', {
       eventType,

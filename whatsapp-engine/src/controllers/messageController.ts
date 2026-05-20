@@ -11,6 +11,12 @@ const getAdminActor = (req: Request): string => {
   return session?.label || session?.role || 'service';
 };
 
+const maskPhone = (value: string): string => {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.length <= 4 ? digits : `***${digits.slice(-4)}`;
+};
+
 const sendMessageSchema = z.object({
   clinicId: z.string().min(1),
   toPhone: z.string().min(8),
@@ -37,7 +43,7 @@ export const sendMessage = asyncHandler(async (req: Request, res: Response) => {
   console.info('[WHATSAPP_NG] send request received', JSON.stringify({
     clinicId: parsed.data.clinicId,
     appointmentId: parsed.data.appointmentId || null,
-    toPhone: parsed.data.toPhone,
+    toPhone: maskPhone(parsed.data.toPhone),
     mode: 'queue',
   }));
 
@@ -85,7 +91,7 @@ export const sendMessageSync = asyncHandler(async (req: Request, res: Response) 
   console.info('[WHATSAPP_NG] send request received', JSON.stringify({
     clinicId: parsed.data.clinicId,
     appointmentId: parsed.data.appointmentId || null,
-    toPhone: parsed.data.toPhone,
+    toPhone: maskPhone(parsed.data.toPhone),
     mode: 'sync',
   }));
 
