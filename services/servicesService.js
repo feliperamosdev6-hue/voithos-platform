@@ -377,6 +377,20 @@ const createServicesService = ({
     return result;
   };
 
+  const isPlainRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+  const mergeNestedRecord = (baseValue, patchValue) => {
+    if (!isPlainRecord(baseValue)) return isPlainRecord(patchValue) ? { ...patchValue } : patchValue;
+    if (!isPlainRecord(patchValue)) return patchValue;
+    const merged = { ...baseValue };
+    Object.entries(patchValue).forEach(([key, value]) => {
+      merged[key] = isPlainRecord(value) && isPlainRecord(baseValue[key])
+        ? mergeNestedRecord(baseValue[key], value)
+        : value;
+    });
+    return merged;
+  };
+
   const updateService = async ({ prontuario, service }) => {
     const { filePath, patient } = await ensurePatientForCurrentClinic(prontuario);
     if (!Array.isArray(patient.servicos)) patient.servicos = [];
@@ -396,9 +410,17 @@ const createServicesService = ({
 
     const nowIso = new Date().toISOString();
     const previous = patient.servicos[idx] || {};
+    const mergedFinanceiro = service.financeiro === undefined
+      ? previous.financeiro
+      : mergeNestedRecord(previous.financeiro, service.financeiro);
+    const mergedIntegracoes = service.integracoes === undefined
+      ? previous.integracoes
+      : mergeNestedRecord(previous.integracoes, service.integracoes);
     const mergedRaw = {
       ...previous,
       ...service,
+      ...(mergedFinanceiro !== undefined ? { financeiro: mergedFinanceiro } : {}),
+      ...(mergedIntegracoes !== undefined ? { integracoes: mergedIntegracoes } : {}),
       id: previous.id,
       clinicId: previous.clinicId || getCurrentClinicId(),
       patientId: previous.patientId || patient.id || patient._id || patient.prontuario || prontuario,

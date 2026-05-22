@@ -57,10 +57,22 @@
     return text;
   };
   const stripDescricaoTag = (value) => String(value || '').replace(/^\s*\[[^\]]+\]\s*/i, '').trim();
+  const resolveProcedureLabelForLancamento = (lancamento = {}) => {
+    const metadata = lancamento?.metadata && typeof lancamento.metadata === 'object' ? lancamento.metadata : {};
+    return String(
+      lancamento?.procedimento
+      || lancamento?.procedureName
+      || lancamento?.serviceLabel
+      || metadata?.procedureName
+      || metadata?.serviceLabel
+      || cleanProcedureDescricao(lancamento?.descricao || lancamento?.description || metadata?.description)
+      || ''
+    ).trim();
+  };
   const formatReceitaDescricaoDisplay = (lancamento) => {
     if (!lancamento) return '';
     if (!isProcedureLancamento(lancamento)) return stripDescricaoTag(lancamento.descricao || '');
-    const procedimento = String(lancamento.procedimento || '').trim() || cleanProcedureDescricao(lancamento.descricao);
+    const procedimento = resolveProcedureLabelForLancamento(lancamento);
     const paciente = String(lancamento.paciente || '').trim();
     const content = [procedimento, paciente].filter(Boolean).join(' - ');
     return content ? content : stripDescricaoTag(lancamento.descricao || '');
@@ -310,6 +322,8 @@
     categoria: String(entry?.categoria || entry?.category || '').toLowerCase().trim() || 'outros',
     metodoPagamento: entry?.metodoPagamento || entry?.paymentMethod || '',
     data: entry?.data || entry?.dueDate || entry?.vencimento || entry?.paidAt || entry?.createdAt || '',
+    procedimento: resolveProcedureLabelForLancamento(entry),
+    descricao: String(entry?.descricao || entry?.description || '').trim() || (resolveProcedureLabelForLancamento(entry) ? `Procedimento: ${resolveProcedureLabelForLancamento(entry)}` : ''),
   });
   const getEntryReferenceDate = (entry) => {
     if (getNormalizedEntryType(entry) === 'despesa') return getEntryDateForExpense(entry);
@@ -2833,7 +2847,7 @@
       id: String(svc?.id || svc?._id || ''),
       dataRef,
       dataObj: parseAnyDate(dataRef),
-      procedimento: svc?.tipo || svc?.nome || svc?.procedimento || 'Procedimento',
+      procedimento: svc?.tipo || svc?.nome || svc?.procedimento || svc?.name || 'Procedimento',
       paciente: svc?.patientName || svc?.pacienteNome || svc?.nomePaciente || svc?.paciente || '-',
       valorCobrado,
       custoTotal,

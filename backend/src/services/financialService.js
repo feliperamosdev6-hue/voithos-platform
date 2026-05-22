@@ -20,6 +20,33 @@ const toDateOnly = (value, fallback = '') => {
 };
 
 const cleanText = (value) => String(value || '').trim();
+const extractProcedureNameFromDescription = (value) => {
+  let text = cleanText(value);
+  if (!text) return '';
+  text = text.replace(/^\[procedimento\]\s*/i, '').trim();
+  text = text.replace(/^procedimento:\s*/i, '').trim();
+  return text;
+};
+const resolveProcedureLabel = ({ metadata = {}, row = {}, payload = {} } = {}) => {
+  const label = cleanText(
+    metadata.procedureName
+    || metadata.serviceLabel
+    || metadata.serviceName
+    || row.procedimento
+    || row.procedureName
+    || payload.procedureName
+    || payload.serviceLabel
+    || payload.serviceName
+    || extractProcedureNameFromDescription(
+      payload.description
+      || payload.descricao
+      || row.description
+      || row.descricao
+      || metadata.description
+    )
+  );
+  return label;
+};
 const BALANCE_TRANSACTION_TYPES = new Set(['PAYMENT', 'ADJUSTMENT']);
 const PAYMENT_METHOD_DETAILS = new Set(['PIX', 'CREDIT', 'DEBIT', 'CASH', 'BOLETO', 'TRANSFER', 'OTHER']);
 
@@ -258,6 +285,7 @@ const mapTransaction = (row = {}) => ({
 
 const mapAccountToLegacy = (row = {}) => {
   const metadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+  const procedureLabel = resolveProcedureLabel({ metadata, row });
   const transactions = Array.isArray(row.transactions) ? row.transactions.map(mapTransaction) : [];
   const installments = Array.isArray(row.installments)
     ? row.installments.map((item) => deriveInstallmentSnapshot(item, row.transactions || []))
@@ -285,11 +313,11 @@ const mapAccountToLegacy = (row = {}) => {
     servicoId: cleanText(metadata.procedureId || row.externalReference || ''),
     prontuario: cleanText(metadata.prontuario || row.patientId),
     paciente: cleanText(metadata.patientName || ''),
-    procedimento: cleanText(metadata.procedureName || ''),
+    procedimento: procedureLabel,
     funcionario: cleanText(metadata.funcionario || metadata.dentistName || ''),
     dentistaId: cleanText(metadata.dentistId || ''),
     dentistaNome: cleanText(metadata.dentistName || metadata.funcionario || ''),
-    descricao: row.description,
+    descricao: cleanText(row.description || metadata.description || ''),
     valor: Number(row.totalAmount || 0),
     totalAmount: Number(row.totalAmount || 0),
     data: cleanText(metadata.data || firstDueDate || toDateOnly(row.createdAt)),
@@ -1035,6 +1063,12 @@ const financialService = {
 
     const installments = buildInstallmentsFromPayload(payload, totalAmount);
     const status = summarizeAccountStatus({ installments, transactions: [], totalAmount });
+    const procedureLabel = resolveProcedureLabel({ payload, row: payload, metadata: payload?.metadata });
+    const resolvedDescription = cleanText(
+      payload.description
+      || payload.descricao
+      || (procedureLabel ? `Procedimento: ${procedureLabel}` : 'Lancamento financeiro')
+    );
     const metadata = {
       ...(payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
       patientName: payload.patientName || patient?.nome || '',
@@ -1042,7 +1076,9 @@ const financialService = {
       paymentMethodDetail: normalizePaymentMethodDetail(
         payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail || 'PIX',
       ),
-      procedureName: payload.procedureName || '',
+      procedureName: procedureLabel,
+      serviceLabel: cleanText(payload.serviceLabel || payload.serviceName || procedureLabel),
+      description: resolvedDescription,
       funcionario: cleanText(payload.funcionario || payload.dentistaNome || ''),
       dentistId: cleanText(payload.dentistaId || ''),
       dentistName: cleanText(payload.dentistaNome || payload.funcionario || ''),
@@ -1060,7 +1096,7 @@ const financialService = {
       patientId: patientId || null,
       appointmentId: appointmentId || null,
       patientProcedureId: procedure?.id || cleanText(payload.patientProcedureId) || null,
-      description: cleanText(payload.description || payload.descricao || 'Lancamento financeiro'),
+      description: resolvedDescription,
       totalAmount,
       status,
       category: cleanText(payload.category || payload.categoria || '') || null,
@@ -1129,13 +1165,24 @@ const financialService = {
       totalAmount: payload.totalAmount ?? payload.valor ?? Number(existing.totalAmount || 0),
       rowStatus: existing.status,
     }));
+    const existingMetadata = (existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {};
+    const procedureLabel = resolveProcedureLabel({ metadata: existingMetadata, row: existing, payload });
+    const isProcedureAccount = cleanText(payload.source || payload.origem || existing.source || existingMetadata.origin).toLowerCase() === 'procedimento'
+      || cleanText(payload.category || payload.categoria || existing.category || existingMetadata.category).toLowerCase() === 'procedimentos'
+      || Boolean(cleanText(payload.procedureId || existingMetadata.procedureId || existing.externalReference));
+    const existingDescription = cleanText(existing.description || existingMetadata.description || '');
+    const resolvedDescription = payload.description !== undefined || payload.descricao !== undefined
+      ? cleanText(payload.description || payload.descricao || (procedureLabel ? `Procedimento: ${procedureLabel}` : 'Lancamento financeiro'))
+      : (
+        isProcedureAccount && procedureLabel
+          ? `Procedimento: ${procedureLabel}`
+          : existingDescription
+      );
     const updated = await financialRepository.updateFinancialAccount({
       id: normalizedAccountId,
       clinicId: normalizedClinicId,
       data: {
-        description: payload.description !== undefined || payload.descricao !== undefined
-          ? cleanText(payload.description || payload.descricao || 'Lancamento financeiro')
-          : existing.description,
+        description: resolvedDescription || existing.description,
         totalAmount: payload.totalAmount !== undefined || payload.valor !== undefined
           ? roundMoney(payload.totalAmount ?? payload.valor ?? Number(existing.totalAmount || 0))
           : existing.totalAmount,
@@ -1153,8 +1200,29 @@ const financialService = {
           ? normalizeTransactionMethod(payload.paymentMethodDetail || payload.paymentMethod || payload.metodoPagamento || payload?.metadata?.paymentMethodDetail)
           : existing.paymentMethod,
         metadata: {
-          ...((existing.metadata && typeof existing.metadata === 'object') ? existing.metadata : {}),
+          ...existingMetadata,
           ...((payload.metadata && typeof payload.metadata === 'object') ? payload.metadata : {}),
+          ...(payload.patientName !== undefined ? { patientName: cleanText(payload.patientName) } : {}),
+          ...(payload.prontuario !== undefined ? { prontuario: cleanText(payload.prontuario) } : {}),
+          ...(payload.procedureId !== undefined || payload.patientProcedureId !== undefined
+            ? { procedureId: cleanText(payload.procedureId || payload.patientProcedureId || existingMetadata.procedureId || existing.externalReference || '') }
+            : {}),
+          ...((payload.procedureName !== undefined || payload.serviceLabel !== undefined || payload.serviceName !== undefined || payload.description !== undefined || payload.descricao !== undefined)
+            ? {
+                procedureName: procedureLabel,
+                serviceLabel: cleanText(payload.serviceLabel || payload.serviceName || procedureLabel),
+                description: resolvedDescription,
+              }
+            : {}),
+          ...(payload.category !== undefined || payload.categoria !== undefined
+            ? { category: cleanText(payload.category || payload.categoria || existingMetadata.category || '') }
+            : {}),
+          ...(payload.source !== undefined || payload.origem !== undefined
+            ? { origin: cleanText(payload.source || payload.origem || existingMetadata.origin || '') }
+            : {}),
+          ...(payload.type !== undefined || payload.tipo !== undefined
+            ? { type: cleanText(payload.type || payload.tipo || existingMetadata.type || '') }
+            : {}),
           ...(payload.explicitDueDate === false ? { explicitDueDate: false, dueDateSource: 'clinical_fallback' } : {}),
           ...(((payload.explicitDueDate !== undefined ? payload.explicitDueDate === true : false) || payload?.metadata?.explicitDueDate === true || (payload.explicitDueDate === undefined && Boolean(cleanText(payload.dueDate || payload.vencimento))))
             ? { explicitDueDate: true, dueDateSource: 'financial' }
@@ -1173,6 +1241,9 @@ const financialService = {
                 dentistId: cleanText(payload.dentistaId || ''),
                 dentistName: cleanText(payload.dentistaNome || payload.funcionario || ''),
               }
+            : {}),
+          ...(payload.description !== undefined || payload.descricao !== undefined
+            ? { description: resolvedDescription }
             : {}),
         },
       },

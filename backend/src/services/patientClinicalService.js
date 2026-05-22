@@ -27,6 +27,20 @@ const cleanText = (value) => String(value || '').trim();
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const PROCEDURE_FINANCIAL_SOURCE = 'procedimento';
 const PROCEDURE_FINANCIAL_CATEGORY = 'procedimentos';
+const extractProcedureNameFromDescription = (value) => {
+  let text = cleanText(value);
+  if (!text) return '';
+  text = text.replace(/^\[procedimento\]\s*/i, '').trim();
+  text = text.replace(/^procedimento:\s*/i, '').trim();
+  return text;
+};
+const resolveProcedureName = (...candidates) => {
+  for (const candidate of candidates) {
+    const value = cleanText(candidate);
+    if (value) return value;
+  }
+  return '';
+};
 
 const normalizeProcedureStatus = (value) => {
   const raw = cleanText(value).toLowerCase();
@@ -170,9 +184,22 @@ const buildProcedureFinancialSnapshot = ({
     ? payload.financeiro
     : {};
   if (!financeAccount) {
+    const procedureName = resolveProcedureName(
+      baseSnapshot.procedureName,
+      baseSnapshot.serviceLabel,
+      payload?.nome,
+      payload?.tipo,
+      payload?.procedimento,
+      payload?.name,
+      extractProcedureNameFromDescription(baseSnapshot.description),
+    );
+    const description = cleanText(baseSnapshot.description || (procedureName ? `Procedimento: ${procedureName}` : ''));
     return {
       ...baseSnapshot,
       financeEntryId: cleanText(baseSnapshot.financeEntryId || financeId),
+      procedureName,
+      serviceLabel: cleanText(baseSnapshot.serviceLabel || procedureName),
+      description,
       paymentStatus: normalizeProcedurePaymentStatus(baseSnapshot.paymentStatus),
       paymentMethod: normalizeProcedurePaymentMethod(
         baseSnapshot.paymentMethodDetail
@@ -196,9 +223,30 @@ const buildProcedureFinancialSnapshot = ({
       warning: cleanText(financeWarning),
     };
   }
+  const procedureName = resolveProcedureName(
+    financeAccount.procedimento,
+    financeAccount.procedureName,
+    financeAccount.metadata?.procedureName,
+    financeAccount.metadata?.serviceLabel,
+    baseSnapshot.procedureName,
+    payload?.nome,
+    payload?.tipo,
+    payload?.procedimento,
+    payload?.name,
+    extractProcedureNameFromDescription(financeAccount.descricao || financeAccount.description || baseSnapshot.description),
+  );
+  const description = cleanText(
+    financeAccount.descricao
+    || financeAccount.description
+    || baseSnapshot.description
+    || (procedureName ? `Procedimento: ${procedureName}` : '')
+  );
   return {
     ...baseSnapshot,
     financeEntryId: cleanText(financeAccount.id || financeId),
+    procedureName,
+    serviceLabel: cleanText(financeAccount.serviceLabel || financeAccount.metadata?.serviceLabel || baseSnapshot.serviceLabel || procedureName),
+    description,
     paymentStatus: cleanText(financeAccount.paymentStatus || 'PENDING'),
     paymentMethod: normalizeProcedurePaymentMethod(
       financeAccount.paymentMethodDetail
@@ -239,9 +287,21 @@ const mapLinkedFinanceToLegacy = (row = {}, payload = {}) => {
     ...storedSnapshot,
   };
   if (!legacyAccount) {
+    const procedureName = resolveProcedureName(
+      merged.procedureName,
+      merged.serviceLabel,
+      payload?.nome,
+      payload?.tipo,
+      payload?.procedimento,
+      payload?.name,
+      extractProcedureNameFromDescription(merged.description),
+    );
     return {
       ...merged,
       financeEntryId: cleanText(merged.financeEntryId || ''),
+      procedureName,
+      serviceLabel: cleanText(merged.serviceLabel || procedureName),
+      description: cleanText(merged.description || (procedureName ? `Procedimento: ${procedureName}` : '')),
       paymentStatus: normalizeProcedurePaymentStatus(merged.paymentStatus),
       paymentMethod: normalizeProcedurePaymentMethod(
         merged.paymentMethodDetail
@@ -266,10 +326,24 @@ const mapLinkedFinanceToLegacy = (row = {}, payload = {}) => {
       remainingAmount: roundMoney(merged.remainingAmount ?? resolveProcedureAmount(payload)),
     };
   }
+  const procedureName = resolveProcedureName(
+    legacyAccount.procedimento,
+    legacyAccount.procedureName,
+    merged.procedureName,
+    merged.serviceLabel,
+    payload?.nome,
+    payload?.tipo,
+    payload?.procedimento,
+    payload?.name,
+    extractProcedureNameFromDescription(legacyAccount.descricao || merged.description),
+  );
   return {
     ...merged,
     financeEntryId: legacyAccount.id,
     accountId: legacyAccount.id,
+    procedureName,
+    serviceLabel: cleanText(legacyAccount.serviceLabel || merged.serviceLabel || procedureName),
+    description: cleanText(legacyAccount.descricao || merged.description || (procedureName ? `Procedimento: ${procedureName}` : '')),
     paymentStatus: legacyAccount.paymentStatus,
     paymentMethod: legacyAccount.paymentMethod || legacyAccount.paymentMethodDetail || legacyAccount.metodoPagamento || '',
     paymentMethodDetail: legacyAccount.paymentMethodDetail || legacyAccount.paymentMethod || legacyAccount.metodoPagamento || '',
@@ -325,13 +399,15 @@ const syncProcedureFinancialAccount = async ({
     return { financeAccount: null, financeId: '', financeWarning: '' };
   }
 
-  const procedureName = cleanText(
-    procedureRow?.name
-    || payload?.nome
-    || payload?.tipo
-    || payload?.procedimento
-    || 'Procedimento'
-  );
+  const procedureName = resolveProcedureName(
+    procedureRow?.name,
+    payload?.nome,
+    payload?.tipo,
+    payload?.procedimento,
+    payload?.name,
+    procedureRow?.financialSnapshot?.procedureName,
+    extractProcedureNameFromDescription(payload?.financeiro?.description),
+  ) || 'Procedimento';
   const dentistId = cleanText(procedureRow?.dentistId || payload?.dentistaId);
   const dentistName = cleanText(procedureRow?.dentistName || payload?.dentistaNome);
   const explicitDueDate = hasExplicitProcedureFinancialDueDate(payload);
@@ -371,6 +447,8 @@ const syncProcedureFinancialAccount = async ({
       prontuario: cleanText(patient?.id || procedureRow?.patientId || ''),
       patientName: cleanText(patient?.nome || ''),
       procedureName,
+      serviceLabel: procedureName,
+      description: `Procedimento: ${procedureName}`,
       procedureId: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
       dentistId,
       dentistName,
@@ -458,7 +536,16 @@ const syncProcedureFinancialAccount = async ({
 const mapProcedureToLegacy = (row = {}) => {
   const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
   const linkedFinance = mapLinkedFinanceToLegacy(row, payload);
-  const resolvedName = row.name || payload.nome || payload.tipo || payload.procedimento || '';
+  const resolvedName = resolveProcedureName(
+    row.name,
+    payload.nome,
+    payload.tipo,
+    payload.procedimento,
+    payload.name,
+    linkedFinance.procedureName,
+    linkedFinance.serviceLabel,
+    extractProcedureNameFromDescription(linkedFinance.description),
+  );
   const resolvedStatus = normalizeProcedureStatus(row.status || payload.status || payload.estado || payload.situacao || 'a-realizar');
   const resolvedTeeth = normalizeProcedureTeeth(payload.dentes || row.tooth || payload.dente);
   const resolvedAmount = resolveProcedureAmount(payload);
@@ -471,8 +558,8 @@ const mapProcedureToLegacy = (row = {}) => {
     appointmentId: row.appointmentId || payload.appointmentId || '',
     codigo: row.procedureCode || payload.codigo || payload.code || '',
     nome: resolvedName,
-    tipo: payload.tipo || row.name || payload.nome || '',
-    procedimento: payload.procedimento || resolvedName,
+    tipo: cleanText(payload.tipo || row.name || payload.nome || payload.name || resolvedName),
+    procedimento: cleanText(payload.procedimento || payload.name || resolvedName),
     status: resolvedStatus,
     estado: payload.estado || resolvedStatus,
     situacao: payload.situacao || resolvedStatus,
@@ -622,13 +709,18 @@ const patientClinicalService = {
     const resolvedStatus = normalizeProcedureStatus(payload.status || payload.estado || payload.situacao || existing?.status || existingPayload.status || 'a-realizar');
     const resolvedTeeth = normalizeProcedureTeeth(mergedPayload.dentes || existing?.tooth || mergedPayload.dente);
     const resolvedAmount = resolveProcedureSyncAmount({ payload: mergedPayload, procedureRow: existing || {} });
-    const resolvedName = cleanText(
-      mergedPayload.nome
-      || mergedPayload.tipo
-      || mergedPayload.procedimento
-      || existing?.name
-      || 'Procedimento'
-    );
+    const resolvedName = resolveProcedureName(
+      mergedPayload.nome,
+      mergedPayload.tipo,
+      mergedPayload.procedimento,
+      mergedPayload.name,
+      existing?.name,
+      existingPayload?.nome,
+      existingPayload?.tipo,
+      existingPayload?.procedimento,
+      existing?.financialSnapshot?.procedureName,
+      extractProcedureNameFromDescription(existing?.financialSnapshot?.description),
+    ) || 'Procedimento';
     const payloadWithIdentity = {
       ...mergedPayload,
       id: externalId,

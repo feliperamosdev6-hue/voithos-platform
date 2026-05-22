@@ -25,6 +25,33 @@ const registerFinanceHandlers = ({
   };
   const byClinic = (list = []) => list.filter((item) => String(item?.clinicId || DEFAULT_CLINIC_ID) === getCurrentClinicId());
   const cleanText = (value) => String(value || '').trim();
+  const extractProcedureNameFromDescription = (value) => {
+    let text = cleanText(value);
+    if (!text) return '';
+    text = text.replace(/^\[procedimento\]\s*/i, '').trim();
+    text = text.replace(/^procedimento:\s*/i, '').trim();
+    return text;
+  };
+  const resolveProcedureLabel = (row = {}) => {
+    const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    return cleanText(
+      row?.procedimento
+      || row?.procedureName
+      || row?.serviceLabel
+      || row?.serviceName
+      || metadata.procedureName
+      || metadata.serviceLabel
+      || metadata.serviceName
+      || extractProcedureNameFromDescription(row?.descricao || row?.description || metadata.description)
+    );
+  };
+  const resolveProcedureDescription = (row = {}) => {
+    const metadata = row?.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    const description = cleanText(row?.descricao || row?.description || metadata.description);
+    if (description) return description;
+    const procedureLabel = resolveProcedureLabel(row);
+    return procedureLabel ? `Procedimento: ${procedureLabel}` : '';
+  };
   const normalizePaymentStatus = (value) => {
     const raw = cleanText(value).toUpperCase();
     if (raw === 'PENDING' || raw === 'PENDENTE' || raw === 'OPEN' || raw === 'PARTIAL') return 'PENDING';
@@ -81,6 +108,8 @@ const registerFinanceHandlers = ({
     !isProcedureFinanceEntry(entry) || hasExplicitFinancialDueDate(entry)
   );
   const normalizeFinanceRow = (row = {}) => {
+    const procedureLabel = resolveProcedureLabel(row);
+    const description = resolveProcedureDescription(row);
     const paymentStatus = normalizePaymentStatus(row?.paymentStatus || row?.status || 'PENDING');
     const paymentMethod = normalizePaymentMethod(
       row?.paymentMethodDetail
@@ -97,6 +126,10 @@ const registerFinanceHandlers = ({
       : (paymentStatus === 'PAID' ? 0 : totalAmount);
     return {
       ...row,
+      descricao: description,
+      description,
+      procedimento: procedureLabel,
+      procedureName: cleanText(row?.procedureName || procedureLabel),
       valor: totalAmount,
       totalAmount,
       remainingAmount,
@@ -196,6 +229,8 @@ const registerFinanceHandlers = ({
     const prontuario = cleanText(financeRow?.prontuario);
     const patientId = cleanText(financeRow?.patientId);
     const procedureId = cleanText(financeRow?.procedureId || financeRow?.servicoId);
+    const procedureLabel = resolveProcedureLabel(financeRow);
+    const description = resolveProcedureDescription(financeRow);
     if (!prontuario || !procedureId || typeof updateService !== 'function') return;
     const servicePatch = {
       id: procedureId,
@@ -206,6 +241,9 @@ const registerFinanceHandlers = ({
       vencimento: financeRow.dueDate || financeRow.vencimento || null,
       financeiro: {
         financeEntryId: financeRow.id,
+        procedureName: procedureLabel,
+        serviceLabel: cleanText(financeRow?.serviceLabel || procedureLabel),
+        description,
         paymentStatus: financeRow.paymentStatus || 'PENDING',
         paymentMethod: financeRow.paymentMethod || 'PIX',
         paidAt: financeRow.paidAt || null,
@@ -458,12 +496,18 @@ const registerFinanceHandlers = ({
       const procedure = context.procedure || {};
       const amount = Number(procedure?.valorCobrado ?? procedure?.valor ?? procedure?.value ?? 0) || 0;
       if (amount <= 0 || procedure?.gerarFinanceiro === false) continue;
+      const procedureLabel = resolveProcedureLabel(procedure) || 'Procedimento';
+      const description = resolveProcedureDescription({
+        ...procedure,
+        procedimento: procedureLabel,
+        descricao: procedure?.financeiro?.description || procedure?.descricao || '',
+      }) || `Procedimento: ${procedureLabel}`;
       const created = await centralBackendAdapter.createFinancialAccount({
         clinicId: targetClinicId,
         patient: context.patient,
         account: {
           patientId: context.patient.id,
-          description: `Procedimento: ${procedure?.tipo || procedure?.nome || procedure?.procedimento || 'Procedimento'}`,
+          description,
           totalAmount: amount,
           category: 'procedimentos',
           source: 'procedimento',
@@ -474,12 +518,24 @@ const registerFinanceHandlers = ({
           installments: procedure?.financeiro?.installments ?? null,
           procedureId: missing.procedureId,
           patientName: context.patient.nome || '',
-          procedureName: procedure?.tipo || procedure?.nome || procedure?.procedimento || 'Procedimento',
+          procedureName: procedureLabel,
           funcionario: procedure?.dentistaNome || procedure?.dentista || '',
           dentistaId: procedure?.dentistaId || '',
           dentistaNome: procedure?.dentistaNome || procedure?.dentista || '',
           prontuario: context.patient.prontuario,
           externalReference: missing.procedureId,
+          metadata: {
+            ...(procedure?.financeiro?.metadata && typeof procedure.financeiro.metadata === 'object' ? procedure.financeiro.metadata : {}),
+            patientName: context.patient.nome || '',
+            prontuario: context.patient.prontuario,
+            procedureId: missing.procedureId,
+            procedureName: procedureLabel,
+            serviceLabel: procedureLabel,
+            description,
+            category: 'procedimentos',
+            origin: 'procedimento',
+            type: 'receita',
+          },
         },
       });
       const normalizedCreated = normalizeFinanceRow(created);
@@ -667,12 +723,14 @@ const registerFinanceHandlers = ({
   ipcMain.handle('finance-add', async (_event, lanc) => {
     requireAccess({ roles: ['admin', 'dentista'], perms: ['finance.view'] });
     if (!isCentralEnabled()) throw new Error('Financeiro central indisponivel.');
+    const procedureLabel = resolveProcedureLabel(lanc);
+    const description = resolveProcedureDescription(lanc);
     const lancamento = await centralBackendAdapter.createFinancialAccount({
       clinicId: getCurrentClinicId(),
       patient: { id: lanc?.patientId || lanc?.prontuario || '' },
       account: {
         patientId: lanc?.patientId || lanc?.prontuario || '',
-        description: lanc?.descricao || '',
+        description,
         totalAmount: lanc?.valor || 0,
         category: lanc?.categoria || 'outros',
         source: lanc?.origem || null,
@@ -685,10 +743,14 @@ const registerFinanceHandlers = ({
         procedureId: lanc?.procedureId || lanc?.servicoId || '',
         appointmentId: lanc?.appointmentId || '',
         patientName: lanc?.paciente || '',
-        procedureName: lanc?.procedimento || '',
+        procedureName: procedureLabel,
+        serviceLabel: procedureLabel,
         prontuario: lanc?.prontuario || lanc?.patientId || '',
         metadata: {
           ...(lanc?.metadata && typeof lanc.metadata === 'object' ? lanc.metadata : {}),
+          description,
+          procedureName: procedureLabel,
+          serviceLabel: procedureLabel,
           legacyShadow: true,
         },
       },
@@ -705,17 +767,27 @@ const registerFinanceHandlers = ({
     requireAccess({ roles: ['admin', 'dentista'], perms: ['finance.view'] });
     if (!isCentralEnabled()) throw new Error('Financeiro central indisponivel.');
     if (!lanc?.id) throw new Error('ID do lancamento e obrigatorio.');
+    const procedureLabel = resolveProcedureLabel(lanc);
+    const description = resolveProcedureDescription(lanc);
     const lancamento = await centralBackendAdapter.updateFinancialAccount({
       clinicId: getCurrentClinicId(),
       accountId: lanc.id,
       account: {
         ...lanc,
         totalAmount: lanc.valor,
-        description: lanc.descricao,
+        description,
         category: lanc.categoria,
         source: lanc.origem,
         dueDate: lanc.dueDate || lanc.vencimento || lanc.data || null,
         paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
+        procedureName: procedureLabel,
+        serviceLabel: procedureLabel,
+        metadata: {
+          ...(lanc?.metadata && typeof lanc.metadata === 'object' ? lanc.metadata : {}),
+          description,
+          procedureName: procedureLabel,
+          serviceLabel: procedureLabel,
+        },
       },
     });
     await runFinanceShadowSync(lancamento, { action: 'financial_updated_shadow_sync' });
@@ -725,12 +797,18 @@ const registerFinanceHandlers = ({
   ipcMain.handle('finance-procedure-revenue-upsert', async (_event, payload = {}) => {
     requireAccess({ roles: ['admin', 'dentista'], perms: ['finance.view'] });
     if (!isCentralEnabled()) throw new Error('Financeiro central indisponivel.');
+    const procedureLabel = resolveProcedureLabel(payload) || 'Procedimento';
+    const description = resolveProcedureDescription({
+      ...payload,
+      procedimento: procedureLabel,
+      descricao: payload?.descricao || payload?.description || '',
+    }) || `Procedimento: ${procedureLabel}`;
     const lancamento = await centralBackendAdapter.createFinancialAccount({
       clinicId: getCurrentClinicId(),
       patient: { id: payload?.patientId || payload?.prontuario || '' },
       account: {
         patientId: payload?.patientId || payload?.prontuario || '',
-        description: payload?.descricao || `Procedimento: ${payload?.procedureName || 'Procedimento'}`,
+        description,
         totalAmount: payload?.valor || 0,
         source: 'procedimento',
         category: 'procedimentos',
@@ -743,9 +821,22 @@ const registerFinanceHandlers = ({
         procedureId: payload?.procedureId || '',
         appointmentId: payload?.appointmentId || '',
         patientName: payload?.patientName || '',
-        procedureName: payload?.procedureName || '',
+        procedureName: procedureLabel,
+        serviceLabel: procedureLabel,
         prontuario: payload?.prontuario || payload?.patientId || '',
         externalReference: payload?.procedureId || payload?.financeEntryId || '',
+        metadata: {
+          ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+          patientName: payload?.patientName || '',
+          prontuario: payload?.prontuario || payload?.patientId || '',
+          procedureId: payload?.procedureId || '',
+          procedureName: procedureLabel,
+          serviceLabel: procedureLabel,
+          description,
+          category: 'procedimentos',
+          origin: 'procedimento',
+          type: 'receita',
+        },
       },
     });
     await shadowUpsert(lancamento);

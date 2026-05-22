@@ -69,6 +69,31 @@ const registerServicesHandlers = ({
     return Number.isFinite(n) ? n : 0;
   };
   const cleanText = (value) => String(value || '').trim();
+  const extractProcedureNameFromDescription = (value) => {
+    let text = cleanText(value);
+    if (!text) return '';
+    text = text.replace(/^\[procedimento\]\s*/i, '').trim();
+    text = text.replace(/^procedimento:\s*/i, '').trim();
+    return text;
+  };
+  const resolveProcedureName = (service = {}) => cleanText(
+    service?.tipo
+    || service?.nome
+    || service?.procedimento
+    || service?.name
+    || service?.procedureName
+    || service?.serviceName
+    || service?.serviceLabel
+    || service?.financeiro?.procedureName
+    || service?.financeiro?.serviceLabel
+    || extractProcedureNameFromDescription(service?.financeiro?.description)
+  );
+  const resolveProcedureFinanceDescription = (service = {}) => {
+    const stored = cleanText(service?.financeiro?.description);
+    if (stored) return stored;
+    const procedureName = resolveProcedureName(service);
+    return procedureName ? `Procedimento: ${procedureName}` : 'Procedimento';
+  };
   const logCentralActive = () => {
     if (centralLogged) return;
     centralLogged = true;
@@ -262,12 +287,19 @@ const registerServicesHandlers = ({
   };
   const upsertProcedureRevenueEntry = async (payload = {}) => {
     if (isCentralEnabled()) {
+      const procedureName = cleanText(
+        payload?.procedureName
+        || payload?.serviceLabel
+        || payload?.serviceName
+        || extractProcedureNameFromDescription(payload?.descricao || payload?.description)
+      );
+      const description = cleanText(payload?.descricao || payload?.description || (procedureName ? `Procedimento: ${procedureName}` : 'Procedimento'));
       const account = await centralBackendAdapter.createFinancialAccount({
         clinicId: getCurrentClinicId(),
         patient: { id: payload?.patientId || payload?.prontuario || '' },
         account: {
           patientId: payload?.patientId || payload?.prontuario || '',
-          description: payload?.descricao || `Procedimento: ${payload?.procedureName || 'Procedimento'}`,
+          description,
           totalAmount: payload?.valor || 0,
           category: 'procedimentos',
           source: 'procedimento',
@@ -280,12 +312,25 @@ const registerServicesHandlers = ({
           appointmentId: payload?.appointmentId || '',
           procedureId: payload?.procedureId || '',
           patientName: payload?.patientName || '',
-          procedureName: payload?.procedureName || '',
+          procedureName,
+          serviceLabel: procedureName,
           funcionario: payload?.funcionario || payload?.dentistaNome || '',
           dentistaId: payload?.dentistaId || '',
           dentistaNome: payload?.dentistaNome || payload?.funcionario || '',
           prontuario: payload?.prontuario || payload?.patientId || '',
           externalReference: payload?.procedureId || payload?.financeEntryId || '',
+          metadata: {
+            ...(payload?.metadata && typeof payload.metadata === 'object' ? payload.metadata : {}),
+            patientName: payload?.patientName || '',
+            prontuario: payload?.prontuario || payload?.patientId || '',
+            procedureId: payload?.procedureId || '',
+            procedureName,
+            serviceLabel: procedureName,
+            description,
+            category: 'procedimentos',
+            origin: 'procedimento',
+            type: 'receita',
+          },
         },
       });
       await shadowUpsertFinance(account);
@@ -346,7 +391,7 @@ const registerServicesHandlers = ({
   const buildProcedureLaboratoryPayload = ({ patient, service, financeExpenseId }) => {
     const nowIso = new Date().toISOString();
     const descricaoLab = cleanText(service?.custos?.laboratorio?.descricao);
-    const procedureName = cleanText(service?.tipo || service?.nome || service?.procedimento || 'Procedimento');
+    const procedureName = resolveProcedureName(service) || 'Procedimento';
     const patientName = cleanText(patient?.fullName || patient?.nome || service?.paciente || '');
     return {
       procedureId: cleanText(service?.id),
@@ -437,7 +482,7 @@ const registerServicesHandlers = ({
 
     const base = idx >= 0 ? (list[idx] || {}) : {};
     const id = cleanText(base.id) || generateFinanceId();
-    const procedureName = cleanText(service?.tipo || service?.nome || service?.procedimento || 'Procedimento');
+    const procedureName = resolveProcedureName(service) || 'Procedimento';
     const pacienteNome = cleanText(patient?.fullName || patient?.nome || service?.paciente || '');
     const labDescricao = cleanText(service?.custos?.laboratorio?.descricao);
     const paymentStatus = normalizePaymentStatus(base.paymentStatus || base.status || 'PENDING');
@@ -578,7 +623,7 @@ const registerServicesHandlers = ({
 
     const base = idx >= 0 ? (list[idx] || {}) : {};
     const descricaoLab = cleanText(service?.custos?.laboratorio?.descricao);
-    const procedureName = cleanText(service?.tipo || service?.nome || service?.procedimento || 'Procedimento');
+    const procedureName = resolveProcedureName(service) || 'Procedimento';
     const patientName = cleanText(patient?.fullName || patient?.nome || service?.paciente || '');
     const entrada = toDateOnly(service?.dataRealizacao || service?.finishedAt || service?.updatedAt || nowIso);
     const registro = {
@@ -797,6 +842,8 @@ const registerServicesHandlers = ({
           : (createdService.valor || createdService.value || 0)
       );
       if (valor > 0) {
+        const procedureName = resolveProcedureName(createdService) || 'Procedimento';
+        const description = resolveProcedureFinanceDescription(createdService);
         patient = patient || await readPatientWithShadowSync(prontuario);
         const prevId = financeId || '';
         console.info('[PRONTUARIO] procedure_financial_sync_started', JSON.stringify({
@@ -813,11 +860,11 @@ const registerServicesHandlers = ({
           patientId: patient.id || patient._id || '',
           prontuario: patient.prontuario || prontuario,
           patientName: patient.fullName || patient.nome || '',
-          procedureName: createdService.tipo || createdService.nome || createdService.procedimento || 'Procedimento',
+          procedureName,
           funcionario: createdService.dentistaNome || createdService.dentista || '',
           dentistaId: createdService.dentistaId || '',
           dentistaNome: createdService.dentistaNome || createdService.dentista || '',
-          descricao: `Procedimento: ${createdService.tipo || createdService.nome || createdService.procedimento || 'Procedimento'}`,
+          descricao: description,
           valor,
           status: 'PENDING',
           paymentMethod: 'PIX',
@@ -841,6 +888,9 @@ const registerServicesHandlers = ({
         const financeSnapshot = {
           ...(createdService.financeiro || {}),
           financeEntryId: financeId,
+          procedureName,
+          serviceLabel: procedureName,
+          description,
           paymentStatus: 'PENDING',
           paymentMethod: 'PIX',
           paidAt: null,
@@ -969,6 +1019,8 @@ const registerServicesHandlers = ({
         && procedureState !== 'pre-existente'
         && procedureState !== 'cancelado';
       if (shouldSyncFinance) {
+        const procedureName = resolveProcedureName(merged) || 'Procedimento';
+        const description = resolveProcedureFinanceDescription(merged);
         const previousId = financeId || baseFinanceId;
         const wasCreated = !previousId;
         const financeiro = merged.financeiro || {};
@@ -982,11 +1034,11 @@ const registerServicesHandlers = ({
           patientId: patient.id || patient._id || '',
           prontuario: patient.prontuario || prontuario,
           patientName: patient.fullName || patient.nome || '',
-          procedureName: merged.tipo || merged.nome || merged.procedimento || 'Procedimento',
+          procedureName,
           funcionario: merged.dentistaNome || merged.dentista || '',
           dentistaId: merged.dentistaId || '',
           dentistaNome: merged.dentistaNome || merged.dentista || '',
-          descricao: `Procedimento: ${merged.tipo || merged.nome || merged.procedimento || 'Procedimento'}`,
+          descricao: description,
           valor,
           status: paymentStatus,
           paymentMethod,
@@ -1001,13 +1053,18 @@ const registerServicesHandlers = ({
       }
     }
 
+    const payloadProcedureName = resolveProcedureName(service);
     const payload = financeId
       ? {
           ...service,
+          ...(payloadProcedureName ? { nome: payloadProcedureName } : {}),
           financeiroId: financeId,
           financeiro: {
             ...(service.financeiro || {}),
             financeEntryId: financeId,
+            procedureName: payloadProcedureName,
+            serviceLabel: payloadProcedureName,
+            description: resolveProcedureFinanceDescription(service),
             paymentStatus: normalizePaymentStatus(service?.financeiro?.paymentStatus || service.paymentStatus || 'PENDING'),
             paymentMethod: normalizePaymentMethod(service?.financeiro?.paymentMethod || service.paymentMethod || service.metodoPagamento || 'PIX'),
             paidAt: normalizePaymentStatus(service?.financeiro?.paymentStatus || service.paymentStatus || 'PENDING') === 'PAID'
@@ -1092,6 +1149,8 @@ const registerServicesHandlers = ({
     const existingPaidAt = existingFinance.paidAt || service.paidAt || null;
     const valor = Number(service.valorCobrado !== undefined ? service.valorCobrado : (service.valor || service.value || 0));
     if (allowFinance && valor > 0) {
+      const procedureName = resolveProcedureName(service) || 'Procedimento';
+      const description = resolveProcedureFinanceDescription(service);
       const prevId = financeId;
       const lancamento = await upsertProcedureRevenueEntry({
         financeEntryId: prevId,
@@ -1099,8 +1158,8 @@ const registerServicesHandlers = ({
         patientId: patient.id || patient._id || '',
         prontuario: patient.prontuario || prontuario,
         patientName: patient.fullName || patient.nome || '',
-        procedureName: service.tipo || service.nome || service.procedimento || 'Procedimento',
-        descricao: `Procedimento: ${service.tipo || service.nome || service.procedimento || 'Procedimento'}`,
+        procedureName,
+        descricao: description,
         valor,
         status: existingPaymentStatus,
         paymentMethod: existingPaymentMethod,
@@ -1117,9 +1176,15 @@ const registerServicesHandlers = ({
       dataRealizacao: doneDate.toISOString(),
     };
     if (financeId) {
+      const procedureName = resolveProcedureName(service) || 'Procedimento';
+      const description = resolveProcedureFinanceDescription(service);
       updatePayload.financeiroId = financeId;
       updatePayload.financeiro = {
+        ...(service.financeiro || {}),
         financeEntryId: financeId,
+        procedureName,
+        serviceLabel: procedureName,
+        description,
         paymentStatus: existingPaymentStatus,
         paymentMethod: existingPaymentMethod,
         paidAt: existingPaymentStatus === 'PAID' ? (existingPaidAt || new Date().toISOString()) : null,

@@ -22,6 +22,23 @@ const createFinanceService = ({
     return Number.isFinite(n) ? n : 0;
   };
   const cleanText = (value) => String(value || '').trim();
+  const extractProcedureNameFromDescription = (value) => {
+    let text = cleanText(value);
+    if (!text) return '';
+    text = text.replace(/^\[procedimento\]\s*/i, '').trim();
+    text = text.replace(/^procedimento:\s*/i, '').trim();
+    return text;
+  };
+  const resolveProcedureLabel = (payload = {}, base = {}) => cleanText(
+    payload.procedureName
+    || payload.procedimento
+    || payload.nomeProcedimento
+    || payload.serviceName
+    || payload.serviceLabel
+    || base.procedimento
+    || base.procedureName
+    || extractProcedureNameFromDescription(payload.descricao || payload.description || base.descricao || base.description)
+  );
   const toDateOnly = (value) => {
     if (!value) return new Date().toISOString().split('T')[0];
     const raw = String(value).trim();
@@ -290,7 +307,6 @@ const createFinanceService = ({
     const statusFinance = paymentStatusToFinance(paymentStatus);
     const metodoPagamento = paymentMethodToFinance(paymentMethod);
     const valor = toNumber(payload.valor);
-    const procedureName = cleanText(payload.procedureName || payload.procedimento || payload.nomeProcedimento || 'Procedimento');
     const pacienteNome = cleanText(payload.patientName || payload.pacienteNome || payload.paciente);
     const data = toDateOnly(payload.data || payload.dataFinalizacao || nowIso);
     const vencimento = payload.vencimento || payload.dueDate ? toDateOnly(payload.vencimento || payload.dueDate) : '';
@@ -310,6 +326,8 @@ const createFinanceService = ({
     }
 
     const base = idx >= 0 ? list[idx] : null;
+    const procedureName = resolveProcedureLabel(payload, base || {}) || 'Procedimento';
+    const description = cleanText(payload.descricao || payload.description || base?.descricao || (procedureName ? `Procedimento: ${procedureName}` : 'Procedimento'));
     const resolvedProcedureId = procedureId || cleanText(base?.procedureId || base?.servicoId);
     const resolvedPatientId = patientId || cleanText(base?.patientId);
     const resolvedProntuario = prontuario || cleanText(base?.prontuario);
@@ -334,7 +352,7 @@ const createFinanceService = ({
       clinicId,
       tipo: 'receita',
       categoria: 'procedimentos',
-      descricao: cleanText(payload.descricao) || `Procedimento: ${procedureName}`,
+      descricao: description,
       valor,
       status: statusFinance,
       metodoPagamento,

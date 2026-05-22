@@ -1023,6 +1023,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (key === 'pre-existente') return 'pre';
     return 'pending';
   };
+  const extractProcedureNameFromDescription = (value) => {
+    let text = String(value || '').trim();
+    if (!text) return '';
+    text = text.replace(/^\[procedimento\]\s*/i, '').trim();
+    text = text.replace(/^procedimento:\s*/i, '').trim();
+    return text;
+  };
+  const resolveServiceDisplayName = (service = {}) => {
+    const financeiro = service?.financeiro || {};
+    return String(
+      service?.tipo
+      || service?.nome
+      || service?.procedimento
+      || service?.name
+      || service?.procedureName
+      || service?.serviceLabel
+      || service?.serviceName
+      || financeiro?.procedureName
+      || financeiro?.serviceLabel
+      || extractProcedureNameFromDescription(financeiro?.description)
+      || ''
+    ).trim();
+  };
+  const resolveFinanceProcedureLabel = (entry = {}) => {
+    const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+    return String(
+      entry?.procedimento
+      || entry?.procedureName
+      || entry?.serviceLabel
+      || entry?.serviceName
+      || metadata?.procedureName
+      || metadata?.serviceLabel
+      || extractProcedureNameFromDescription(entry?.descricao || entry?.description || metadata?.description)
+      || ''
+    ).trim();
+  };
+  const resolveFinanceDescription = (entry = {}) => {
+    const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
+    const description = String(entry?.descricao || entry?.description || metadata?.description || '').trim();
+    if (description) return description;
+    const label = resolveFinanceProcedureLabel(entry);
+    return label ? `Procedimento: ${label}` : '';
+  };
   const getServicePaymentStatusUpper = (service = {}) => {
     const financeiro = service?.financeiro || {};
     return normalizePaymentStatusUpper(financeiro.paymentStatus || service.paymentStatus || 'PENDING');
@@ -1077,9 +1120,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const baseFinanceiro = service.financeiro || {};
     let financeEntryId = baseFinanceiro.financeEntryId || service.financeiroId || '';
     const currentMethod = normalizePaymentMethodUpper(baseFinanceiro.paymentMethod || service.paymentMethod || service.metodoPagamento || 'PIX');
+    const procedureName = resolveServiceDisplayName(service) || 'Procedimento';
     const servicePatch = {
       financeiro: {
         ...baseFinanceiro,
+        procedureName,
+        serviceLabel: procedureName,
+        description: String(baseFinanceiro.description || `Procedimento: ${procedureName}`).trim(),
         paymentMethod: currentMethod,
       },
     };
@@ -1332,7 +1379,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resetPatientPaymentForm();
     editingPatientPaymentId = String(row.id || '');
     if (patientPaymentModalTitle) patientPaymentModalTitle.textContent = 'Editar pagamento';
-    if (patientPaymentDescription) patientPaymentDescription.value = row.descricao || row.procedimento || '';
+    if (patientPaymentDescription) patientPaymentDescription.value = resolveFinanceDescription(row) || resolveFinanceProcedureLabel(row) || '';
     if (patientPaymentValue) patientPaymentValue.value = String(Number(row.valor || 0) || '');
     const method = normalizePaymentMethodUpper(row.paymentMethod || row.metodoPagamento || 'OTHER');
     if (patientPaymentMethod) patientPaymentMethod.value = method;
@@ -1354,8 +1401,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const venc = formatDateBr(row.dueDate || row.vencimento || '');
     const recebido = formatDateTimeBr(row.paidAt || '');
     const origem = row.origem || '-';
-    const procedimento = row.procedimento || '-';
-    const descricao = row.descricao || '-';
+    const procedimento = resolveFinanceProcedureLabel(row) || '-';
+    const descricao = resolveFinanceDescription(row) || '-';
     alert(
       `Detalhes do pagamento\n\n` +
       `Data: ${data}\n` +
@@ -1581,6 +1628,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const method = normalizePaymentMethodUpper(item.paymentMethod || item.metodoPagamento || 'PIX');
       const canConfirm = isPendingLikeFinanceStatus(statusRaw);
       const dueDate = item.dueDate || item.vencimento || '';
+      const procedureLabel = resolveFinanceProcedureLabel(item);
       const installmentsHelp = getPatientFinanceInstallmentsLabel(item);
       const supportsInstallments = patientFinanceMethodSupportsInstallments(method);
       const installmentsValue = Math.max(1, Number(item.installments || 0) || 1);
@@ -1588,7 +1636,7 @@ document.addEventListener('DOMContentLoaded', () => {
       row.className = 'procedimentos-row';
       row.innerHTML = `
         <span>${formatDateBr(dueDate || item.data)}</span>
-        <span>${item.procedimento || item.descricao || '-'}</span>
+        <span>${procedureLabel || resolveFinanceDescription(item) || '-'}</span>
         <span>${formatCurrency(item.valor)}</span>
         <span class="patient-finance-method">
           <select class="patient-finance-method-select" data-finance-id="${item.id}" aria-label="Forma de pagamento">
@@ -1937,7 +1985,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (procFinalizeDraftBtn) procFinalizeDraftBtn.hidden = procFinalizeMode === 'edit';
     if (procFinalizeId) procFinalizeId.value = service.id || '';
-    if (procFullName) procFullName.value = service.tipo || service.nome || service.procedimento || '';
+    if (procFullName) procFullName.value = resolveServiceDisplayName(service);
     if (procFullDentes) procFullDentes.value = formatDentes(service.dentes || []).replace(/-/g, '').trim();
     if (procFullProfissional) procFullProfissional.value = service.dentistaNome || service.dentista || '';
     if (procFullRegisteredAt) procFullRegisteredAt.value = toInputDate(service.registeredAt || service.dataAdicionado || service.createdAt);
@@ -2113,7 +2161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     procedimentosEmpty.classList.remove('show');
     updateFinanceMetrics(list);
     procedimentosBody.innerHTML = list.map((svc) => {
-      const nome = svc.tipo || svc.nome || svc.procedimento || 'Procedimento';
+      const nome = resolveServiceDisplayName(svc) || 'Procedimento';
       const dentes = formatDentes(svc.dentes);
       const estadoNormalizado = normalizeEstado(svc.status || svc.estado || svc.situacao);
       const workflowValue = deriveServiceWorkflowOptionValue(svc);
@@ -2413,7 +2461,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fillProcEditModal = (service) => {
     if (!service) return;
     if (procEditId) procEditId.value = service.id || '';
-    if (procEditName) procEditName.value = service.tipo || service.nome || service.procedimento || '';
+    if (procEditName) procEditName.value = resolveServiceDisplayName(service);
     if (procEditValor) {
       const val = getServiceAmount(service);
       procEditValor.value = val ? val.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
@@ -2437,7 +2485,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const fillProcModal = (service) => {
     if (!service) return;
-    const nome = service.tipo || service.nome || service.procedimento || 'Procedimento';
+    const nome = resolveServiceDisplayName(service) || 'Procedimento';
     const dentes = formatDentes(service.dentes);
     const codigo = service.codigo || service.code || '';
     const title = codigo ? `[${codigo}] | ${nome}` : `${nome}`;
