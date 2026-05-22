@@ -41,7 +41,7 @@ const registerServicesHandlers = ({
   const normalizePaymentStatus = (value) => {
     const raw = String(value || '').toUpperCase().trim();
     if (raw === 'PENDING' || raw === 'PENDENTE' || raw === 'OPEN' || raw === 'PARTIAL') return 'PENDING';
-    if (raw === 'CANCELLED' || raw === 'CANCELADO') return 'CANCELLED';
+    if (raw === 'CANCELLED' || raw === 'CANCELED' || raw === 'CANCELADO') return 'CANCELLED';
     if (raw === 'PAID' || raw === 'PAGO') return 'PAID';
     return 'PENDING';
   };
@@ -303,7 +303,7 @@ const registerServicesHandlers = ({
     return lancamento;
   };
   const deleteProcedureRevenueEntry = async ({ financeId, serviceId }) => {
-    if (isCentralEnabled() && financeId) {
+    if (isCentralEnabled() && financeId && !serviceId) {
       try {
         await centralBackendAdapter.deleteFinancialAccount({
           clinicId: getCurrentClinicId(),
@@ -312,8 +312,9 @@ const registerServicesHandlers = ({
       } catch (error) {
         console.warn('[FINANCEIRO] procedure delete central account failed', error);
       }
+      await shadowDeleteFinance(financeId);
+      return;
     }
-    await shadowDeleteFinance(financeId);
     await removeProcedureFinanceEntries({ financeId, serviceId });
   };
   const getProcedureIntegrationIds = (service = {}) => ({
@@ -635,27 +636,54 @@ const registerServicesHandlers = ({
 
     const list = await readFinance();
     if (!Array.isArray(list) || !list.length) return;
-    const filtered = (Array.isArray(list) ? list : []).filter((item) => {
+    let changed = false;
+    const now = new Date().toISOString();
+    const userId = cleanText(currentUserRef?.()?.id);
+    const nextList = [];
+    (Array.isArray(list) ? list : []).forEach((item) => {
       const sameClinic = String(item?.clinicId || DEFAULT_CLINIC_ID) === clinicId;
-      if (!sameClinic) return true;
+      if (!sameClinic) {
+        nextList.push(item);
+        return;
+      }
 
       const sameId = targetFinanceId && String(item?.id || '') === targetFinanceId;
-      if (sameId) return false;
+      let shouldRemove = Boolean(sameId);
 
-      if (!targetServiceId) return true;
-      const sameProcedure = String(item?.procedureId || item?.servicoId || '') === targetServiceId;
-      if (!sameProcedure) return true;
-      const isProcedureEntry = String(item?.origem || '').toLowerCase() === 'procedimento'
-        || String(item?.categoria || '').toLowerCase() === 'procedimentos';
-      if (!isProcedureEntry) return true;
+      if (!shouldRemove && targetServiceId) {
+        const sameProcedure = String(item?.procedureId || item?.servicoId || '') === targetServiceId;
+        const isProcedureEntry = String(item?.origem || '').toLowerCase() === 'procedimento'
+          || String(item?.categoria || '').toLowerCase() === 'procedimentos';
+        if (sameProcedure && isProcedureEntry) {
+          const entryProntuario = String(item?.prontuario || '').trim();
+          shouldRemove = !targetProntuario || !entryProntuario || entryProntuario === targetProntuario;
+        }
+      }
 
-      const entryProntuario = String(item?.prontuario || '').trim();
-      if (!targetProntuario || !entryProntuario) return false;
-      return entryProntuario !== targetProntuario;
+      if (!shouldRemove) {
+        nextList.push(item);
+        return;
+      }
+
+      changed = true;
+      const isPaid = normalizePaymentStatus(item?.paymentStatus || item?.status) === 'PAID'
+        || Number(item?.paidAmount || 0) > 0;
+      if (isPaid) {
+        nextList.push({
+          ...item,
+          status: 'cancelado',
+          paymentStatus: 'CANCELLED',
+          remainingAmount: 0,
+          canceledAt: item?.canceledAt || now,
+          canceledBy: item?.canceledBy || userId,
+          updatedAt: now,
+          updatedBy: userId,
+        });
+      }
     });
 
-    if (filtered.length !== list.length) {
-      await writeFinance(filtered);
+    if (changed) {
+      await writeFinance(nextList);
     }
   };
 
@@ -899,7 +927,35 @@ const registerServicesHandlers = ({
     let financeCreated = false;
     let patient = null;
 
-    if (service.status === 'realizado' && service.dataRealizacao) {
+    const financeRelevantKeys = new Set([
+      'status',
+      'estado',
+      'situacao',
+      'dataRealizacao',
+      'finishedAt',
+      'finalizadoEm',
+      'paymentStatus',
+      'paymentMethod',
+      'metodoPagamento',
+      'financeiro',
+      'financeiroId',
+      'financeiroLancamentoId',
+      'valorCobrado',
+      'valor',
+      'value',
+      'gerarFinanceiro',
+      'vencimento',
+      'dueDate',
+      'tipo',
+      'nome',
+      'procedimento',
+      'dentistaId',
+      'dentistaNome',
+      'dentista',
+    ]);
+    const shouldConsiderFinanceSync = Object.keys(service || {}).some((key) => financeRelevantKeys.has(key));
+
+    if (shouldConsiderFinanceSync) {
       const sourceData = await loadProceduresFromSource(prontuario);
       patient = sourceData.patient;
       const base = (Array.isArray(sourceData.procedures) ? sourceData.procedures : []).find((s) => String(s.id || '') === String(service.id));
@@ -907,7 +963,12 @@ const registerServicesHandlers = ({
       const allowFinance = merged.gerarFinanceiro !== false;
       const baseFinanceId = base?.financeiro?.financeEntryId || base?.financeiroId || base?.financeiroLancamentoId || '';
       const valor = Number(merged.valorCobrado !== undefined ? merged.valorCobrado : (merged.valor || merged.value || 0));
-      if (allowFinance && valor > 0) {
+      const procedureState = normalizeProcedureState(merged.status || merged.estado || merged.situacao || '');
+      const shouldSyncFinance = allowFinance
+        && valor > 0
+        && procedureState !== 'pre-existente'
+        && procedureState !== 'cancelado';
+      if (shouldSyncFinance) {
         const previousId = financeId || baseFinanceId;
         const wasCreated = !previousId;
         const financeiro = merged.financeiro || {};
@@ -931,9 +992,9 @@ const registerServicesHandlers = ({
           paymentMethod,
           dueDate,
           explicitDueDate: Boolean(dueDate),
-          paidAt,
+          paidAt: paymentStatus === 'PAID' ? paidAt : null,
           installments: financeiro.installments ?? null,
-          data: toDateOnly(merged.dataRealizacao || new Date().toISOString()),
+          data: toDateOnly(merged.dataRealizacao || merged.registeredAt || new Date().toISOString()),
         });
         financeId = lancamento.id;
         financeCreated = wasCreated;

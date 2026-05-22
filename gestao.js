@@ -223,7 +223,7 @@
     if (!raw) return '';
     if (raw === 'pago' || raw === 'paid') return 'pago';
     if (raw === 'pendente' || raw === 'pending') return 'pendente';
-    if (raw === 'cancelado' || raw === 'cancelled') return 'cancelado';
+    if (raw === 'cancelado' || raw === 'cancelled' || raw === 'canceled') return 'cancelado';
     return raw;
   };
   const getFinanceStatus = (entry) => {

@@ -1162,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const normalizePaymentStatusUpper = (value) => {
     const raw = String(value || '').toUpperCase().trim();
     if (raw === 'PENDING' || raw === 'PENDENTE' || raw === 'OPEN' || raw === 'PARTIAL') return 'PENDING';
-    if (raw === 'CANCELLED' || raw === 'CANCELADO') return 'CANCELLED';
+    if (raw === 'CANCELLED' || raw === 'CANCELED' || raw === 'CANCELADO') return 'CANCELLED';
     if (raw === 'PAID' || raw === 'PAGO') return 'PAID';
     return 'PENDING';
   };

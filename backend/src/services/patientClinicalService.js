@@ -148,7 +148,7 @@ const sumLinkedAccountPayments = (account = {}) => {
   const transactions = Array.isArray(account?.transactions) ? account.transactions : [];
   return roundMoney(
     transactions
-      .filter((item) => cleanText(item?.type).toUpperCase() === 'PAYMENT')
+      .filter((item) => ['PAYMENT', 'ADJUSTMENT'].includes(cleanText(item?.type).toUpperCase()))
       .reduce((acc, item) => acc + roundMoney(item?.amount ?? 0), 0),
   );
 };
@@ -396,6 +396,30 @@ const syncProcedureFinancialAccount = async ({
       clinicId,
       payload: financePayload,
     });
+
+  const linkedAccountPaidAmount = linkedAccount ? Math.max(0, sumLinkedAccountPayments(linkedAccount)) : 0;
+  const linkedAccountStatus = cleanText(linkedAccount?.paymentStatus || linkedAccount?.status).toUpperCase();
+  const mustReverseLinkedPayment = linkedAccount
+    && paymentStatus !== 'PAID'
+    && (
+      linkedAccountPaidAmount > 0
+      || linkedAccountStatus === 'PAID'
+      || linkedAccountStatus === 'PARTIAL'
+    );
+
+  if (mustReverseLinkedPayment) {
+    financeAccount = await financialService.reverseFinancialAccountPayments({
+      clinicId,
+      accountId: financeAccount.id,
+      metadata: {
+        origin: PROCEDURE_FINANCIAL_SOURCE,
+        category: PROCEDURE_FINANCIAL_CATEGORY,
+        procedureId: cleanText(procedureRow?.externalId || payload?.id || payload?.externalId),
+        patientProcedureId: cleanText(procedureRow?.id),
+        reason: 'procedure_status_reset',
+      },
+    });
+  }
 
   const previousPaidAmount = sumLinkedAccountPayments(linkedAccount);
   const shouldRegisterAutomaticPayment = allowPaymentRegistration

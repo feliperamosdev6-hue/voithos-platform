@@ -13,7 +13,7 @@ const createFinanceService = ({
 }) => {
   const DEFAULT_CLINIC_ID = 'defaultClinic';
   const PAYMENT_METHODS = new Set(['PIX', 'CREDIT', 'DEBIT', 'CASH', 'BOLETO', 'TRANSFER', 'OTHER']);
-  const PAYMENT_STATUS = new Set(['PAID', 'PENDING', 'CANCELLED']);
+  const PAYMENT_STATUS = new Set(['PAID', 'PENDING', 'CANCELLED', 'CANCELED']);
 
   const getCurrentUserSafe = () => (typeof getCurrentUser === 'function' ? (getCurrentUser() || null) : null);
   const getCurrentClinicId = () => String(getCurrentUserSafe()?.clinicId || DEFAULT_CLINIC_ID).trim() || DEFAULT_CLINIC_ID;
@@ -72,7 +72,7 @@ const createFinanceService = ({
     if (PAYMENT_STATUS.has(raw)) return raw;
     if (raw === 'PAGO') return 'PAID';
     if (raw === 'PENDENTE') return 'PENDING';
-    if (raw === 'CANCELADO') return 'CANCELLED';
+    if (raw === 'CANCELED' || raw === 'CANCELADO') return 'CANCELLED';
     return 'PAID';
   };
 
@@ -325,6 +325,8 @@ const createFinanceService = ({
     const paidAt = paymentStatus === 'PAID'
       ? (payload.paidAt || base?.paidAt || nowIso)
       : null;
+    const paidAmount = paymentStatus === 'PAID' ? valor : 0;
+    const remainingAmount = paymentStatus === 'PENDING' ? valor : 0;
 
     const entry = {
       ...(base || {}),
@@ -339,6 +341,8 @@ const createFinanceService = ({
       paymentMethod,
       paymentStatus,
       paidAt,
+      paidAmount,
+      remainingAmount,
       dueDate: vencimento || null,
       vencimento: vencimento || null,
       installments: payload.installments ?? base?.installments ?? null,
@@ -387,6 +391,8 @@ const createFinanceService = ({
       paymentMethod: requestedMethod,
       metodoPagamento: paymentMethodToFinance(requestedMethod),
       paidAt,
+      paidAmount: Number(list[idx]?.valor || list[idx]?.totalAmount || 0) || 0,
+      remainingAmount: 0,
       notes: notes || list[idx]?.notes || '',
       updatedAt: nowIso,
       updatedBy: user?.id || '',

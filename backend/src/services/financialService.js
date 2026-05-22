@@ -20,7 +20,7 @@ const toDateOnly = (value, fallback = '') => {
 };
 
 const cleanText = (value) => String(value || '').trim();
-const PAYMENT_TRANSACTION_TYPES = new Set(['PAYMENT']);
+const BALANCE_TRANSACTION_TYPES = new Set(['PAYMENT', 'ADJUSTMENT']);
 const PAYMENT_METHOD_DETAILS = new Set(['PIX', 'CREDIT', 'DEBIT', 'CASH', 'BOLETO', 'TRANSFER', 'OTHER']);
 
 const normalizeAccountStatus = (value) => {
@@ -209,7 +209,7 @@ const resolveProcedureLink = async ({ clinicId, patientId, procedureId }) => {
 };
 
 const sumTransactionAmount = (transactions = [], predicate = () => true) => roundMoney(transactions
-  .filter((item) => PAYMENT_TRANSACTION_TYPES.has(item.type) && predicate(item))
+  .filter((item) => BALANCE_TRANSACTION_TYPES.has(cleanText(item?.type).toUpperCase()) && predicate(item))
   .reduce((acc, item) => acc + roundMoney(item.amount), 0));
 
 const deriveInstallmentSnapshot = (row = {}, transactions = []) => {
@@ -217,7 +217,7 @@ const deriveInstallmentSnapshot = (row = {}, transactions = []) => {
   const due = dueDate ? new Date(`${dueDate}T23:59:59.999Z`) : null;
   const now = new Date();
   const amount = roundMoney(row.amount);
-  const paidAmount = sumTransactionAmount(transactions, (item) => item.installmentId === row.id);
+  const paidAmount = Math.max(0, sumTransactionAmount(transactions, (item) => item.installmentId === row.id));
   const remainingAmount = roundMoney(Math.max(0, amount - paidAmount));
 
   let derivedStatus = row.status;
@@ -262,7 +262,7 @@ const mapAccountToLegacy = (row = {}) => {
   const installments = Array.isArray(row.installments)
     ? row.installments.map((item) => deriveInstallmentSnapshot(item, row.transactions || []))
     : [];
-  const paidAmount = sumTransactionAmount(row.transactions || []);
+  const paidAmount = Math.max(0, sumTransactionAmount(row.transactions || []));
   const remainingAmount = roundMoney(Math.max(0, roundMoney(row.totalAmount || 0) - paidAmount));
   const paymentStatus = summarizeAccountStatus({
     installments,
@@ -322,7 +322,7 @@ const summarizeAccountStatus = ({ installments = [], transactions = [], totalAmo
   const activeInstallments = installments.filter((item) => item.status !== 'CANCELED');
   const activeAmount = roundMoney(activeInstallments.reduce((acc, item) => acc + roundMoney(item.amount), 0));
   const referenceAmount = activeAmount > 0 ? activeAmount : roundMoney(totalAmount);
-  const paidAmount = sumTransactionAmount(transactions);
+  const paidAmount = Math.max(0, sumTransactionAmount(transactions));
   const canceled = installments.length > 0 && activeInstallments.length === 0;
   if (canceled) return 'CANCELED';
   if (referenceAmount > 0 && paidAmount >= referenceAmount) return 'PAID';
@@ -1211,6 +1211,88 @@ const financialService = {
       account: row,
     });
     return { success: true };
+  },
+
+  reverseFinancialAccountPayments: async ({ clinicId, accountId, metadata = {} }) => {
+    const normalizedClinicId = cleanText(clinicId);
+    const normalizedAccountId = cleanText(accountId);
+    const row = await financialRepository.findFinancialAccountByIdAndClinic({
+      clinicId: normalizedClinicId,
+      accountId: normalizedAccountId,
+    });
+    if (!row) throw new AppError(404, 'FINANCIAL_ACCOUNT_NOT_FOUND', 'Financial account not found.');
+
+    const transactions = Array.isArray(row.transactions) ? row.transactions : [];
+    const reversalMethod = normalizeTransactionMethod(metadata.paymentMethod || row.paymentMethod || 'OTHER');
+    let installmentReversedAmount = 0;
+
+    for (const installment of (row.installments || [])) {
+      const installmentPaidAmount = Math.max(0, sumTransactionAmount(transactions, (item) => cleanText(item?.installmentId) === cleanText(installment.id)));
+      if (installmentPaidAmount > 0) {
+        await financialRepository.createTransaction({
+          clinicId: normalizedClinicId,
+          accountId: normalizedAccountId,
+          installmentId: installment.id,
+          type: 'ADJUSTMENT',
+          amount: -installmentPaidAmount,
+          method: reversalMethod,
+          metadata: {
+            ...(metadata && typeof metadata === 'object' ? metadata : {}),
+            reversal: true,
+            source: cleanText(metadata?.source) || 'procedure_payment_reversal',
+            reversedAt: new Date().toISOString(),
+          },
+        });
+        installmentReversedAmount = roundMoney(installmentReversedAmount + installmentPaidAmount);
+      }
+
+      await financialRepository.updateInstallment({
+        installmentId: installment.id,
+        clinicId: normalizedClinicId,
+        data: {
+          status: 'PENDING',
+          paidAt: null,
+        },
+      });
+    }
+
+    const totalPaidAmount = Math.max(0, sumTransactionAmount(transactions));
+    const accountLevelPaidAmount = roundMoney(Math.max(0, totalPaidAmount - installmentReversedAmount));
+    if (accountLevelPaidAmount > 0) {
+      await financialRepository.createTransaction({
+        clinicId: normalizedClinicId,
+        accountId: normalizedAccountId,
+        installmentId: null,
+        type: 'ADJUSTMENT',
+        amount: -accountLevelPaidAmount,
+        method: reversalMethod,
+        metadata: {
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
+          reversal: true,
+          source: cleanText(metadata?.source) || 'procedure_payment_reversal',
+          reversedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    const existingMetadata = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+    const updated = await financialRepository.updateFinancialAccount({
+      id: normalizedAccountId,
+      clinicId: normalizedClinicId,
+      data: {
+        status: 'OPEN',
+        paymentMethod: null,
+        metadata: {
+          ...existingMetadata,
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
+          paymentStatus: 'PENDING',
+          paidAt: null,
+          paymentReversedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    return mapAccountToLegacy(updated);
   },
 
   registerPayment: async ({ clinicId, accountId, installmentId, amount, method, paidAt, metadata = {} }) => {

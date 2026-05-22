@@ -381,6 +381,8 @@ const createServicesService = ({
     const { filePath, patient } = await ensurePatientForCurrentClinic(prontuario);
     if (!Array.isArray(patient.servicos)) patient.servicos = [];
     const currentUser = getCurrentUserSafe();
+    const idx = patient.servicos.findIndex((s) => s.id === service.id);
+    if (idx === -1) throw new Error('Servico nao encontrado.');
 
     if (currentUser?.tipo === 'dentista') {
       const previousDentistaId = String(patient.servicos[idx]?.dentistaId || '');
@@ -391,9 +393,6 @@ const createServicesService = ({
         throw new Error('Paciente pertence a outro dentista. Atualizacao nao permitida.');
       }
     }
-
-    const idx = patient.servicos.findIndex((s) => s.id === service.id);
-    if (idx === -1) throw new Error('Servico nao encontrado.');
 
     const nowIso = new Date().toISOString();
     const previous = patient.servicos[idx] || {};
