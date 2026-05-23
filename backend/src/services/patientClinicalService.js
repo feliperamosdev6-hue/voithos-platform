@@ -39,6 +39,13 @@ const normalizeProcedureNameCandidate = (value) => {
   if (!text) return '';
   return text.toLowerCase() === 'procedimento' ? '' : text;
 };
+const resolvePersistedProcedureType = (...candidates) => {
+  for (const candidate of candidates) {
+    const value = normalizeProcedureNameCandidate(candidate);
+    if (value) return value;
+  }
+  return 'Procedimento';
+};
 const resolveProcedureName = (...candidates) => {
   for (const candidate of candidates) {
     const value = normalizeProcedureNameCandidate(candidate);
@@ -565,9 +572,14 @@ const mapProcedureToLegacy = (row = {}) => {
     clinicId: row.clinicId,
     appointmentId: row.appointmentId || payload.appointmentId || '',
     codigo: row.procedureCode || payload.codigo || payload.code || '',
+    procedureName: resolvedName,
+    serviceName: resolveProcedureName(payload.serviceName, payload.procedureName, payload.serviceLabel, resolvedName),
+    serviceLabel: resolveProcedureName(payload.serviceLabel, payload.procedureName, payload.serviceName, resolvedName),
+    name: resolveProcedureName(payload.name, resolvedName),
     nome: resolvedName,
-    tipo: cleanText(payload.tipo || row.name || payload.nome || payload.name || resolvedName),
-    procedimento: cleanText(payload.procedimento || payload.name || resolvedName),
+    tipo: resolvePersistedProcedureType(payload.tipo, row.name, payload.nome, payload.name, resolvedName),
+    procedimento: resolveProcedureName(payload.procedimento, payload.name, payload.nome, resolvedName),
+    description: cleanText(payload.description || linkedFinance.description || (resolvedName ? `Procedimento: ${resolvedName}` : '')),
     status: resolvedStatus,
     estado: payload.estado || resolvedStatus,
     situacao: payload.situacao || resolvedStatus,
@@ -741,8 +753,14 @@ const patientClinicalService = {
       ...mergedPayload,
       id: externalId,
       externalId,
+      procedureName: resolvedName,
+      serviceName: resolveProcedureName(mergedPayload.serviceName, mergedPayload.procedureName, mergedPayload.serviceLabel, mergedPayload.name, resolvedName),
+      serviceLabel: resolveProcedureName(mergedPayload.serviceLabel, mergedPayload.procedureName, mergedPayload.serviceName, mergedPayload.name, resolvedName),
+      name: resolveProcedureName(mergedPayload.name, resolvedName),
       nome: resolvedName,
-      tipo: cleanText(mergedPayload.tipo || mergedPayload.nome || mergedPayload.procedimento || resolvedName),
+      tipo: resolvePersistedProcedureType(mergedPayload.tipo, mergedPayload.nome, mergedPayload.procedimento, mergedPayload.name, resolvedName),
+      procedimento: resolveProcedureName(mergedPayload.procedimento, mergedPayload.name, mergedPayload.nome, resolvedName),
+      description: cleanText(mergedPayload.description || existing?.financialSnapshot?.description || (resolvedName ? `Procedimento: ${resolvedName}` : '')),
       dentes: resolvedTeeth,
       dente: cleanText(mergedPayload.dente || resolvedTeeth[0] || ''),
       faces: Array.isArray(mergedPayload.faces) ? mergedPayload.faces.map((item) => cleanText(item)).filter(Boolean) : [],

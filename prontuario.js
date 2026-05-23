@@ -1893,13 +1893,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const registeredIso = parseDateOnlyInputToIso(procFullRegisteredAt?.value || '');
     const faces = procFullFaces.filter((b) => b.checked).map((b) => b.value);
     const nomeProcedimento = (procFullName?.value || '').trim();
+    const procedureName = nomeProcedimento || resolveProcedureDisplayName(base);
     const financeiroBase = base?.financeiro || {};
     const paymentStatus = getSelectedPaymentStatus();
     const paidAtManual = parseDateTimeLocalToIso(procPaymentPaidAt?.value || '');
 
     return {
-      tipo: nomeProcedimento || base.tipo || base.nome || base.procedimento,
-      nome: nomeProcedimento || base.nome || base.tipo || base.procedimento,
+      procedureName,
+      serviceName: procedureName,
+      serviceLabel: procedureName,
+      name: procedureName,
+      tipo: procedureName || base.tipo || base.nome || base.procedimento,
+      nome: procedureName || base.nome || base.tipo || base.procedimento,
+      procedimento: procedureName || base.procedimento || base.nome || base.tipo,
+      description: base.description || base.descricao || (procedureName ? `Procedimento: ${procedureName}` : ''),
       dentes: parseDentesInput(procFullDentes?.value || ''),
       faces,
       dentistaNome: (procFullProfissional?.value || '').trim() || base.dentistaNome || base.dentista || '',
@@ -1912,6 +1919,9 @@ document.addEventListener('DOMContentLoaded', () => {
         : null),
       financeiro: {
         ...financeiroBase,
+        procedureName,
+        serviceLabel: procedureName,
+        description: financeiroBase.description || (procedureName ? `Procedimento: ${procedureName}` : ''),
         paymentStatus,
         paymentMethod: normalizePaymentMethodUpper(procPaymentMethod?.value || financeiroBase.paymentMethod || base.paymentMethod || 'PIX'),
         paidAt: paymentStatus === 'PAID'
