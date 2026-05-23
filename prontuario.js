@@ -1030,22 +1030,68 @@ document.addEventListener('DOMContentLoaded', () => {
     text = text.replace(/^procedimento:\s*/i, '').trim();
     return text;
   };
-  const resolveServiceDisplayName = (service = {}) => {
-    const financeiro = service?.financeiro || {};
-    return String(
-      service?.tipo
-      || service?.nome
-      || service?.procedimento
-      || service?.name
-      || service?.procedureName
-      || service?.serviceLabel
-      || service?.serviceName
-      || financeiro?.procedureName
-      || financeiro?.serviceLabel
-      || extractProcedureNameFromDescription(financeiro?.description)
-      || ''
-    ).trim();
+  const isPlainRecord = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+  const mergeProcedureNestedRecord = (baseValue, patchValue) => {
+    if (!isPlainRecord(baseValue)) return isPlainRecord(patchValue) ? { ...patchValue } : patchValue;
+    if (!isPlainRecord(patchValue)) return patchValue;
+    return { ...baseValue, ...patchValue };
   };
+  const mergeProcedureRecord = (originalProcedure = {}, patchProcedure = {}) => {
+    const merged = {
+      ...(originalProcedure || {}),
+      ...(patchProcedure || {}),
+    };
+    if (originalProcedure?.financeiro !== undefined || patchProcedure?.financeiro !== undefined) {
+      merged.financeiro = mergeProcedureNestedRecord(originalProcedure?.financeiro || {}, patchProcedure?.financeiro || {});
+    }
+    if (originalProcedure?.metadata !== undefined || patchProcedure?.metadata !== undefined) {
+      merged.metadata = mergeProcedureNestedRecord(originalProcedure?.metadata || {}, patchProcedure?.metadata || {});
+    }
+    return merged;
+  };
+  const updateProcedureInCurrentPatient = (procedureId, nextProcedure = {}) => {
+    if (!procedureId || !Array.isArray(currentPatient?.servicos)) return null;
+    const index = currentPatient.servicos.findIndex((item) => String(item?.id || '') === String(procedureId));
+    if (index === -1) return null;
+    const merged = mergeProcedureRecord(currentPatient.servicos[index], nextProcedure);
+    currentPatient.servicos[index] = merged;
+    return merged;
+  };
+  const normalizeProcedureDisplayCandidate = (value, { fromDescription = false } = {}) => {
+    const normalized = fromDescription
+      ? extractProcedureNameFromDescription(value)
+      : String(value || '').trim();
+    if (!normalized) return '';
+    if (normalized.toLowerCase() === 'procedimento') return '';
+    return normalized;
+  };
+  const resolveProcedureDisplayName = (procedure = {}) => {
+    const financeiro = procedure?.financeiro && typeof procedure.financeiro === 'object' ? procedure.financeiro : {};
+    const metadata = procedure?.metadata && typeof procedure.metadata === 'object' ? procedure.metadata : {};
+    const candidates = [
+      normalizeProcedureDisplayCandidate(procedure?.procedureName),
+      normalizeProcedureDisplayCandidate(procedure?.serviceName),
+      normalizeProcedureDisplayCandidate(procedure?.serviceLabel),
+      normalizeProcedureDisplayCandidate(procedure?.name),
+      normalizeProcedureDisplayCandidate(procedure?.nome),
+      normalizeProcedureDisplayCandidate(procedure?.procedimento),
+      normalizeProcedureDisplayCandidate(procedure?.tipo),
+      normalizeProcedureDisplayCandidate(procedure?.description, { fromDescription: true }),
+      normalizeProcedureDisplayCandidate(financeiro?.procedureName),
+      normalizeProcedureDisplayCandidate(financeiro?.serviceLabel),
+      normalizeProcedureDisplayCandidate(financeiro?.description, { fromDescription: true }),
+      normalizeProcedureDisplayCandidate(metadata?.procedureName),
+      normalizeProcedureDisplayCandidate(metadata?.serviceName),
+      normalizeProcedureDisplayCandidate(metadata?.description, { fromDescription: true }),
+    ].filter(Boolean);
+    if (candidates.length) return candidates[0];
+    console.warn('[PRONTUARIO] procedure_display_name_fallback', {
+      procedureId: String(procedure?.id || procedure?._id || '').trim(),
+      patientId: String(currentPatient?.id || currentPatient?._id || currentPatient?.prontuario || '').trim(),
+    });
+    return 'Procedimento';
+  };
+  const resolveServiceDisplayName = (service = {}) => resolveProcedureDisplayName(service);
   const resolveFinanceProcedureLabel = (entry = {}) => {
     const metadata = entry?.metadata && typeof entry.metadata === 'object' ? entry.metadata : {};
     return String(
@@ -1114,14 +1160,30 @@ document.addEventListener('DOMContentLoaded', () => {
     return 'AG_PAGAMENTO';
   };
   const applyProcedureRowWorkflowStatus = async (serviceId, nextValue) => {
-    const service = findServiceById(serviceId);
-    if (!service || !currentPatient?.prontuario) return;
+    const originalProcedure = findServiceById(serviceId);
+    if (!originalProcedure || !currentPatient?.prontuario) return;
     const option = String(nextValue || '').toUpperCase();
-    const baseFinanceiro = service.financeiro || {};
-    let financeEntryId = baseFinanceiro.financeEntryId || service.financeiroId || '';
-    const currentMethod = normalizePaymentMethodUpper(baseFinanceiro.paymentMethod || service.paymentMethod || service.metodoPagamento || 'PIX');
-    const procedureName = resolveServiceDisplayName(service) || 'Procedimento';
+    const baseFinanceiro = originalProcedure.financeiro || {};
+    let financeEntryId = baseFinanceiro.financeEntryId || originalProcedure.financeiroId || '';
+    const currentMethod = normalizePaymentMethodUpper(
+      baseFinanceiro.paymentMethod
+      || originalProcedure.paymentMethod
+      || originalProcedure.metodoPagamento
+      || 'PIX'
+    );
+    const procedureName = resolveProcedureDisplayName(originalProcedure);
     const servicePatch = {
+      procedureName,
+      serviceName: originalProcedure.serviceName || procedureName,
+      serviceLabel: originalProcedure.serviceLabel || procedureName,
+      name: originalProcedure.name || originalProcedure.nome || procedureName,
+      nome: originalProcedure.nome || originalProcedure.name || procedureName,
+      procedimento: originalProcedure.procedimento || procedureName,
+      tipo: originalProcedure.tipo || procedureName,
+      description: originalProcedure.description || originalProcedure.descricao || `Procedimento: ${procedureName}`,
+      metadata: {
+        ...(originalProcedure.metadata || {}),
+      },
       financeiro: {
         ...baseFinanceiro,
         procedureName,
@@ -1147,14 +1209,14 @@ document.addEventListener('DOMContentLoaded', () => {
       servicePatch.financeiro.paidAt = baseFinanceiro.paidAt || nowIso();
     } else if (option === 'PAGO') {
       servicePatch.status = 'realizado';
-      servicePatch.dataRealizacao = service.dataRealizacao || service.finishedAt || service.finalizadoEm || nowIso();
+      servicePatch.dataRealizacao = originalProcedure.dataRealizacao || originalProcedure.finishedAt || originalProcedure.finalizadoEm || nowIso();
       servicePatch.statusFinanceiroProcedimento = 'finalizado';
       servicePatch.paymentStatus = 'PAID';
       servicePatch.financeiro.paymentStatus = 'PAID';
       servicePatch.financeiro.paidAt = baseFinanceiro.paidAt || nowIso();
     } else if (option === 'REALIZADO_AG_PAGAMENTO') {
       servicePatch.status = 'realizado';
-      servicePatch.dataRealizacao = service.dataRealizacao || service.finishedAt || service.finalizadoEm || nowIso();
+      servicePatch.dataRealizacao = originalProcedure.dataRealizacao || originalProcedure.finishedAt || originalProcedure.finalizadoEm || nowIso();
       servicePatch.statusFinanceiroProcedimento = 'finalizado';
       servicePatch.paymentStatus = 'PENDING';
       servicePatch.financeiro.paymentStatus = 'PENDING';
@@ -1172,10 +1234,12 @@ document.addEventListener('DOMContentLoaded', () => {
         },
       });
 
-      const savedService = updateResult?.service || findServiceById(serviceId) || service;
+      const savedService = mergeProcedureRecord(originalProcedure, updateResult?.service || servicePatch);
+      updateProcedureInCurrentPatient(serviceId, savedService);
       financeEntryId = updateResult?.financeId || savedService?.financeiroId || savedService?.financeiro?.financeEntryId || financeEntryId;
 
       emitFinanceUpdated();
+      renderProcedimentos(currentPatient.servicos, getActiveProcedimentosFilter());
       await refreshProcedimentos();
       await refreshPatientFinance();
       buildProcedureToast('Status do procedimento atualizado.');
