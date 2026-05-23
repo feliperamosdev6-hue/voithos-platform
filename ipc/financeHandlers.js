@@ -121,6 +121,20 @@ const registerFinanceHandlers = ({
     const totalAmount = Number(
       row?.valor ?? row?.totalAmount ?? row?.amount ?? row?.grossAmount ?? 0
     ) || 0;
+    const installmentSchedule = Array.isArray(row?.installments)
+      ? row.installments
+      : (Array.isArray(row?.metadata?.schedule) ? row.metadata.schedule : []);
+    const installmentsCount = Math.max(
+      1,
+      Number(
+        row?.installmentsCount
+        ?? row?.parcelas
+        ?? (Array.isArray(row?.installments) ? row.installments.length : row?.installments)
+        ?? row?.metadata?.installmentsCount
+        ?? installmentSchedule.length
+        ?? 1
+      ) || 1,
+    );
     const remainingAmount = row?.remainingAmount !== undefined && row?.remainingAmount !== null
       ? (Number(row.remainingAmount) || 0)
       : (paymentStatus === 'PAID' ? 0 : totalAmount);
@@ -144,6 +158,9 @@ const registerFinanceHandlers = ({
       prontuario: cleanText(row?.prontuario || row?.patientId),
       procedureId: cleanText(row?.procedureId || row?.servicoId),
       servicoId: cleanText(row?.servicoId || row?.procedureId),
+      installmentSchedule,
+      installments: installmentsCount,
+      installmentsCount,
     };
   };
   const logCentral = (action, payload = {}) => {

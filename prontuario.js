@@ -1326,9 +1326,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const key = normalizePaymentMethodUpper(value || 'OTHER');
     return key === 'CREDIT' || key === 'BOLETO' || key === 'OTHER';
   };
+  const getPatientFinanceInstallmentsCount = (item = {}) => {
+    return Math.max(
+      1,
+      Number(
+        item.installmentsCount
+        ?? (Array.isArray(item.installments) ? item.installments.length : item.installments)
+        ?? item.parcelas
+        ?? item.metadata?.installmentsCount
+        ?? item.installmentSchedule?.length
+        ?? 1
+      ) || 1,
+    );
+  };
   const getPatientFinanceInstallmentsLabel = (item = {}) => {
     const method = normalizePaymentMethodUpper(item.paymentMethod || item.metodoPagamento || 'OTHER');
-    const installments = Math.max(1, Number(item.installments || 0) || 1);
+    const installments = getPatientFinanceInstallmentsCount(item);
     if (method === 'CREDIT') return installments > 1 ? `${installments}x no credito` : 'Credito a vista';
     if (method === 'BOLETO') return installments > 1 ? `${installments} boletos` : '1 boleto';
     if (method === 'OTHER') return installments > 1 ? `${installments} parcelas` : 'Pagamento unico';
@@ -1448,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const method = normalizePaymentMethodUpper(row.paymentMethod || row.metodoPagamento || 'OTHER');
     if (patientPaymentMethod) patientPaymentMethod.value = method;
     if (patientPaymentDueDate) patientPaymentDueDate.value = toDateOnlyValue(row.dueDate || row.vencimento || '');
-    const installments = Math.max(1, Number(row.installments || 0) || 1);
+    const installments = getPatientFinanceInstallmentsCount(row);
     if (patientPaymentInstallments) patientPaymentInstallments.value = String(Math.min(12, installments));
     setPatientPaymentMode(installments > 1 ? 'installment' : 'single');
     patientPaymentModal.classList.add('open');
@@ -1695,7 +1708,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const procedureLabel = resolveFinanceProcedureLabel(item);
       const installmentsHelp = getPatientFinanceInstallmentsLabel(item);
       const supportsInstallments = patientFinanceMethodSupportsInstallments(method);
-      const installmentsValue = Math.max(1, Number(item.installments || 0) || 1);
+      const installmentsValue = getPatientFinanceInstallmentsCount(item);
       const row = document.createElement('div');
       row.className = 'procedimentos-row';
       row.innerHTML = `
@@ -3900,7 +3913,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const nextMethod = normalizePaymentMethodUpper(field?.value || row.paymentMethod || row.metodoPagamento || 'PIX');
     const supportsInstallments = patientFinanceMethodSupportsInstallments(nextMethod);
     const nextInstallments = supportsInstallments
-      ? Math.max(1, Number((installmentsField?.value) || row.installments || 1) || 1)
+      ? Math.max(1, Number((installmentsField?.value) || getPatientFinanceInstallmentsCount(row) || 1) || 1)
       : null;
     try {
       await financeApi.update?.({
