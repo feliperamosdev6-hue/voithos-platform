@@ -129,8 +129,8 @@ const registerFinanceHandlers = ({
       Number(
         row?.installmentsCount
         ?? row?.parcelas
-        ?? (Array.isArray(row?.installments) ? row.installments.length : row?.installments)
         ?? row?.metadata?.installmentsCount
+        ?? (Array.isArray(row?.installments) ? row.installments.length : row?.installments)
         ?? installmentSchedule.length
         ?? 1
       ) || 1,
@@ -740,6 +740,17 @@ const registerFinanceHandlers = ({
   ipcMain.handle('finance-add', async (_event, lanc) => {
     requireAccess({ roles: ['admin', 'dentista'], perms: ['finance.view'] });
     if (!isCentralEnabled()) throw new Error('Financeiro central indisponivel.');
+    const recordOnlyInstallmentsCount = lanc?.recordOnlyInstallmentsCount === true;
+    const installmentsCount = Math.max(
+      1,
+      Number(
+        lanc?.installmentsCount
+        ?? lanc?.metadata?.installmentsCount
+        ?? (Array.isArray(lanc?.installments) ? lanc.installments.length : lanc?.installments)
+        ?? lanc?.parcelas
+        ?? 1
+      ) || 1,
+    );
     const procedureLabel = resolveProcedureLabel(lanc);
     const description = resolveProcedureDescription(lanc);
     const lancamento = await centralBackendAdapter.createFinancialAccount({
@@ -755,8 +766,10 @@ const registerFinanceHandlers = ({
         paymentMethod: lanc?.paymentMethod || lanc?.metodoPagamento || '',
         paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
         dueDate: lanc?.dueDate || lanc?.vencimento || lanc?.data || null,
-        installments: Array.isArray(lanc?.installments) ? lanc.installments : null,
-        installmentsCount: lanc?.installments ?? lanc?.parcelas ?? null,
+        installments: recordOnlyInstallmentsCount
+          ? null
+          : (Array.isArray(lanc?.installments) ? lanc.installments : null),
+        installmentsCount: recordOnlyInstallmentsCount ? null : installmentsCount,
         procedureId: lanc?.procedureId || lanc?.servicoId || '',
         appointmentId: lanc?.appointmentId || '',
         patientName: lanc?.paciente || '',
@@ -765,6 +778,7 @@ const registerFinanceHandlers = ({
         prontuario: lanc?.prontuario || lanc?.patientId || '',
         metadata: {
           ...(lanc?.metadata && typeof lanc.metadata === 'object' ? lanc.metadata : {}),
+          installmentsCount,
           description,
           procedureName: procedureLabel,
           serviceLabel: procedureLabel,
@@ -784,6 +798,17 @@ const registerFinanceHandlers = ({
     requireAccess({ roles: ['admin', 'dentista'], perms: ['finance.view'] });
     if (!isCentralEnabled()) throw new Error('Financeiro central indisponivel.');
     if (!lanc?.id) throw new Error('ID do lancamento e obrigatorio.');
+    const recordOnlyInstallmentsCount = lanc?.recordOnlyInstallmentsCount === true;
+    const installmentsCount = Math.max(
+      1,
+      Number(
+        lanc?.installmentsCount
+        ?? lanc?.metadata?.installmentsCount
+        ?? (Array.isArray(lanc?.installments) ? lanc.installments.length : lanc?.installments)
+        ?? lanc?.parcelas
+        ?? 1
+      ) || 1,
+    );
     const procedureLabel = resolveProcedureLabel(lanc);
     const description = resolveProcedureDescription(lanc);
     const lancamento = await centralBackendAdapter.updateFinancialAccount({
@@ -796,11 +821,21 @@ const registerFinanceHandlers = ({
         category: lanc.categoria,
         source: lanc.origem,
         dueDate: lanc.dueDate || lanc.vencimento || lanc.data || null,
+        ...(recordOnlyInstallmentsCount
+          ? {
+              installments: undefined,
+              installmentsCount: undefined,
+              parcelas: undefined,
+            }
+          : {
+              installmentsCount,
+            }),
         paymentMethodDetail: lanc?.paymentMethodDetail || lanc?.paymentMethod || lanc?.metodoPagamento || '',
         procedureName: procedureLabel,
         serviceLabel: procedureLabel,
         metadata: {
           ...(lanc?.metadata && typeof lanc.metadata === 'object' ? lanc.metadata : {}),
+          installmentsCount,
           description,
           procedureName: procedureLabel,
           serviceLabel: procedureLabel,

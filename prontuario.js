@@ -1339,9 +1339,9 @@ document.addEventListener('DOMContentLoaded', () => {
       1,
       Number(
         item.installmentsCount
+        ?? item.metadata?.installmentsCount
         ?? (Array.isArray(item.installments) ? item.installments.length : item.installments)
         ?? item.parcelas
-        ?? item.metadata?.installmentsCount
         ?? item.installmentSchedule?.length
         ?? 1
       ) || 1,
@@ -3929,7 +3929,11 @@ document.addEventListener('DOMContentLoaded', () => {
         paymentMethod: nextMethod,
         paymentMethodDetail: nextMethod,
         metodoPagamento: paymentMethodToFinance(nextMethod),
-        installments: nextInstallments,
+        recordOnlyInstallmentsCount: true,
+        installmentsCount: nextInstallments,
+        metadata: {
+          installmentsCount: nextInstallments,
+        },
       });
       buildProcedureToast(`Pagamento atualizado: ${paymentMethodLabel(nextMethod)}${nextInstallments && nextInstallments > 1 ? ` (${nextInstallments}x)` : ''}.`);
       emitFinanceUpdated();
@@ -4293,7 +4297,11 @@ document.addEventListener('DOMContentLoaded', () => {
         metodoPagamento: paymentMethodToFinance(paymentMethod),
         dueDate: dueDate || null,
         vencimento: dueDate || null,
-        installments: installments > 1 ? installments : 1,
+        recordOnlyInstallmentsCount: true,
+        installmentsCount: installments > 1 ? installments : 1,
+        metadata: {
+          installmentsCount: installments > 1 ? installments : 1,
+        },
         patientId: currentPatient.id || currentPatient._id || '',
         prontuario: currentPatient.prontuario || '',
         paciente: currentPatient.nome || currentPatient.name || '',
