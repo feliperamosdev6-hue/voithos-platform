@@ -76,17 +76,26 @@ const registerServicesHandlers = ({
     text = text.replace(/^procedimento:\s*/i, '').trim();
     return text;
   };
-  const resolveProcedureName = (service = {}) => cleanText(
-    service?.tipo
-    || service?.nome
-    || service?.procedimento
-    || service?.name
-    || service?.procedureName
-    || service?.serviceName
-    || service?.serviceLabel
-    || service?.financeiro?.procedureName
-    || service?.financeiro?.serviceLabel
-    || extractProcedureNameFromDescription(service?.financeiro?.description)
+  const normalizeProcedureNameCandidate = (value) => {
+    const text = cleanText(value);
+    if (!text) return '';
+    return text.toLowerCase() === 'procedimento' ? '' : text;
+  };
+  const resolveProcedureName = (service = {}) => (
+    normalizeProcedureNameCandidate(service?.procedureName)
+    || normalizeProcedureNameCandidate(service?.serviceName)
+    || normalizeProcedureNameCandidate(service?.serviceLabel)
+    || normalizeProcedureNameCandidate(service?.name)
+    || normalizeProcedureNameCandidate(service?.nome)
+    || normalizeProcedureNameCandidate(service?.procedimento)
+    || normalizeProcedureNameCandidate(service?.description)
+    || normalizeProcedureNameCandidate(service?.financeiro?.procedureName)
+    || normalizeProcedureNameCandidate(service?.financeiro?.serviceLabel)
+    || normalizeProcedureNameCandidate(extractProcedureNameFromDescription(service?.financeiro?.description))
+    || normalizeProcedureNameCandidate(service?.metadata?.procedureName)
+    || normalizeProcedureNameCandidate(service?.metadata?.serviceName)
+    || normalizeProcedureNameCandidate(extractProcedureNameFromDescription(service?.metadata?.description))
+    || normalizeProcedureNameCandidate(service?.tipo)
   );
   const resolveProcedureFinanceDescription = (service = {}) => {
     const stored = cleanText(service?.financeiro?.description);
@@ -976,6 +985,7 @@ const registerServicesHandlers = ({
     let financeId = service.financeiroId || service.financeiroLancamentoId || service?.financeiro?.financeEntryId || '';
     let financeCreated = false;
     let patient = null;
+    let baseProcedure = null;
 
     const financeRelevantKeys = new Set([
       'status',
@@ -1009,6 +1019,7 @@ const registerServicesHandlers = ({
       const sourceData = await loadProceduresFromSource(prontuario);
       patient = sourceData.patient;
       const base = (Array.isArray(sourceData.procedures) ? sourceData.procedures : []).find((s) => String(s.id || '') === String(service.id));
+      baseProcedure = base || null;
       const merged = { ...(base || {}), ...(service || {}) };
       const allowFinance = merged.gerarFinanceiro !== false;
       const baseFinanceId = base?.financeiro?.financeEntryId || base?.financeiroId || base?.financeiroLancamentoId || '';
@@ -1053,7 +1064,8 @@ const registerServicesHandlers = ({
       }
     }
 
-    const payloadProcedureName = resolveProcedureName(service);
+    const payloadProcedureContext = { ...(baseProcedure || {}), ...(service || {}) };
+    const payloadProcedureName = resolveProcedureName(payloadProcedureContext);
     const payload = financeId
       ? {
           ...service,
@@ -1062,9 +1074,11 @@ const registerServicesHandlers = ({
           financeiro: {
             ...(service.financeiro || {}),
             financeEntryId: financeId,
-            procedureName: payloadProcedureName,
-            serviceLabel: payloadProcedureName,
-            description: resolveProcedureFinanceDescription(service),
+            ...(payloadProcedureName ? {
+              procedureName: payloadProcedureName,
+              serviceLabel: payloadProcedureName,
+            } : {}),
+            description: resolveProcedureFinanceDescription(payloadProcedureContext),
             paymentStatus: normalizePaymentStatus(service?.financeiro?.paymentStatus || service.paymentStatus || 'PENDING'),
             paymentMethod: normalizePaymentMethod(service?.financeiro?.paymentMethod || service.paymentMethod || service.metodoPagamento || 'PIX'),
             paidAt: normalizePaymentStatus(service?.financeiro?.paymentStatus || service.paymentStatus || 'PENDING') === 'PAID'

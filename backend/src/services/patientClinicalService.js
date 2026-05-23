@@ -34,9 +34,14 @@ const extractProcedureNameFromDescription = (value) => {
   text = text.replace(/^procedimento:\s*/i, '').trim();
   return text;
 };
+const normalizeProcedureNameCandidate = (value) => {
+  const text = cleanText(value);
+  if (!text) return '';
+  return text.toLowerCase() === 'procedimento' ? '' : text;
+};
 const resolveProcedureName = (...candidates) => {
   for (const candidate of candidates) {
-    const value = cleanText(candidate);
+    const value = normalizeProcedureNameCandidate(candidate);
     if (value) return value;
   }
   return '';
@@ -537,14 +542,17 @@ const mapProcedureToLegacy = (row = {}) => {
   const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
   const linkedFinance = mapLinkedFinanceToLegacy(row, payload);
   const resolvedName = resolveProcedureName(
+    payload.procedureName,
+    payload.serviceName,
+    payload.serviceLabel,
     row.name,
-    payload.nome,
-    payload.tipo,
-    payload.procedimento,
     payload.name,
+    payload.nome,
+    payload.procedimento,
     linkedFinance.procedureName,
     linkedFinance.serviceLabel,
     extractProcedureNameFromDescription(linkedFinance.description),
+    payload.tipo,
   );
   const resolvedStatus = normalizeProcedureStatus(row.status || payload.status || payload.estado || payload.situacao || 'a-realizar');
   const resolvedTeeth = normalizeProcedureTeeth(payload.dentes || row.tooth || payload.dente);
@@ -710,16 +718,24 @@ const patientClinicalService = {
     const resolvedTeeth = normalizeProcedureTeeth(mergedPayload.dentes || existing?.tooth || mergedPayload.dente);
     const resolvedAmount = resolveProcedureSyncAmount({ payload: mergedPayload, procedureRow: existing || {} });
     const resolvedName = resolveProcedureName(
-      mergedPayload.nome,
-      mergedPayload.tipo,
-      mergedPayload.procedimento,
+      mergedPayload.procedureName,
+      mergedPayload.serviceName,
+      mergedPayload.serviceLabel,
       mergedPayload.name,
+      mergedPayload.nome,
+      mergedPayload.procedimento,
       existing?.name,
+      existingPayload?.procedureName,
+      existingPayload?.serviceName,
+      existingPayload?.serviceLabel,
+      existingPayload?.name,
       existingPayload?.nome,
-      existingPayload?.tipo,
       existingPayload?.procedimento,
       existing?.financialSnapshot?.procedureName,
+      existing?.financialSnapshot?.serviceLabel,
       extractProcedureNameFromDescription(existing?.financialSnapshot?.description),
+      mergedPayload.tipo,
+      existingPayload?.tipo,
     ) || 'Procedimento';
     const payloadWithIdentity = {
       ...mergedPayload,
