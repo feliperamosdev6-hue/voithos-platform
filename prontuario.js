@@ -1181,6 +1181,10 @@ document.addEventListener('DOMContentLoaded', () => {
       procedimento: originalProcedure.procedimento || procedureName,
       tipo: originalProcedure.tipo || procedureName,
       description: originalProcedure.description || originalProcedure.descricao || `Procedimento: ${procedureName}`,
+      dentes: Array.isArray(originalProcedure.dentes) ? [...originalProcedure.dentes] : parseDentesInput(originalProcedure.dente || ''),
+      dente: String(originalProcedure.dente || (Array.isArray(originalProcedure.dentes) ? originalProcedure.dentes[0] : '') || '').trim(),
+      denteFaces: String(originalProcedure.denteFaces || '').trim(),
+      faces: Array.isArray(originalProcedure.faces) ? [...originalProcedure.faces] : [],
       metadata: {
         ...(originalProcedure.metadata || {}),
       },
@@ -1251,8 +1255,12 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const formatDentes = (dentes) => {
-    if (!dentes || !Array.isArray(dentes) || dentes.length === 0) return '-';
-    return dentes.join(', ');
+    if (Array.isArray(dentes)) {
+      const list = dentes.map((item) => String(item || '').trim()).filter(Boolean);
+      return list.length ? list.join(', ') : '-';
+    }
+    const single = String(dentes || '').trim();
+    return single || '-';
   };
 
   const formatCurrency = (value) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -2073,7 +2081,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (procFinalizeDraftBtn) procFinalizeDraftBtn.hidden = procFinalizeMode === 'edit';
     if (procFinalizeId) procFinalizeId.value = service.id || '';
     if (procFullName) procFullName.value = resolveServiceDisplayName(service);
-    if (procFullDentes) procFullDentes.value = formatDentes(service.dentes || []).replace(/-/g, '').trim();
+    if (procFullDentes) procFullDentes.value = formatDentes(service.dentes || service.dente || []).replace(/-/g, '').trim();
     if (procFullProfissional) procFullProfissional.value = service.dentistaNome || service.dentista || '';
     if (procFullRegisteredAt) procFullRegisteredAt.value = toInputDate(service.registeredAt || service.dataAdicionado || service.createdAt);
     if (procFullFinishedAt) procFullFinishedAt.value = toInputDate(service.dataRealizacao || service.finishedAt || service.finalizadoEm);
@@ -2249,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateFinanceMetrics(list);
     procedimentosBody.innerHTML = list.map((svc) => {
       const nome = resolveServiceDisplayName(svc) || 'Procedimento';
-      const dentes = formatDentes(svc.dentes);
+      const dentes = formatDentes(svc.dentes || svc.dente);
       const estadoNormalizado = normalizeEstado(svc.status || svc.estado || svc.situacao);
       const workflowValue = deriveServiceWorkflowOptionValue(svc);
       const workflowSelectStateClass = workflowSelectClass(workflowValue);
@@ -2553,7 +2561,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const val = getServiceAmount(service);
       procEditValor.value = val ? val.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
     }
-    if (procEditDentes) procEditDentes.value = formatDentes(service.dentes || []).replace(/-/g, '').trim();
+    if (procEditDentes) procEditDentes.value = formatDentes(service.dentes || service.dente || []).replace(/-/g, '').trim();
     if (procEditProfissional) procEditProfissional.value = service.dentistaNome || service.dentista || '';
     if (procEditRealizado) procEditRealizado.value = toInputDate(service.dataRealizacao || service.finishedAt || service.finalizadoEm);
     if (procEditObs) procEditObs.value = service.observacoes || service.obs || service.observacao || '';
@@ -2573,7 +2581,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const fillProcModal = (service) => {
     if (!service) return;
     const nome = resolveServiceDisplayName(service) || 'Procedimento';
-    const dentes = formatDentes(service.dentes);
+    const dentes = formatDentes(service.dentes || service.dente);
     const codigo = service.codigo || service.code || '';
     const title = codigo ? `[${codigo}] | ${nome}` : `${nome}`;
     const estadoLabel = statusLabel(service.status || service.estado || service.situacao);
