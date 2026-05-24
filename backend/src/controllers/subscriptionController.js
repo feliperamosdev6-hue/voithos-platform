@@ -18,10 +18,6 @@ const createSubscription = async (req, res, next) => {
     const data = await subscriptionService.createSubscription({
       clinicId: getAuthenticatedClinicId(req),
       planType: req.body?.planType,
-      provider: req.body?.provider,
-      externalPaymentId: req.body?.externalPaymentId,
-      paymentLink: req.body?.paymentLink,
-      gatewayMode: req.body?.gatewayMode,
     });
     return res.status(201).json({ ok: true, data });
   } catch (error) {
@@ -45,12 +41,9 @@ const createSubscriptionCheckout = async (req, res, next) => {
 
 const confirmSubscriptionPayment = async (req, res, next) => {
   try {
-    const data = await subscriptionService.confirmPayment({
+    const data = await subscriptionService.getWebhookOnlyPaymentStatus({
       clinicId: getAuthenticatedClinicId(req),
-      paymentId: req.body?.paymentId,
-      provider: req.body?.provider,
-      externalPaymentId: req.body?.externalPaymentId,
-      paidAt: req.body?.paidAt,
+      role: req.auth?.role || '',
     });
     return res.status(200).json({ ok: true, data });
   } catch (error) {
@@ -75,9 +68,6 @@ const renewSubscription = async (req, res, next) => {
     const data = await subscriptionService.renewSubscription({
       clinicId: getAuthenticatedClinicId(req),
       planType: req.body?.planType,
-      provider: req.body?.provider,
-      externalPaymentId: req.body?.externalPaymentId,
-      paymentLink: req.body?.paymentLink,
     });
     return res.status(200).json({ ok: true, data });
   } catch (error) {

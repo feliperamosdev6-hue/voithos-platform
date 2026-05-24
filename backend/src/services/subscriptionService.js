@@ -200,11 +200,6 @@ const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerC
   return payload;
 };
 
-const isCheckoutPaymentPaid = (payment) => {
-  const status = normalizeText(payment?.status).toUpperCase();
-  return ['PAID', 'RECEIVED', 'CONFIRMED'].includes(status);
-};
-
 const resolvePaidAtFromAsaasPayment = (payment) => {
   const candidates = [
     payment?.paymentDate,
@@ -257,6 +252,27 @@ const logLegacyAccess = (clinic, reason) => {
     clinicCreatedAt: clinic?.createdAt || null,
     commercialActivationAt: appEnv.subscriptionCommercialActivationAt || '',
     reason,
+  });
+};
+
+const logBilling = (stage, details = {}) => {
+  console.info('[billing]', {
+    stage,
+    clinicId: normalizeText(details.clinicId),
+    paymentId: normalizeText(details.paymentId),
+    externalPaymentId: normalizeText(details.externalPaymentId),
+    status: normalizeText(details.status),
+  });
+};
+
+const logBillingWebhook = (stage, details = {}) => {
+  console.info('[billing-webhook]', {
+    stage,
+    clinicId: normalizeText(details.clinicId),
+    paymentId: normalizeText(details.paymentId),
+    externalPaymentId: normalizeText(details.externalPaymentId),
+    eventType: normalizeText(details.eventType),
+    status: normalizeText(details.status),
   });
 };
 
@@ -412,7 +428,7 @@ const subscriptionService = {
     return overview;
   },
 
-  createSubscription: async ({ clinicId, planType, provider, externalPaymentId, paymentLink, gatewayMode }) => {
+  createSubscription: async ({ clinicId, planType }) => {
     if (!normalizeText(clinicId)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
     }
@@ -423,50 +439,24 @@ const subscriptionService = {
     }
 
     const plan = getPlanDefinition(planType);
-    const isCheckoutGateway = normalizeText(gatewayMode).toUpperCase() === 'CHECKOUT';
-    const normalizedProvider = isCheckoutGateway ? ASAAS_CHECKOUT_PROVIDER : normalizeProvider(provider);
     const createdSubscription = await subscriptionRepository.createSubscriptionWithPayment({
       clinicId,
       planType: plan.planType,
       amount: roundMoney(plan.amount),
-      provider: normalizedProvider,
-      externalPaymentId: normalizeText(externalPaymentId) || null,
-      paymentLink: normalizeText(paymentLink) || null,
+      provider: ASAAS_CHECKOUT_PROVIDER,
+      externalPaymentId: null,
+      paymentLink: null,
     });
 
-    let finalSubscription = createdSubscription;
-    if (normalizeText(gatewayMode).toUpperCase() !== 'CHECKOUT' && asaasService.isConfigured()) {
-      try {
-        const clinic = await clinicRepository.findById(clinicId);
-        const customer = await asaasService.createCustomer({
-          name: clinic?.nomeFantasia || clinic?.razaoSocial || 'Clinica Voithos',
-          email: clinic?.email || '',
-          cpfCnpj: clinic?.cnpjCpf || '',
-          phone: clinic?.telefoneComercial || '',
-        });
-        const asaasPayment = await asaasService.createPayment({
-          customerId: customer?.id,
-          value: roundMoney(plan.amount),
-          description: `Assinatura Voithos ${plan.planType}`,
-        });
-
-        if (createdSubscription?.lastPayment?.id) {
-          await subscriptionRepository.updatePaymentGatewayData({
-            paymentId: createdSubscription.lastPayment.id,
-            provider: 'ASAAS',
-            externalPaymentId: asaasPayment?.id || null,
-            paymentLink: asaasPayment?.invoiceUrl || null,
-          });
-          finalSubscription = await subscriptionRepository.findByClinicId({ clinicId });
-        }
-      } catch (_error) {
-        finalSubscription = createdSubscription;
-      }
-    }
+    logBilling('subscription_pending_created', {
+      clinicId,
+      paymentId: createdSubscription?.lastPayment?.id,
+      status: createdSubscription?.status,
+    });
 
     return {
-      ...finalSubscription,
-      paymentLink: finalSubscription?.lastPayment?.paymentLink || null,
+      ...createdSubscription,
+      paymentLink: createdSubscription?.lastPayment?.paymentLink || null,
     };
   },
 
@@ -549,7 +539,12 @@ const subscriptionService = {
     };
   },
 
-  confirmPayment: async ({ clinicId, paymentId, provider, externalPaymentId, paidAt }) => {
+  confirmPayment: async ({ clinicId, paymentId, provider, externalPaymentId, paidAt, trustedSource }) => {
+    if (trustedSource !== 'ASAAS_WEBHOOK') {
+      logBilling('client_payment_confirmation_blocked', { clinicId, paymentId, externalPaymentId });
+      throw new AppError(403, 'WEBHOOK_REQUIRED', 'Payment confirmation is handled by the payment webhook.');
+    }
+
     if (!normalizeText(clinicId)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
     }
@@ -575,6 +570,12 @@ const subscriptionService = {
 
     if (normalizeText(payment.status).toUpperCase() === 'PAID') {
       const syncedExisting = await syncLifecycle(payment.subscription, new Date());
+      logBillingWebhook('subscription_payment_already_paid', {
+        clinicId,
+        paymentId: payment.id,
+        externalPaymentId: externalPaymentId || payment.externalPaymentId,
+        status: payment.status,
+      });
       return buildOverview(syncedExisting, new Date());
     }
 
@@ -596,10 +597,17 @@ const subscriptionService = {
       graceUntil,
     });
 
+    logBillingWebhook('subscription_activated', {
+      clinicId,
+      paymentId: payment.id,
+      externalPaymentId: externalPaymentId || payment.externalPaymentId,
+      status: 'PAID',
+    });
+
     return buildOverview(subscription, confirmedAt);
   },
 
-  renewSubscription: async ({ clinicId, planType, provider, externalPaymentId, paymentLink }) => {
+  renewSubscription: async ({ clinicId, planType }) => {
     if (!normalizeText(clinicId)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
     }
@@ -619,68 +627,54 @@ const subscriptionService = {
       clinicId,
       planType: plan.planType,
       amount: roundMoney(plan.amount),
-      provider: normalizeProvider(provider),
-      externalPaymentId: normalizeText(externalPaymentId) || null,
-      paymentLink: normalizeText(paymentLink) || null,
+      provider: ASAAS_CHECKOUT_PROVIDER,
+      externalPaymentId: null,
+      paymentLink: null,
       resetStatusToPending,
+    });
+
+    logBilling('subscription_renewal_pending_created', {
+      clinicId,
+      paymentId: renewed?.lastPayment?.id,
+      status: renewed?.lastPayment?.status,
     });
 
     return buildOverview(renewed, new Date());
   },
 
+  getWebhookOnlyPaymentStatus: async ({ clinicId, role }) => {
+    const overview = await subscriptionService.getMySubscription({ clinicId, role });
+    return {
+      ...overview,
+      confirmationSource: 'ASAAS_WEBHOOK',
+      webhookDriven: true,
+    };
+  },
+
   refreshPaymentStatus: async ({ clinicId, role }) => {
     const overview = await subscriptionService.getMySubscription({ clinicId, role });
-    const subscription = overview?.subscription || null;
-    const lastPayment = subscription?.lastPayment || null;
-    if (!subscription || !lastPayment) {
-      return overview;
-    }
-
-    const effectiveStatus = normalizeText(overview.effectiveStatus).toUpperCase();
-    if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
-      return overview;
-    }
-
-    if (!asaasService.isConfigured()) {
-      return overview;
-    }
-
-    if (normalizeText(lastPayment.provider).toUpperCase() !== ASAAS_CHECKOUT_PROVIDER || !normalizeText(lastPayment.externalPaymentId)) {
-      return overview;
-    }
-
-    try {
-      const result = await asaasService.listPaymentsByCheckoutSession(lastPayment.externalPaymentId);
-      const paymentRows = Array.isArray(result?.data) ? result.data : [];
-      const paidPayment = paymentRows.find((payment) => isCheckoutPaymentPaid(payment));
-      if (!paidPayment) {
-        return overview;
-      }
-
-      return subscriptionService.confirmPayment({
-        clinicId,
-        paymentId: lastPayment.id,
-        provider: ASAAS_CHECKOUT_PROVIDER,
-        externalPaymentId: paidPayment.id || lastPayment.externalPaymentId,
-        paidAt: resolvePaidAtFromAsaasPayment(paidPayment),
-      });
-    } catch (_error) {
-      return overview;
-    }
+    return {
+      ...overview,
+      confirmationSource: 'ASAAS_WEBHOOK',
+      webhookDriven: true,
+    };
   },
 
   handleAsaasWebhookEvent: async ({ eventType, payment }) => {
     if (!isWebhookPaymentConfirmationEvent(eventType)) {
+      logBillingWebhook('event_ignored', { eventType, status: 'unsupported_event' });
       return { handled: false };
     }
 
     const externalPaymentId = resolveWebhookPaymentExternalId(payment);
     if (!externalPaymentId) {
+      logBillingWebhook('event_ignored', { eventType, status: 'missing_external_payment_id' });
       return { handled: false };
     }
 
     const paymentStatus = normalizeText(payment?.status).toUpperCase();
     if (paymentStatus && !['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAID', 'RECEIVED', 'CONFIRMED'].includes(paymentStatus)) {
+      logBillingWebhook('event_ignored', { eventType, externalPaymentId, status: paymentStatus });
       return { handled: false };
     }
 
@@ -690,6 +684,7 @@ const subscriptionService = {
     }).catch(() => null);
 
     if (!paymentRecord) {
+      logBillingWebhook('pending_signup_payment_lookup', { eventType, externalPaymentId, status: paymentStatus });
       return authService.finalizePendingSignupPaymentByExternalPaymentId({
         externalPaymentId,
         paidAt: resolvePaidAtFromAsaasPayment(payment),
@@ -697,9 +692,16 @@ const subscriptionService = {
     }
 
     const paidAt = resolvePaidAtFromAsaasPayment(payment);
-    const currentStatus = normalizeText(paymentRecord?.subscription?.status).toUpperCase();
-    if (currentStatus === 'ACTIVE') {
-      return { handled: true, alreadyActive: true };
+    const currentPaymentStatus = normalizeText(paymentRecord?.status).toUpperCase();
+    if (currentPaymentStatus === 'PAID') {
+      logBillingWebhook('subscription_payment_idempotent', {
+        eventType,
+        clinicId: paymentRecord.clinicId,
+        paymentId: paymentRecord.id,
+        externalPaymentId,
+        status: currentPaymentStatus,
+      });
+      return { handled: true, alreadyPaid: true };
     }
 
     await subscriptionService.confirmPayment({
@@ -708,6 +710,7 @@ const subscriptionService = {
       provider: ASAAS_CHECKOUT_PROVIDER,
       externalPaymentId,
       paidAt,
+      trustedSource: 'ASAAS_WEBHOOK',
     });
 
     return { handled: true };

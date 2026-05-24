@@ -9,19 +9,19 @@ const handleAsaasWebhook = async (req, res) => {
   const expectedToken = normalizeText(process.env.ASAAS_WEBHOOK_TOKEN || '');
 
   if (!expectedToken && String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production') {
-    console.error('[asaas][webhook] auth token is not configured');
+    console.error('[billing-webhook] auth token is not configured');
     return res.status(503).json({ ok: false, error: { code: 'WEBHOOK_AUTH_NOT_CONFIGURED', message: 'Webhook authentication is not configured.' } });
   }
 
   if (expectedToken && requestToken !== expectedToken) {
-    console.warn('[asaas][webhook] invalid auth token', {
+    console.warn('[billing-webhook] invalid auth token', {
       eventType,
       paymentId,
     });
     return res.status(401).json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Invalid webhook token.' } });
   }
 
-  console.info('[asaas][webhook] event received', {
+  console.info('[billing-webhook] event received', {
     eventType,
     paymentId,
   });
@@ -33,13 +33,14 @@ const handleAsaasWebhook = async (req, res) => {
     });
 
     if (result?.handled === true) {
-      console.info('[asaas][webhook] payment handled', {
+      console.info('[billing-webhook] payment handled', {
         eventType,
         paymentId,
+        idempotent: result?.alreadyPaid === true || result?.alreadyFinalized === true || result?.alreadyActive === true,
       });
     }
   } catch (error) {
-    console.error('[asaas][webhook] processing failed', {
+    console.error('[billing-webhook] processing failed', {
       eventType,
       paymentId,
       error: error?.message || String(error || ''),

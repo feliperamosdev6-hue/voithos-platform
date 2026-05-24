@@ -19,6 +19,12 @@ const { createExtractorFromData } = require('node-unrar-js');
 const isMissingTableError = (error) => error && error.code === 'P2021';
 const normalizeDocument = (value) => String(value || '').replace(/\D/g, '');
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const maskEmail = (value) => {
+  const normalized = normalizeEmail(value);
+  const [localPart = '', domain = ''] = normalized.split('@');
+  if (!localPart || !domain) return '';
+  return `${localPart.slice(0, 2)}***@${domain}`;
+};
 const normalizeKey = (value) => normalizeImportKey(value);
 const isValidDocumentType = (value) => value === 'CPF' || value === 'CNPJ';
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
@@ -3830,10 +3836,9 @@ const clinicService = {
 
     try {
       await pendingSignupRepository.deleteExpired(new Date());
-      console.info('[signup][clinic-service]', {
+      console.info('[billing-signup]', {
         stage: 'signup_started',
-        email: adminEmail,
-        clinic: nomeFantasia,
+        email: maskEmail(adminEmail),
       });
       let emailVerificationCode = generateEmailVerificationCode();
       let emailVerificationExpiresAt = getEmailVerificationExpiresAt();
@@ -3842,10 +3847,9 @@ const clinicService = {
       let shouldSendVerificationEmail = true;
       let reusedActiveVerification = false;
       const duplicatedClinic = await clinicRepository.findByDocument(document.documentNumber);
-      console.info('[signup][clinic-service]', {
+      console.info('[billing-signup]', {
         stage: 'clinic_lookup_completed',
-        email: adminEmail,
-        clinic: nomeFantasia,
+        email: maskEmail(adminEmail),
         status: duplicatedClinic ? 'duplicate_found' : 'available',
       });
       if (duplicatedClinic) {
@@ -3853,10 +3857,9 @@ const clinicService = {
       }
 
       const duplicatedUser = await userRepository.findByEmail(adminEmail);
-      console.info('[signup][clinic-service]', {
+      console.info('[billing-signup]', {
         stage: 'user_lookup_completed',
-        email: adminEmail,
-        clinic: nomeFantasia,
+        email: maskEmail(adminEmail),
         status: duplicatedUser ? 'duplicate_found' : 'available',
       });
       if (duplicatedUser) {
@@ -3922,19 +3925,18 @@ const clinicService = {
         resendAvailableAt,
         sendCount,
       });
-      console.info('[signup][clinic-service]', {
+      console.info('[billing-signup]', {
         stage: 'pending_signup_saved',
-        email: adminEmail,
-        clinic: nomeFantasia,
+        email: maskEmail(adminEmail),
+        pendingSignupId: pendingSignup?.id || '',
         sendCount: Number(pendingSignup?.sendCount || 0),
       });
 
       if (shouldSendVerificationEmail) {
         try {
-          console.info('[signup][clinic-service]', {
+          console.info('[billing-signup]', {
             stage: 'verification_email_send_started',
-            email: adminEmail,
-            clinic: nomeFantasia,
+            email: maskEmail(adminEmail),
             sendCount,
           });
           const emailResult = await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);

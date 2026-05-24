@@ -257,6 +257,17 @@ const logAuthDiagnostic = (stage, details = {}) => {
   });
 };
 
+const logBillingSignup = (stage, details = {}) => {
+  console.info('[billing-signup]', {
+    stage,
+    email: details.email ? maskEmail(details.email) : '',
+    pendingSignupId: String(details.pendingSignupId || '').trim(),
+    clinicId: String(details.clinicId || '').trim(),
+    externalPaymentId: String(details.externalPaymentId || '').trim(),
+    status: String(details.status || '').trim(),
+  });
+};
+
 const sanitizeUser = (user) => {
   if (!user) return null;
   const emailVerificationPending = user.emailVerified !== true && Boolean(user.emailVerificationCode);
@@ -487,6 +498,8 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
     const startDate = paidAt;
     const endDate = addDays(startDate, plan.durationDays);
     const graceUntil = addDays(endDate, 3);
+    const finalizedAt = new Date();
+    const finalizedAccessExpiresAt = addMinutes(finalizedAt, 60);
     const clinicAddressLine = buildClinicAddressLine(signupData.clinicAddress);
     const clinic = await tx.clinic.create({
       data: {
@@ -597,31 +610,46 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
       },
     });
 
+    const existingSignupData = pendingSignup.signupData && typeof pendingSignup.signupData === 'object'
+      ? pendingSignup.signupData
+      : {};
     await tx.$executeRaw`
-      DELETE FROM "PendingSignup"
-      WHERE "email" = ${signupData.adminEmail}
+      UPDATE "PendingSignup"
+      SET "passwordHash" = '',
+          "signupData" = CAST(${JSON.stringify({
+            ...existingSignupData,
+            paymentCheckout: {
+              ...(existingSignupData.paymentCheckout && typeof existingSignupData.paymentCheckout === 'object'
+                ? existingSignupData.paymentCheckout
+                : {}),
+              status: 'PAID',
+              paidAt: paidAt.toISOString(),
+            },
+            finalizedAt: finalizedAt.toISOString(),
+            finalizedAccessExpiresAt: finalizedAccessExpiresAt.toISOString(),
+            finalizedClinicId: clinic.id,
+            finalizedUserId: user.id,
+          })} AS jsonb),
+          "updatedAt" = NOW()
+      WHERE "id" = ${pendingSignup.id}
     `;
 
-    const token = crypto.randomUUID();
-    const expiresAt = addDays(new Date(), SESSION_TTL_DAYS);
-    const session = await tx.session.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt,
-      },
-    });
-
     return {
-      token: session.token,
       clinic,
       user,
     };
   });
 
+  logBillingSignup('signup_activated', {
+    email: signupData.adminEmail,
+    pendingSignupId: pendingSignup.id,
+    clinicId: created.clinic?.id,
+    externalPaymentId: paymentContext?.externalPaymentId || signupData?.paymentCheckout?.externalPaymentId || '',
+    status: 'ACTIVE',
+  });
+
   return {
     verified: true,
-    token: created.token,
     clinic: {
       ...created.clinic,
       clinicId: created.clinic.id,
@@ -1139,7 +1167,8 @@ const getPendingSignupForCheckout = async ({ email, pendingSignupToken }) => {
   const checkoutExpiresAt = signupData.paymentCheckout?.expiresAt
     ? new Date(signupData.paymentCheckout.expiresAt).getTime()
     : 0;
-  if (checkoutExpiresAt && checkoutExpiresAt <= Date.now()) {
+  const finalizedAt = String(signupData.finalizedAt || '').trim();
+  if (!finalizedAt && checkoutExpiresAt && checkoutExpiresAt <= Date.now()) {
     await pendingSignupRepository.deleteByEmail(normalizedEmail);
     throw new AppError(410, 'PENDING_CHECKOUT_EXPIRED', 'Pending checkout expired. Start signup again.');
   }
@@ -1152,6 +1181,18 @@ const getPendingSignupForCheckout = async ({ email, pendingSignupToken }) => {
 
 const updatePendingSignupOnboarding = async ({ email, pendingSignupToken, selectedPlan, operationType }) => {
   const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  if (String(signupData.finalizedAt || '').trim()) {
+    return {
+      selectedPlan: normalizeSelectedPlan(signupData.selectedPlan),
+      operationType: String(signupData.operationType || '').trim(),
+      paymentLink: null,
+      paymentExpiresAt: null,
+      pendingCheckout: false,
+      effectiveStatus: 'ACTIVE',
+      webhookDriven: true,
+      pendingSignupId: pendingSignup.id,
+    };
+  }
   const normalizedPlan = selectedPlan ? normalizeSelectedPlan(selectedPlan) : normalizeSelectedPlan(signupData.selectedPlan);
   if (selectedPlan && !PUBLIC_SUBSCRIPTION_PLANS[normalizedPlan]) {
     throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
@@ -1189,6 +1230,14 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
   }
 
   const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  if (String(signupData.finalizedAt || '').trim()) {
+    return {
+      pendingCheckout: false,
+      effectiveStatus: 'ACTIVE',
+      webhookDriven: true,
+      paymentLink: null,
+    };
+  }
   const selectedPlan = normalizeSelectedPlan(planType || signupData.selectedPlan);
   if (!PUBLIC_SUBSCRIPTION_PLANS[selectedPlan]) {
     throw new AppError(400, 'VALIDATION_ERROR', 'selectedPlan is invalid.');
@@ -1253,6 +1302,13 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
     signupData: nextSignupData,
   });
 
+  logBillingSignup('checkout_created', {
+    email: pendingSignup.email,
+    pendingSignupId: pendingSignup.id,
+    externalPaymentId: checkoutId,
+    status: 'PENDING',
+  });
+
   return {
     checkoutId,
     paymentLink: checkoutUrl,
@@ -1268,6 +1324,48 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
 
 const refreshPendingSignupPaymentStatus = async ({ email, pendingSignupToken }) => {
   const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  const finalizedAt = String(signupData.finalizedAt || '').trim();
+  if (finalizedAt) {
+    const accessExpiresAt = signupData.finalizedAccessExpiresAt ? new Date(signupData.finalizedAccessExpiresAt).getTime() : 0;
+    const user = await userRepository.findById(String(signupData.finalizedUserId || '').trim()).catch(() => null)
+      || await userRepository.findByEmail(normalizeEmail(signupData.adminEmail || pendingSignup.email || '')).catch(() => null);
+    if (!user || user.ativo === false) {
+      return {
+        pendingCheckout: false,
+        effectiveStatus: 'ACTIVE',
+        webhookDriven: true,
+        requiresLogin: true,
+      };
+    }
+
+    if (!accessExpiresAt || accessExpiresAt <= Date.now()) {
+      return {
+        pendingCheckout: false,
+        effectiveStatus: 'ACTIVE',
+        webhookDriven: true,
+        requiresLogin: true,
+      };
+    }
+
+    const session = await createSession(user.id);
+    const clinic = user.clinicId ? await clinicRepository.findById(user.clinicId).catch(() => null) : null;
+    logBillingSignup('finalized_signup_status_returned', {
+      email: pendingSignup.email,
+      pendingSignupId: pendingSignup.id,
+      clinicId: user.clinicId,
+      status: 'ACTIVE',
+    });
+    return {
+      verified: true,
+      token: session.token,
+      user: sanitizeUser(user),
+      clinic: clinic ? { ...clinic, clinicId: clinic.id } : null,
+      pendingCheckout: false,
+      effectiveStatus: 'ACTIVE',
+      webhookDriven: true,
+    };
+  }
+
   const checkoutId = String(signupData.paymentCheckout?.externalPaymentId || '').trim();
   if (!checkoutId) {
     return {
@@ -1277,31 +1375,13 @@ const refreshPendingSignupPaymentStatus = async ({ email, pendingSignupToken }) 
     };
   }
 
-  if (!asaasService.isConfigured()) {
-    return {
-      pendingCheckout: true,
-      paymentLink: signupData.paymentCheckout?.paymentLink || null,
-      effectiveStatus: 'PENDING_PAYMENT',
-    };
-  }
-
-  const result = await asaasService.listPaymentsByCheckoutSession(checkoutId);
-  const paymentRows = Array.isArray(result?.data) ? result.data : [];
-  const paidPayment = paymentRows.find((payment) => ['PAID', 'RECEIVED', 'CONFIRMED'].includes(String(payment?.status || '').trim().toUpperCase()));
-  if (!paidPayment) {
-    return {
-      pendingCheckout: true,
-      paymentLink: signupData.paymentCheckout?.paymentLink || null,
-      effectiveStatus: 'PENDING_PAYMENT',
-    };
-  }
-
-  return finalizePendingSignup(pendingSignup, {
-    provider: ASAAS_CHECKOUT_PROVIDER,
-    externalPaymentId: checkoutId,
+  return {
+    pendingCheckout: true,
     paymentLink: signupData.paymentCheckout?.paymentLink || null,
-    paidAt: paidPayment?.paymentDate || paidPayment?.clientPaymentDate || paidPayment?.confirmedDate || new Date(),
-  });
+    effectiveStatus: 'PENDING_PAYMENT',
+    confirmationSource: 'ASAAS_WEBHOOK',
+    webhookDriven: true,
+  };
 };
 
 const finalizePendingSignupPaymentByExternalPaymentId = async ({ externalPaymentId, paidAt }) => {
@@ -1314,18 +1394,57 @@ const finalizePendingSignupPaymentByExternalPaymentId = async ({ externalPayment
     ? pendingSignup.signupData
     : {};
 
-  const duplicateUser = await userRepository.findByEmail(normalizeEmail(signupData.adminEmail || pendingSignup.email || ''));
-  if (duplicateUser) {
-    await pendingSignupRepository.deleteByEmail(pendingSignup.email);
-    return { handled: true, alreadyFinalized: true };
+  if (String(signupData.finalizedAt || '').trim()) {
+    logBillingSignup('webhook_retry_ignored', {
+      email: pendingSignup.email,
+      pendingSignupId: pendingSignup.id,
+      clinicId: signupData.finalizedClinicId,
+      externalPaymentId,
+      status: 'already_finalized',
+    });
+    return { handled: true, alreadyFinalized: true, clinicId: signupData.finalizedClinicId || '' };
   }
 
-  const result = await finalizePendingSignup(pendingSignup, {
-    provider: ASAAS_CHECKOUT_PROVIDER,
-    externalPaymentId,
-    paymentLink: signupData.paymentCheckout?.paymentLink || null,
-    paidAt: paidAt || new Date(),
-  });
+  const duplicateUser = await userRepository.findByEmail(normalizeEmail(signupData.adminEmail || pendingSignup.email || ''));
+  if (duplicateUser) {
+    await pendingSignupRepository.updateSignupDataByEmail({
+      email: pendingSignup.email,
+      signupData: {
+        ...signupData,
+        paymentCheckout: {
+          ...(signupData.paymentCheckout && typeof signupData.paymentCheckout === 'object' ? signupData.paymentCheckout : {}),
+          status: 'PAID',
+        },
+        finalizedAt: signupData.finalizedAt || new Date().toISOString(),
+        finalizedClinicId: duplicateUser.clinicId || '',
+        finalizedUserId: duplicateUser.id || '',
+      },
+    });
+    logBillingSignup('webhook_retry_matched_existing_user', {
+      email: pendingSignup.email,
+      pendingSignupId: pendingSignup.id,
+      clinicId: duplicateUser.clinicId,
+      externalPaymentId,
+      status: 'already_finalized',
+    });
+    return { handled: true, alreadyFinalized: true, clinicId: duplicateUser.clinicId || '' };
+  }
+
+  let result;
+  try {
+    result = await finalizePendingSignup(pendingSignup, {
+      provider: ASAAS_CHECKOUT_PROVIDER,
+      externalPaymentId,
+      paymentLink: signupData.paymentCheckout?.paymentLink || null,
+      paidAt: paidAt || new Date(),
+    });
+  } catch (error) {
+    if (error?.code === 'P2002' || error instanceof AppError && ['CLINIC_DOCUMENT_EXISTS', 'USER_EMAIL_EXISTS'].includes(error.code)) {
+      const existingUser = await userRepository.findByEmail(normalizeEmail(signupData.adminEmail || pendingSignup.email || '')).catch(() => null);
+      return { handled: true, alreadyFinalized: true, clinicId: existingUser?.clinicId || '' };
+    }
+    throw error;
+  }
 
   return {
     handled: true,

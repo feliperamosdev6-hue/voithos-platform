@@ -122,12 +122,23 @@ const pendingSignupRepository = {
       WITH deleted AS (
         DELETE FROM "PendingSignup"
         WHERE (
-          ("signupData"->>'emailVerifiedAt' IS NULL OR "signupData"->>'emailVerifiedAt' = '')
-          AND "verificationExpiresAt" < ${normalizedReferenceDate}
+          ("signupData"->>'finalizedAt' IS NULL OR "signupData"->>'finalizedAt' = '')
+          AND (
+            (
+              ("signupData"->>'emailVerifiedAt' IS NULL OR "signupData"->>'emailVerifiedAt' = '')
+              AND "verificationExpiresAt" < ${normalizedReferenceDate}
+            )
+            OR (
+              "signupData"->'paymentCheckout'->>'expiresAt' IS NOT NULL
+              AND "signupData"->'paymentCheckout'->>'expiresAt' < ${normalizedReferenceDate.toISOString()}
+            )
+          )
         )
         OR (
-          "signupData"->'paymentCheckout'->>'expiresAt' IS NOT NULL
-          AND "signupData"->'paymentCheckout'->>'expiresAt' < ${normalizedReferenceDate.toISOString()}
+          "signupData"->>'finalizedAt' IS NOT NULL
+          AND "signupData"->>'finalizedAt' <> ''
+          AND "signupData"->>'finalizedAccessExpiresAt' IS NOT NULL
+          AND "signupData"->>'finalizedAccessExpiresAt' < ${normalizedReferenceDate.toISOString()}
         )
         RETURNING "id"
       )

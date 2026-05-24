@@ -25,26 +25,6 @@ const validateCreateSubscription = validate((req) => {
   return issues;
 });
 
-const validateConfirmPayment = validate((req) => {
-  const issues = [];
-  const paymentId = String(req.body?.paymentId || '').trim();
-  const provider = String(req.body?.provider || '').trim();
-  const externalPaymentId = String(req.body?.externalPaymentId || '').trim();
-
-  if (!paymentId && !(provider && externalPaymentId)) {
-    issues.push({
-      field: 'paymentId',
-      message: 'paymentId or provider + externalPaymentId are required.',
-    });
-  }
-
-  if (req.body?.paidAt && Number.isNaN(new Date(req.body.paidAt).getTime())) {
-    issues.push({ field: 'paidAt', message: 'paidAt is invalid.' });
-  }
-
-  return issues;
-});
-
 const validateRenewSubscription = validate((req) => {
   const issues = [];
   const planType = String(req.body?.planType || '').trim().toUpperCase();
@@ -91,7 +71,7 @@ router.use(authenticate);
 router.get('/me', getMySubscription);
 router.post('/create', validateCreateSubscription, createSubscription);
 router.post('/checkout', validateCreateCheckout, createSubscriptionCheckout);
-router.post('/confirm-payment', validateConfirmPayment, confirmSubscriptionPayment);
+router.post('/confirm-payment', confirmSubscriptionPayment);
 router.post('/refresh-payment-status', refreshSubscriptionPaymentStatus);
 router.post('/renew', validateRenewSubscription, renewSubscription);
 
