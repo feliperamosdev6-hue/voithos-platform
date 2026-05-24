@@ -381,6 +381,7 @@ const patientService = {
       fileName,
       contentType,
       previousStorageKey: cleanText(currentProfilePhoto.storageKey || currentProfile.selfiePath || currentProfile.profilePhotoPath),
+      previousStorageBackend: cleanText(currentProfilePhoto.storageBackend || ''),
     });
 
     await patientClinicalRepository.upsertClinicalRecordSummary({
@@ -427,6 +428,7 @@ const patientService = {
       storageKey: cleanText(profilePhoto.storageKey || profile.selfiePath || profile.profilePhotoPath),
       fileName: cleanText(profilePhoto.fileName || profile.selfieFileName),
       contentType: cleanText(profilePhoto.contentType || profile.selfieMime || profile.profilePhotoMime),
+      storageBackend: cleanText(profilePhoto.storageBackend || ''),
     });
   },
 

@@ -4,6 +4,7 @@ const { appEnv } = require('../config/appEnv');
 const { AppError } = require('../errors/AppError');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
+const { createR2StorageClient } = require('./r2StorageClient');
 
 const VALID_ROLES = new Set(['primary', 'source']);
 const ONE_MB = 1024 * 1024;
@@ -45,6 +46,24 @@ const sanitizeFileName = (value, fallback = 'document.bin') => {
   const normalized = path.basename(raw).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
   return normalized || fallback;
 };
+
+const normalizeStorageDriver = (value) => String(value || '').trim().toLowerCase() === 'r2' ? 'r2' : 'local';
+
+const getActiveStorageDriver = () => normalizeStorageDriver(appEnv.documentStorageDriver);
+
+const normalizeStorageBackend = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'r2') return 'r2';
+  return 'server_fs';
+};
+
+const getR2Client = () => createR2StorageClient({
+  accountId: appEnv.r2AccountId,
+  accessKeyId: appEnv.r2AccessKeyId,
+  secretAccessKey: appEnv.r2SecretAccessKey,
+  bucket: appEnv.r2Bucket,
+  endpoint: appEnv.r2Endpoint,
+});
 
 const getConfiguredStorageRoot = () => {
   const configured = String(appEnv.clinicalDocumentsStorageRoot || '').trim();
@@ -141,7 +160,7 @@ const resolveFallbackFileName = (document, role) => {
 const buildStorageKey = ({ clinicId, patientId, externalDocumentId, role, fileName }) => {
   const safeFileName = sanitizeFileName(fileName);
   const ext = path.extname(safeFileName) || '.bin';
-  return path.join(
+  return path.posix.join(
     sanitizeSegment(clinicId, 'clinic'),
     sanitizeSegment(patientId, 'patient'),
     `${sanitizeSegment(externalDocumentId, 'document')}--${sanitizeSegment(role, 'primary')}${ext}`
@@ -320,15 +339,25 @@ const storeDocumentAsset = async ({
     role: resolvedRole,
     fileName: resolvedFileName,
   });
-  const storageRoot = await resolveWritableStorageRoot();
-  const absolutePath = resolveAbsolutePath(storageKey, storageRoot);
-  await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
-  await fs.promises.writeFile(absolutePath, buffer);
+  const activeStorageDriver = getActiveStorageDriver();
+  const storageBackend = activeStorageDriver === 'r2' ? 'r2' : 'server_fs';
+  if (activeStorageDriver === 'r2') {
+    await getR2Client().putObject({
+      key: storageKey,
+      buffer,
+      contentType: uploadValidation.contentType,
+    });
+  } else {
+    const storageRoot = await resolveWritableStorageRoot();
+    const absolutePath = resolveAbsolutePath(storageKey, storageRoot);
+    await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.promises.writeFile(absolutePath, buffer);
+  }
 
   const metadata = getDocumentMetadata(context.document);
   const assets = metadata.assets && typeof metadata.assets === 'object' ? { ...metadata.assets } : {};
   assets[resolvedRole] = {
-    storageBackend: 'server_fs',
+    storageBackend,
     storageKey,
     fileName: resolvedFileName,
     contentType: uploadValidation.contentType,
@@ -361,6 +390,7 @@ const storeDocumentAsset = async ({
     fileName: resolvedFileName,
     size: buffer.length,
     contentType: assets[resolvedRole].contentType,
+    storageBackend,
     storageKey,
   };
 };
@@ -391,12 +421,24 @@ const getDocumentAsset = async ({
     clinicId: context.clinicId,
     patientId: context.patientId,
   });
-  const absolutePath = resolveAbsolutePath(storageKey, await resolveWritableStorageRoot());
-  if (!fs.existsSync(absolutePath)) {
-    throw new AppError(404, 'DOCUMENT_FILE_NOT_FOUND', 'Stored document file not found.');
+  const storageBackend = normalizeStorageBackend(configuredAsset?.storageBackend);
+  let buffer;
+  if (storageBackend === 'r2') {
+    try {
+      buffer = await getR2Client().getObject({ key: storageKey });
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'R2_OBJECT_NOT_FOUND') {
+        throw new AppError(404, 'DOCUMENT_FILE_NOT_FOUND', 'Stored document file not found.');
+      }
+      throw error;
+    }
+  } else {
+    const absolutePath = resolveAbsolutePath(storageKey, await resolveWritableStorageRoot());
+    if (!fs.existsSync(absolutePath)) {
+      throw new AppError(404, 'DOCUMENT_FILE_NOT_FOUND', 'Stored document file not found.');
+    }
+    buffer = await fs.promises.readFile(absolutePath);
   }
-
-  const buffer = await fs.promises.readFile(absolutePath);
   return {
     role: resolvedRole,
     fileName: sanitizeFileName(configuredAsset?.fileName || fallbackFileName),
@@ -415,6 +457,15 @@ const removeStoredFile = async (storageKey = '') => {
   });
 };
 
+const removeStoredObject = async ({ storageKey = '', storageBackend = 'server_fs' } = {}) => {
+  if (!storageKey) return;
+  if (normalizeStorageBackend(storageBackend) === 'r2') {
+    await getR2Client().deleteObject({ key: storageKey });
+    return;
+  }
+  await removeStoredFile(storageKey);
+};
+
 const storePatientProfilePhoto = async ({
   clinicId,
   patientId,
@@ -422,6 +473,7 @@ const storePatientProfilePhoto = async ({
   fileName = '',
   contentType = '',
   previousStorageKey = '',
+  previousStorageBackend = '',
 } = {}) => {
   const normalizedClinicId = String(clinicId || '').trim();
   const normalizedPatientId = String(patientId || '').trim();
@@ -449,17 +501,29 @@ const storePatientProfilePhoto = async ({
     invalidTypeMessage: 'Formato nao permitido.',
   });
   const storedName = `profile-photo${validation.extension === '.jpeg' ? '.jpg' : validation.extension}`;
-  const storageKey = path.join(
+  const storageKey = path.posix.join(
     sanitizeSegment(normalizedClinicId, 'clinic'),
     sanitizeSegment(normalizedPatientId, 'patient'),
     storedName
   );
-  const storageRoot = await resolveWritableStorageRoot();
-  const absolutePath = resolveAbsolutePath(storageKey, storageRoot);
-  await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
-  await fs.promises.writeFile(absolutePath, buffer);
+  const activeStorageDriver = getActiveStorageDriver();
+  const storageBackend = activeStorageDriver === 'r2' ? 'r2' : 'server_fs';
+  if (activeStorageDriver === 'r2') {
+    await getR2Client().putObject({
+      key: storageKey,
+      buffer,
+      contentType: validation.contentType,
+    });
+  } else {
+    const storageRoot = await resolveWritableStorageRoot();
+    const absolutePath = resolveAbsolutePath(storageKey, storageRoot);
+    await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.promises.writeFile(absolutePath, buffer);
+  }
 
   if (
+    activeStorageDriver === 'local'
+    &&
     previousStorageKey
     && previousStorageKey !== storageKey
     && isStorageKeyForPatient({
@@ -468,11 +532,14 @@ const storePatientProfilePhoto = async ({
       patientId: normalizedPatientId,
     })
   ) {
-    await removeStoredFile(previousStorageKey);
+    await removeStoredObject({
+      storageKey: previousStorageKey,
+      storageBackend: previousStorageBackend,
+    });
   }
 
   return {
-    storageBackend: 'server_fs',
+    storageBackend,
     storageKey,
     fileName: safeFileName,
     storedName,
@@ -489,6 +556,7 @@ const getPatientProfilePhoto = async ({
   storageKey,
   fileName = '',
   contentType = '',
+  storageBackend = '',
 } = {}) => {
   const normalizedClinicId = String(clinicId || '').trim();
   const normalizedPatientId = String(patientId || '').trim();
@@ -506,11 +574,24 @@ const getPatientProfilePhoto = async ({
     clinicId: normalizedClinicId,
     patientId: normalizedPatientId,
   });
-  const absolutePath = resolveAbsolutePath(normalizedStorageKey, await resolveWritableStorageRoot());
-  if (!fs.existsSync(absolutePath)) {
-    throw new AppError(404, 'PROFILE_PHOTO_NOT_FOUND', 'Profile photo not found.');
+  const resolvedStorageBackend = normalizeStorageBackend(storageBackend);
+  let buffer;
+  if (resolvedStorageBackend === 'r2') {
+    try {
+      buffer = await getR2Client().getObject({ key: normalizedStorageKey });
+    } catch (error) {
+      if (error instanceof AppError && error.code === 'R2_OBJECT_NOT_FOUND') {
+        throw new AppError(404, 'PROFILE_PHOTO_NOT_FOUND', 'Profile photo not found.');
+      }
+      throw error;
+    }
+  } else {
+    const absolutePath = resolveAbsolutePath(normalizedStorageKey, await resolveWritableStorageRoot());
+    if (!fs.existsSync(absolutePath)) {
+      throw new AppError(404, 'PROFILE_PHOTO_NOT_FOUND', 'Profile photo not found.');
+    }
+    buffer = await fs.promises.readFile(absolutePath);
   }
-  const buffer = await fs.promises.readFile(absolutePath);
   return {
     buffer,
     fileName: sanitizeFileName(fileName || path.basename(normalizedStorageKey)),

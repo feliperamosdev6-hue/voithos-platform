@@ -302,6 +302,79 @@ test('patientDocumentStorageService salva PDF valido como metadados e arquivo ex
   assert.equal(await fs.promises.readFile(storedPath, 'utf8'), pdfBuffer.toString('utf8'));
 });
 
+test('patientDocumentStorageService salva PDF valido no driver R2 privado', async (t) => {
+  let updatedDocument = null;
+  const r2Writes = [];
+  const { module: storageModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          documentStorageDriver: 'r2',
+          r2AccountId: 'account',
+          r2AccessKeyId: 'key',
+          r2SecretAccessKey: 'secret',
+          r2Bucket: 'voithos-private-documents',
+          r2Endpoint: 'https://account.r2.cloudflarestorage.com',
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/services/r2StorageClient.js')]: {
+        createR2StorageClient: () => ({
+          putObject: async (input) => {
+            r2Writes.push(input);
+          },
+          getObject: async () => Buffer.from('%PDF-1.4\nmock\n'),
+          deleteObject: async () => {},
+        }),
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+          findByIdAndClinic: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {
+          findDocumentByExternalId: async () => ({
+            id: 'row-1',
+            clinicId: 'clinic-auth',
+            patientId: 'patient-1',
+            externalDocumentId: 'doc-1',
+            type: 'ARQUIVO',
+            category: 'ARQUIVO_PACIENTE',
+            metadata: {},
+          }),
+          updateDocument: async (input) => {
+            updatedDocument = input;
+            return { count: 1 };
+          },
+        },
+      },
+    }
+  );
+  t.after(restore);
+
+  const pdfBuffer = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+  const result = await storageModule.patientDocumentStorageService.storeDocumentAsset({
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+    externalDocumentId: 'doc-1',
+    role: 'primary',
+    buffer: pdfBuffer,
+    fileName: '../exame.pdf',
+    contentType: 'application/pdf',
+  });
+
+  assert.equal(result.storageBackend, 'r2');
+  assert.equal(result.storageKey, 'clinic-auth/patient-1/doc-1--primary.pdf');
+  assert.equal(r2Writes.length, 1);
+  assert.equal(r2Writes[0].key, result.storageKey);
+  assert.equal(r2Writes[0].contentType, 'application/pdf');
+  assert.equal(updatedDocument.data.metadata.assets.primary.storageBackend, 'r2');
+  assert.equal(updatedDocument.data.metadata.assets.primary.storageKey, result.storageKey);
+  assert.equal(updatedDocument.data.metadata.assets.primary.publicUrl, undefined);
+});
+
 test('patientDocumentStorageService bloqueia leitura de anexo de paciente de outra clinica', async (t) => {
   const { module: storageModule, restore } = loadModuleWithMocks(
     path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js'),
