@@ -65,6 +65,18 @@ const getR2Client = () => createR2StorageClient({
   endpoint: appEnv.r2Endpoint,
 });
 
+const logStorageBootStatus = () => {
+  console.info('[storage][documents]', {
+    driver: getActiveStorageDriver(),
+    r2BucketConfigured: Boolean(String(appEnv.r2Bucket || '').trim()),
+    r2EndpointConfigured: Boolean(String(appEnv.r2Endpoint || '').trim() || String(appEnv.r2AccountId || '').trim()),
+    r2AccessKeyConfigured: Boolean(String(appEnv.r2AccessKeyId || '').trim()),
+    r2SecretConfigured: Boolean(String(appEnv.r2SecretAccessKey || '').trim()),
+  });
+};
+
+logStorageBootStatus();
+
 const getConfiguredStorageRoot = () => {
   const configured = String(appEnv.clinicalDocumentsStorageRoot || '').trim();
   return configured ? path.resolve(configured) : '';

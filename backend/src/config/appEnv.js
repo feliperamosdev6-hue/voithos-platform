@@ -66,7 +66,7 @@ const appEnv = {
   r2AccountId: String(readValue('R2_ACCOUNT_ID', '')).trim(),
   r2AccessKeyId: String(readValue('R2_ACCESS_KEY_ID', '')).trim(),
   r2SecretAccessKey: String(readValue('R2_SECRET_ACCESS_KEY', '')).trim(),
-  r2Bucket: String(readValue('R2_BUCKET', '')).trim(),
+  r2Bucket: String(readValue('R2_BUCKET', readValue('R2_BUCKET_NAME', ''))).trim(),
   r2Endpoint: normalizeBaseUrl(readValue('R2_ENDPOINT', '')),
   r2PublicBaseUrl: normalizeBaseUrl(readValue('R2_PUBLIC_BASE_URL', '')),
   appointmentReminderSchedulerEnabled: String(readValue('APPOINTMENT_REMINDER_SCHEDULER_ENABLED', 'true')).trim().toLowerCase() !== 'false',
