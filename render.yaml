@@ -54,6 +54,14 @@ services:
         value: "true"
       - key: SUBSCRIPTION_ENFORCEMENT_ENABLED
         value: "false"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SECURITY_HEADERS_HSTS
+        value: "true"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAME_SITE
+        value: "none"
 
   - type: web
     name: voithos-whatsapp-ng

@@ -36,6 +36,7 @@ const { startAppointmentReminderScheduler } = require('./services/appointmentRem
 const { startMaintenanceScheduler } = require('./services/maintenanceSchedulerService');
 const { startPlanMessageScheduler } = require('./services/planMessageSchedulerService');
 const { errorHandler } = require('./middlewares/errorHandler');
+const { configureTrustProxy, securityHeaders } = require('./middlewares/securityHeaders');
 
 process.on('unhandledRejection', (reason) => {
   console.error('UNHANDLED_REJECTION', reason);
@@ -48,6 +49,8 @@ process.on('uncaughtException', (err) => {
 const app = express();
 const port = Number(process.env.PORT || 4000);
 const legacySqliteApiEnabled = String(process.env.LEGACY_SQLITE_API_ENABLED || '').trim().toLowerCase() === 'true';
+
+configureTrustProxy(app);
 
 const corsOriginAllowlist = new Set([
   'http://localhost:3000',
@@ -72,6 +75,10 @@ const addCorsOrigins = (rawValue, label) => {
 
 addCorsOrigins(process.env.PUBLIC_APP_BASE_URL, 'PUBLIC_APP_BASE_URL');
 addCorsOrigins(process.env.PUBLIC_APP_ALLOWED_ORIGINS, 'PUBLIC_APP_ALLOWED_ORIGINS');
+addCorsOrigins(process.env.CORS_ORIGIN, 'CORS_ORIGIN');
+addCorsOrigins(process.env.CORS_ALLOWED_ORIGINS, 'CORS_ALLOWED_ORIGINS');
+
+app.use(securityHeaders);
 
 app.use(cors({
   origin(origin, callback) {
