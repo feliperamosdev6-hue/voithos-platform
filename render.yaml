@@ -62,6 +62,26 @@ services:
         value: "true"
       - key: COOKIE_SAME_SITE
         value: "none"
+      - key: RATE_LIMIT_LOGIN_MAX
+        value: "10"
+      - key: RATE_LIMIT_LOGIN_WINDOW_MS
+        value: "600000"
+      - key: RATE_LIMIT_PASSWORD_RESET_MAX
+        value: "5"
+      - key: RATE_LIMIT_PASSWORD_RESET_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_PUBLIC_SIGNUP_MAX
+        value: "10"
+      - key: RATE_LIMIT_PUBLIC_SIGNUP_WINDOW_MS
+        value: "3600000"
+      - key: RATE_LIMIT_EMAIL_VERIFICATION_MAX
+        value: "10"
+      - key: RATE_LIMIT_EMAIL_VERIFICATION_WINDOW_MS
+        value: "900000"
+      - key: RATE_LIMIT_SUPERADMIN_MAX
+        value: "30"
+      - key: RATE_LIMIT_SUPERADMIN_WINDOW_MS
+        value: "600000"
 
   - type: web
     name: voithos-whatsapp-ng
