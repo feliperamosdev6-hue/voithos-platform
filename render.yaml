@@ -49,7 +49,7 @@ services:
       - key: CLINICAL_DOCUMENTS_STORAGE_ROOT
         value: /var/data/patient-documents
       - key: DOCUMENT_STORAGE_DRIVER
-        value: local
+        value: r2
       - key: R2_ACCOUNT_ID
         sync: false
       - key: R2_ACCESS_KEY_ID
