@@ -8,6 +8,35 @@ const hashSha256 = (value) => crypto.createHash('sha256').update(value).digest('
 const hmac = (key, value) => crypto.createHmac('sha256', key).update(value).digest();
 const hmacHex = (key, value) => crypto.createHmac('sha256', key).update(value).digest('hex');
 
+const extractXmlTag = (body, tagName) => {
+  const text = Buffer.isBuffer(body) ? body.toString('utf8') : String(body || '');
+  const match = text.match(new RegExp(`<${tagName}>([^<]*)</${tagName}>`, 'i'));
+  return match ? match[1].slice(0, 160) : '';
+};
+
+const parseR2Error = (response = {}) => ({
+  statusCode: response.statusCode || 0,
+  errorCode: extractXmlTag(response.body, 'Code') || '',
+  errorMessage: extractXmlTag(response.body, 'Message') || '',
+  requestId: String(response.headers?.['x-amz-request-id'] || response.headers?.['cf-ray'] || '').slice(0, 120),
+});
+
+const logR2Failure = ({ operation, key = '', response = null, error = null }) => {
+  const payload = {
+    operation,
+    keyHash: key ? hashSha256(key).slice(0, 16) : '',
+  };
+  if (response) {
+    Object.assign(payload, parseR2Error(response));
+  }
+  if (error) {
+    payload.errorName = String(error.name || '').slice(0, 80);
+    payload.errorCode = String(error.code || '').slice(0, 80);
+    payload.errorMessage = String(error.message || '').slice(0, 160);
+  }
+  console.warn('[storage][r2]', payload);
+};
+
 const encodeKey = (key) => normalizeText(key)
   .split('/')
   .map((segment) => encodeURIComponent(segment))
@@ -126,32 +155,53 @@ const createR2StorageClient = ({
 
   return {
     putObject: async ({ key, buffer, contentType }) => {
-      const response = await send({
-        method: 'PUT',
-        key,
-        bodyBuffer: buffer,
-        contentType,
-      });
+      let response;
+      try {
+        response = await send({
+          method: 'PUT',
+          key,
+          bodyBuffer: buffer,
+          contentType,
+        });
+      } catch (error) {
+        logR2Failure({ operation: 'putObject', key, error });
+        throw new AppError(502, 'R2_UPLOAD_FAILED', 'Could not store document in R2.');
+      }
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        logR2Failure({ operation: 'putObject', key, response });
         throw new AppError(502, 'R2_UPLOAD_FAILED', 'Could not store document in R2.');
       }
     },
 
     getObject: async ({ key }) => {
-      const response = await send({ method: 'GET', key });
+      let response;
+      try {
+        response = await send({ method: 'GET', key });
+      } catch (error) {
+        logR2Failure({ operation: 'getObject', key, error });
+        throw new AppError(502, 'R2_DOWNLOAD_FAILED', 'Could not read document from R2.');
+      }
       if (response.statusCode === 404) {
         throw new AppError(404, 'R2_OBJECT_NOT_FOUND', 'Stored document file not found.');
       }
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        logR2Failure({ operation: 'getObject', key, response });
         throw new AppError(502, 'R2_DOWNLOAD_FAILED', 'Could not read document from R2.');
       }
       return response.body;
     },
 
     deleteObject: async ({ key }) => {
-      const response = await send({ method: 'DELETE', key });
+      let response;
+      try {
+        response = await send({ method: 'DELETE', key });
+      } catch (error) {
+        logR2Failure({ operation: 'deleteObject', key, error });
+        throw new AppError(502, 'R2_DELETE_FAILED', 'Could not remove document from R2.');
+      }
       if (response.statusCode === 404) return;
       if (response.statusCode < 200 || response.statusCode >= 300) {
+        logR2Failure({ operation: 'deleteObject', key, response });
         throw new AppError(502, 'R2_DELETE_FAILED', 'Could not remove document from R2.');
       }
     },
