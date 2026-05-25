@@ -1267,7 +1267,7 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
 };
 
 const refreshPendingSignupPaymentStatus = async ({ email, pendingSignupToken }) => {
-  const { pendingSignup, signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
+  const { signupData } = await getPendingSignupForCheckout({ email, pendingSignupToken });
   const checkoutId = String(signupData.paymentCheckout?.externalPaymentId || '').trim();
   if (!checkoutId) {
     return {
@@ -1277,31 +1277,11 @@ const refreshPendingSignupPaymentStatus = async ({ email, pendingSignupToken }) 
     };
   }
 
-  if (!asaasService.isConfigured()) {
-    return {
-      pendingCheckout: true,
-      paymentLink: signupData.paymentCheckout?.paymentLink || null,
-      effectiveStatus: 'PENDING_PAYMENT',
-    };
-  }
-
-  const result = await asaasService.listPaymentsByCheckoutSession(checkoutId);
-  const paymentRows = Array.isArray(result?.data) ? result.data : [];
-  const paidPayment = paymentRows.find((payment) => ['PAID', 'RECEIVED', 'CONFIRMED'].includes(String(payment?.status || '').trim().toUpperCase()));
-  if (!paidPayment) {
-    return {
-      pendingCheckout: true,
-      paymentLink: signupData.paymentCheckout?.paymentLink || null,
-      effectiveStatus: 'PENDING_PAYMENT',
-    };
-  }
-
-  return finalizePendingSignup(pendingSignup, {
-    provider: ASAAS_CHECKOUT_PROVIDER,
-    externalPaymentId: checkoutId,
+  return {
+    pendingCheckout: true,
     paymentLink: signupData.paymentCheckout?.paymentLink || null,
-    paidAt: paidPayment?.paymentDate || paidPayment?.clientPaymentDate || paidPayment?.confirmedDate || new Date(),
-  });
+    effectiveStatus: 'PENDING_PAYMENT',
+  };
 };
 
 const finalizePendingSignupPaymentByExternalPaymentId = async ({ externalPaymentId, paidAt }) => {

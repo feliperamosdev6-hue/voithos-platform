@@ -200,11 +200,6 @@ const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerC
   return payload;
 };
 
-const isCheckoutPaymentPaid = (payment) => {
-  const status = normalizeText(payment?.status).toUpperCase();
-  return ['PAID', 'RECEIVED', 'CONFIRMED'].includes(status);
-};
-
 const resolvePaidAtFromAsaasPayment = (payment) => {
   const candidates = [
     payment?.paymentDate,
@@ -336,6 +331,42 @@ const syncLifecycle = async (subscription, now = new Date()) => {
   return subscriptionRepository.updateStatus({
     subscriptionId: subscription.id,
     status: effectiveStatus,
+  });
+};
+
+const getStoredSubscriptionOverview = async ({ clinicId, role }) => {
+  if (normalizeText(role).toUpperCase() === 'SUPER_ADMIN') {
+    return buildOverview(null, new Date(), {
+      bypassed: true,
+      effectiveStatus: 'ACTIVE',
+      accessAllowed: true,
+    });
+  }
+
+  if (!normalizeText(clinicId)) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const now = new Date();
+  const subscription = await subscriptionRepository.findByClinicId({ clinicId });
+
+  if (!subscription) {
+    const clinic = await clinicRepository.findById(clinicId);
+    const reason = isLegacyClinicByCutoff(clinic) ? 'legacy_clinic_without_subscription' : 'no_subscription_record';
+    logLegacyAccess(clinic || { id: clinicId }, reason);
+
+    return buildOverview(null, now, {
+      effectiveStatus: LEGACY_ACCESS_STATUS,
+      accessAllowed: true,
+      warning: appEnv.subscriptionEnforcementEnabled === true
+        ? 'Acesso legado liberado por compatibilidade ate a ativacao comercial.'
+        : 'Cobranca desativada por feature flag.',
+      technicalNotice: reason,
+    });
+  }
+
+  return buildOverview(subscription, now, {
+    technicalNotice: 'payment_status_read_only',
   });
 };
 
@@ -549,7 +580,11 @@ const subscriptionService = {
     };
   },
 
-  confirmPayment: async ({ clinicId, paymentId, provider, externalPaymentId, paidAt }) => {
+  confirmPayment: async ({ clinicId, paymentId, provider, externalPaymentId, paidAt, source }) => {
+    if (normalizeText(source).toUpperCase() !== 'ASAAS_WEBHOOK') {
+      throw new AppError(403, 'WEBHOOK_ONLY_PAYMENT_CONFIRMATION', 'Payment confirmation is only allowed from the Asaas webhook.');
+    }
+
     if (!normalizeText(clinicId)) {
       throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
     }
@@ -629,44 +664,7 @@ const subscriptionService = {
   },
 
   refreshPaymentStatus: async ({ clinicId, role }) => {
-    const overview = await subscriptionService.getMySubscription({ clinicId, role });
-    const subscription = overview?.subscription || null;
-    const lastPayment = subscription?.lastPayment || null;
-    if (!subscription || !lastPayment) {
-      return overview;
-    }
-
-    const effectiveStatus = normalizeText(overview.effectiveStatus).toUpperCase();
-    if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
-      return overview;
-    }
-
-    if (!asaasService.isConfigured()) {
-      return overview;
-    }
-
-    if (normalizeText(lastPayment.provider).toUpperCase() !== ASAAS_CHECKOUT_PROVIDER || !normalizeText(lastPayment.externalPaymentId)) {
-      return overview;
-    }
-
-    try {
-      const result = await asaasService.listPaymentsByCheckoutSession(lastPayment.externalPaymentId);
-      const paymentRows = Array.isArray(result?.data) ? result.data : [];
-      const paidPayment = paymentRows.find((payment) => isCheckoutPaymentPaid(payment));
-      if (!paidPayment) {
-        return overview;
-      }
-
-      return subscriptionService.confirmPayment({
-        clinicId,
-        paymentId: lastPayment.id,
-        provider: ASAAS_CHECKOUT_PROVIDER,
-        externalPaymentId: paidPayment.id || lastPayment.externalPaymentId,
-        paidAt: resolvePaidAtFromAsaasPayment(paidPayment),
-      });
-    } catch (_error) {
-      return overview;
-    }
+    return getStoredSubscriptionOverview({ clinicId, role });
   },
 
   handleAsaasWebhookEvent: async ({ eventType, payment }) => {
@@ -708,6 +706,7 @@ const subscriptionService = {
       provider: ASAAS_CHECKOUT_PROVIDER,
       externalPaymentId,
       paidAt,
+      source: 'ASAAS_WEBHOOK',
     });
 
     return { handled: true };

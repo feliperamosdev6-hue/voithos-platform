@@ -45,14 +45,13 @@ const createSubscriptionCheckout = async (req, res, next) => {
 
 const confirmSubscriptionPayment = async (req, res, next) => {
   try {
-    const data = await subscriptionService.confirmPayment({
-      clinicId: getAuthenticatedClinicId(req),
-      paymentId: req.body?.paymentId,
-      provider: req.body?.provider,
-      externalPaymentId: req.body?.externalPaymentId,
-      paidAt: req.body?.paidAt,
+    return res.status(410).json({
+      ok: false,
+      error: {
+        code: 'CLIENT_PAYMENT_CONFIRMATION_DISABLED',
+        message: 'Payment confirmation is processed only by the Asaas webhook.',
+      },
     });
-    return res.status(200).json({ ok: true, data });
   } catch (error) {
     return next(error);
   }

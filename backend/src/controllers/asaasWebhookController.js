@@ -39,10 +39,21 @@ const handleAsaasWebhook = async (req, res) => {
       });
     }
   } catch (error) {
+    const statusCode = Number(error?.statusCode || 500);
+    const responseStatus = statusCode >= 400 && statusCode < 500 ? statusCode : 500;
+    const errorCode = String(error?.code || 'WEBHOOK_PROCESSING_FAILED');
     console.error('[asaas][webhook] processing failed', {
       eventType,
       paymentId,
+      errorCode,
       error: error?.message || String(error || ''),
+    });
+    return res.status(responseStatus).json({
+      ok: false,
+      error: {
+        code: errorCode,
+        message: 'Webhook processing failed.',
+      },
     });
   }
 

@@ -21,6 +21,335 @@ const register = (name, fn) => {
   tests.push({ name, fn });
 };
 
+register('subscriptionController.confirmSubscriptionPayment desativa confirmacao client-driven', async () => {
+  let confirmCalled = false;
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/subscriptionController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/subscriptionService.js')]: {
+        subscriptionService: {
+          confirmPayment: async () => {
+            confirmCalled = true;
+            throw new Error('client confirmation should not activate billing');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/utils/authContext.js')]: {
+        getAuthenticatedClinicId: () => 'clinic-auth',
+      },
+    }
+  );
+
+  try {
+    const req = {
+      auth: { clinicId: 'clinic-auth' },
+      body: {
+        paymentId: 'payment-1',
+        provider: 'ASAAS_CHECKOUT',
+        externalPaymentId: 'checkout-1',
+      },
+    };
+    const res = createResponseDouble();
+    let forwardedError = null;
+
+    await controller.confirmSubscriptionPayment(req, res, (error) => {
+      forwardedError = error;
+    });
+
+    assert.equal(confirmCalled, false);
+    assert.equal(forwardedError, null);
+    assert.equal(res.statusCode, 410);
+    assert.equal(res.payload?.ok, false);
+    assert.equal(res.payload?.error?.code, 'CLIENT_PAYMENT_CONFIRMATION_DISABLED');
+  } finally {
+    restore();
+  }
+});
+
+register('subscriptionService.refreshPaymentStatus consulta apenas estado persistido', async () => {
+  let gatewayCalled = false;
+  let activationCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {
+          findById: async () => ({ id: 'clinic-auth', createdAt: new Date('2026-01-01T00:00:00.000Z') }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findByClinicId: async () => ({
+            id: 'sub-1',
+            clinicId: 'clinic-auth',
+            planType: 'MONTHLY',
+            amount: 94.9,
+            status: 'PENDING_PAYMENT',
+            startDate: null,
+            endDate: null,
+            graceUntil: null,
+            lastPayment: {
+              id: 'payment-1',
+              status: 'PENDING',
+              provider: 'ASAAS_CHECKOUT',
+              externalPaymentId: 'checkout-1',
+              paymentLink: 'https://checkout.example',
+            },
+            payments: [],
+          }),
+          confirmPaymentAndActivateSubscription: async () => {
+            activationCalled = true;
+            throw new Error('refresh should not activate billing');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: {
+        asaasService: {
+          isConfigured: () => true,
+          listPaymentsByCheckoutSession: async () => {
+            gatewayCalled = true;
+            throw new Error('refresh should not query Asaas');
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    const result = await serviceModule.subscriptionService.refreshPaymentStatus({
+      clinicId: 'clinic-auth',
+      role: 'DENTIST',
+    });
+
+    assert.equal(gatewayCalled, false);
+    assert.equal(activationCalled, false);
+    assert.equal(result?.effectiveStatus, 'PENDING_PAYMENT');
+    assert.equal(result?.subscription?.lastPayment?.status, 'PENDING');
+  } finally {
+    restore();
+  }
+});
+
+register('subscriptionService.confirmPayment bloqueia origem diferente de webhook', async () => {
+  let lookupCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findPaymentForConfirmation: async () => {
+            lookupCalled = true;
+            return null;
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: { asaasService: {} },
+    }
+  );
+
+  try {
+    await assert.rejects(
+      () => serviceModule.subscriptionService.confirmPayment({
+        clinicId: 'clinic-auth',
+        paymentId: 'payment-1',
+      }),
+      (error) => {
+        assert.equal(error?.statusCode, 403);
+        assert.equal(error?.code, 'WEBHOOK_ONLY_PAYMENT_CONFIRMATION');
+        return true;
+      }
+    );
+    assert.equal(lookupCalled, false);
+  } finally {
+    restore();
+  }
+});
+
+register('authService.refreshPendingSignupPaymentStatus nao finaliza cadastro nem consulta gateway', async () => {
+  let gatewayCalled = false;
+  let createClinicCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/authService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/db/prisma.js')]: {
+        prisma: {
+          clinic: {
+            create: async () => {
+              createClinicCalled = true;
+              throw new Error('refresh should not create clinic');
+            },
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/pendingSignupRepository.js')]: {
+        pendingSignupRepository: {
+          findByEmail: async () => ({
+            id: 'pending-1',
+            email: 'clinic@example.com',
+            signupData: {
+              checkoutToken: 'token-1',
+              emailVerifiedAt: '2026-05-25T10:00:00.000Z',
+              paymentCheckout: {
+                externalPaymentId: 'checkout-1',
+                paymentLink: 'https://checkout.example',
+                expiresAt: '2099-01-01T00:00:00.000Z',
+              },
+            },
+          }),
+          deleteByEmail: async () => {
+            throw new Error('pending signup should not be deleted');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/sessionRepository.js')]: { sessionRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/userRepository.js')]: { userRepository: {} },
+      [path.resolve(__dirname, '../backend/src/services/emailService.js')]: { emailService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: {
+        asaasService: {
+          isConfigured: () => true,
+          listPaymentsByCheckoutSession: async () => {
+            gatewayCalled = true;
+            throw new Error('refresh should not query Asaas');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/promotionOfferService.js')]: { promotionOfferService: {} },
+    }
+  );
+
+  try {
+    const result = await serviceModule.authService.refreshPendingSignupPaymentStatus({
+      email: 'clinic@example.com',
+      pendingSignupToken: 'token-1',
+    });
+
+    assert.equal(gatewayCalled, false);
+    assert.equal(createClinicCalled, false);
+    assert.equal(result?.pendingCheckout, true);
+    assert.equal(result?.effectiveStatus, 'PENDING_PAYMENT');
+    assert.equal(result?.paymentLink, 'https://checkout.example');
+  } finally {
+    restore();
+  }
+});
+
+register('asaasWebhookController retorna erro em falha real para permitir retry', async () => {
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/asaasWebhookController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/subscriptionService.js')]: {
+        subscriptionService: {
+          handleAsaasWebhookEvent: async () => {
+            throw new Error('database unavailable');
+          },
+        },
+      },
+    }
+  );
+
+  const previousToken = process.env.ASAAS_WEBHOOK_TOKEN;
+  process.env.ASAAS_WEBHOOK_TOKEN = 'webhook-token';
+
+  try {
+    const req = {
+      body: {
+        event: 'PAYMENT_CONFIRMED',
+        payment: { id: 'pay-ext-1' },
+      },
+      get: (name) => (String(name).toLowerCase() === 'asaas-access-token' ? 'webhook-token' : ''),
+    };
+    const res = createResponseDouble();
+
+    await controller.handleAsaasWebhook(req, res);
+
+    assert.equal(res.statusCode, 500);
+    assert.equal(res.payload?.ok, false);
+    assert.equal(res.payload?.error?.code, 'WEBHOOK_PROCESSING_FAILED');
+  } finally {
+    if (previousToken === undefined) {
+      delete process.env.ASAAS_WEBHOOK_TOKEN;
+    } else {
+      process.env.ASAAS_WEBHOOK_TOKEN = previousToken;
+    }
+    restore();
+  }
+});
+
+register('subscriptionService.handleAsaasWebhookEvent trata webhook duplicado como idempotente', async () => {
+  let activationCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findPaymentByProviderAndExternalPaymentId: async () => ({
+            id: 'payment-1',
+            clinicId: 'clinic-auth',
+            status: 'PAID',
+            externalPaymentId: 'pay-ext-1',
+            subscription: {
+              id: 'sub-1',
+              clinicId: 'clinic-auth',
+              status: 'ACTIVE',
+            },
+          }),
+          confirmPaymentAndActivateSubscription: async () => {
+            activationCalled = true;
+            throw new Error('duplicate webhook should not activate twice');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: {
+        authService: {
+          finalizePendingSignupPaymentByExternalPaymentId: async () => {
+            throw new Error('existing subscription payment should not finalize signup');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: { asaasService: {} },
+    }
+  );
+
+  try {
+    const result = await serviceModule.subscriptionService.handleAsaasWebhookEvent({
+      eventType: 'PAYMENT_CONFIRMED',
+      payment: {
+        id: 'pay-ext-1',
+        status: 'CONFIRMED',
+        paymentDate: '2026-05-25',
+      },
+    });
+
+    assert.equal(activationCalled, false);
+    assert.deepEqual(result, { handled: true, alreadyActive: true });
+  } finally {
+    restore();
+  }
+});
+
 register('financialController.listAccounts usa clinicId autenticado', async () => {
   const calls = [];
   const { module: controller, restore } = loadModuleWithMocks(
