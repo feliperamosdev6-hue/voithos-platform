@@ -19,6 +19,14 @@ const { createExtractorFromData } = require('node-unrar-js');
 const isMissingTableError = (error) => error && error.code === 'P2021';
 const normalizeDocument = (value) => String(value || '').replace(/\D/g, '');
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const maskEmailForLog = (value) => {
+  const [localPart = '', domain = ''] = normalizeEmail(value).split('@');
+  if (!localPart || !domain) return '';
+  const localMask = localPart.length <= 2
+    ? `${localPart[0] || '*'}*`
+    : `${localPart.slice(0, 2)}***`;
+  return `${localMask}@${domain}`;
+};
 const normalizeKey = (value) => normalizeImportKey(value);
 const isValidDocumentType = (value) => value === 'CPF' || value === 'CNPJ';
 const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
@@ -3933,20 +3941,20 @@ const clinicService = {
         try {
           console.info('[signup][clinic-service]', {
             stage: 'verification_email_send_started',
-            email: adminEmail,
+            email: maskEmailForLog(adminEmail),
             clinic: nomeFantasia,
             sendCount,
           });
           const emailResult = await emailService.sendVerificationEmail(adminEmail, emailVerificationCode);
           console.info('[email] Signup verification email accepted', {
             stage: 'verification_email_send_completed',
-            email: adminEmail,
+            email: maskEmailForLog(adminEmail),
             resendEmailId: emailResult?.data?.id || '',
           });
         } catch (emailError) {
           console.error('[email] Failed to send signup verification email', {
             stage: 'verification_email_send_failed',
-            email: adminEmail,
+            email: maskEmailForLog(adminEmail),
             error: emailError?.message || emailError,
             resendError: emailError?.resendError || null,
           });
