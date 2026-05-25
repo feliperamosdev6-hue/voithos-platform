@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { appEnv } = require('../config/appEnv');
 const { AppError } = require('../errors/AppError');
 const { patientRepository } = require('../repositories/patientRepository');
@@ -50,6 +51,8 @@ const sanitizeFileName = (value, fallback = 'document.bin') => {
 const normalizeStorageDriver = (value) => String(value || '').trim().toLowerCase() === 'r2' ? 'r2' : 'local';
 
 const getActiveStorageDriver = () => normalizeStorageDriver(appEnv.documentStorageDriver);
+
+const hashStorageKey = (value) => crypto.createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
 
 const normalizeStorageBackend = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
@@ -478,6 +481,49 @@ const removeStoredObject = async ({ storageKey = '', storageBackend = 'server_fs
   await removeStoredFile(storageKey);
 };
 
+const collectDocumentAssets = (document = {}) => {
+  const metadata = getDocumentMetadata(document);
+  const assets = metadata.assets && typeof metadata.assets === 'object' ? metadata.assets : {};
+  return Object.entries(assets)
+    .filter(([, asset]) => asset && typeof asset === 'object' && !Array.isArray(asset))
+    .map(([role, asset]) => ({
+      role,
+      storageKey: String(asset.storageKey || '').trim(),
+      storageBackend: normalizeStorageBackend(asset.storageBackend),
+    }))
+    .filter((asset) => asset.storageKey);
+};
+
+const removeDocumentAssets = async ({ clinicId, patientId, document } = {}) => {
+  const normalizedClinicId = String(clinicId || '').trim();
+  const normalizedPatientId = String(patientId || '').trim();
+  const assets = collectDocumentAssets(document);
+  for (const asset of assets) {
+    assertStorageKeyForPatient({
+      storageKey: asset.storageKey,
+      clinicId: normalizedClinicId,
+      patientId: normalizedPatientId,
+    });
+    try {
+      await removeStoredObject({
+        storageKey: asset.storageKey,
+        storageBackend: asset.storageBackend,
+      });
+    } catch (error) {
+      console.warn('[storage][documents]', {
+        operation: 'removeDocumentAsset',
+        storageBackend: asset.storageBackend,
+        role: asset.role,
+        keyHash: hashStorageKey(asset.storageKey),
+        errorCode: String(error?.code || '').slice(0, 80),
+        errorMessage: String(error?.message || '').slice(0, 160),
+      });
+      throw error;
+    }
+  }
+  return { removed: assets.length };
+};
+
 const storePatientProfilePhoto = async ({
   clinicId,
   patientId,
@@ -534,8 +580,6 @@ const storePatientProfilePhoto = async ({
   }
 
   if (
-    activeStorageDriver === 'local'
-    &&
     previousStorageKey
     && previousStorageKey !== storageKey
     && isStorageKeyForPatient({
@@ -616,6 +660,7 @@ module.exports = {
   patientDocumentStorageService: {
     storeDocumentAsset,
     getDocumentAsset,
+    removeDocumentAssets,
     storePatientProfilePhoto,
     getPatientProfilePhoto,
     DOCUMENT_ATTACHMENT_MAX_BYTES,

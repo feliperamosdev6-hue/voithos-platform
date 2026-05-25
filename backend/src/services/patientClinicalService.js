@@ -963,6 +963,21 @@ const patientClinicalService = {
     };
 
     if (existing) {
+      if (data.archived) {
+        await patientDocumentStorageService.removeDocumentAssets({
+          clinicId,
+          patientId,
+          document: existing,
+        });
+        data.metadata = {
+          ...data.metadata,
+          assets: {},
+          storageDeletedAt: new Date().toISOString(),
+        };
+        data.localPath = null;
+        data.storedName = null;
+        data.size = null;
+      }
       await patientClinicalRepository.updateDocument({
         id: existing.id,
         clinicId,

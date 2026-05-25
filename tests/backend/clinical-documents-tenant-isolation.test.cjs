@@ -136,6 +136,77 @@ test('patientClinicalService.upsertDocumentMetadata remove tenant fields injetad
   });
 });
 
+test('patientClinicalService arquivar documento remove assets antes de limpar metadados', async (t) => {
+  let updatedPayload = null;
+  const removedAssets = [];
+  const existingDocument = {
+    id: 'row-1',
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+    externalDocumentId: 'doc-1',
+    archived: false,
+    metadata: {
+      assets: {
+        primary: {
+          storageBackend: 'r2',
+          storageKey: 'clinic-auth/patient-1/doc-1--primary.pdf',
+        },
+      },
+    },
+  };
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientClinicalService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findByIdAndClinic: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {
+          ensureClinicalRecord: async () => ({ id: 'record-1', clinicId: 'clinic-auth', patientId: 'patient-1' }),
+          findDocumentByExternalId: async () => existingDocument,
+          updateDocument: async (input) => {
+            updatedPayload = input;
+            return { count: 1 };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/financialRepository.js')]: { financialRepository: {} },
+      [path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js')]: {
+        patientDocumentStorageService: {
+          removeDocumentAssets: async (input) => {
+            removedAssets.push(input);
+            return { removed: 1 };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/services/financialService.js')]: {
+        financialService: {},
+        mapAccountToLegacy: (row) => row,
+      },
+    }
+  );
+  t.after(restore);
+
+  await serviceModule.patientClinicalService.upsertDocumentMetadata({
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+    document: {
+      id: 'doc-1',
+      title: 'Exame',
+      archived: true,
+    },
+  });
+
+  assert.equal(removedAssets.length, 1);
+  assert.equal(removedAssets[0].document, existingDocument);
+  assert.deepEqual(updatedPayload.data.metadata.assets, {});
+  assert.ok(updatedPayload.data.metadata.storageDeletedAt);
+  assert.equal(updatedPayload.data.storedName, null);
+  assert.equal(updatedPayload.data.size, null);
+});
+
 test('patientDocumentStorageService bloqueia anexo acima de 5MB', async (t) => {
   const storageRoot = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'voithos-doc-storage-'));
   const { module: storageModule, restore } = loadModuleWithMocks(
@@ -373,6 +444,162 @@ test('patientDocumentStorageService salva PDF valido no driver R2 privado', asyn
   assert.equal(updatedDocument.data.metadata.assets.primary.storageBackend, 'r2');
   assert.equal(updatedDocument.data.metadata.assets.primary.storageKey, result.storageKey);
   assert.equal(updatedDocument.data.metadata.assets.primary.publicUrl, undefined);
+});
+
+test('patientDocumentStorageService remove assets R2 salvos no documento', async (t) => {
+  const r2Deletes = [];
+  const { module: storageModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          documentStorageDriver: 'r2',
+          r2AccountId: 'account',
+          r2AccessKeyId: 'key',
+          r2SecretAccessKey: 'secret',
+          r2Bucket: 'voithos-private-documents',
+          r2Endpoint: 'https://account.r2.cloudflarestorage.com',
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/services/r2StorageClient.js')]: {
+        createR2StorageClient: () => ({
+          putObject: async () => {},
+          getObject: async () => Buffer.from('%PDF-1.4\nmock\n'),
+          deleteObject: async (input) => {
+            r2Deletes.push(input);
+          },
+        }),
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+          findByIdAndClinic: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {},
+      },
+    }
+  );
+  t.after(restore);
+
+  const result = await storageModule.patientDocumentStorageService.removeDocumentAssets({
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+    document: {
+      metadata: {
+        assets: {
+          primary: {
+            storageBackend: 'r2',
+            storageKey: 'clinic-auth/patient-1/doc-1--primary.pdf',
+          },
+          source: {
+            storageBackend: 'r2',
+            storageKey: 'clinic-auth/patient-1/doc-1--source.json',
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(result.removed, 2);
+  assert.deepEqual(r2Deletes.map((item) => item.key), [
+    'clinic-auth/patient-1/doc-1--primary.pdf',
+    'clinic-auth/patient-1/doc-1--source.json',
+  ]);
+});
+
+test('patientDocumentStorageService bloqueia remocao de asset de outra clinica', async (t) => {
+  const { module: storageModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/config/appEnv.js')]: {
+        appEnv: { documentStorageDriver: 'r2' },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {},
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {},
+      },
+    }
+  );
+  t.after(restore);
+
+  await assert.rejects(
+    () => storageModule.patientDocumentStorageService.removeDocumentAssets({
+      clinicId: 'clinic-auth',
+      patientId: 'patient-1',
+      document: {
+        metadata: {
+          assets: {
+            primary: {
+              storageBackend: 'r2',
+              storageKey: 'clinic-evil/patient-1/doc-1--primary.pdf',
+            },
+          },
+        },
+      },
+    }),
+    (error) => {
+      assert.equal(error?.code, 'INVALID_STORAGE_KEY');
+      return true;
+    }
+  );
+});
+
+test('patientDocumentStorageService substituir foto remove foto R2 anterior', async (t) => {
+  const r2Writes = [];
+  const r2Deletes = [];
+  const { module: storageModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../../backend/src/services/patientDocumentStorageService.js'),
+    {
+      [path.resolve(__dirname, '../../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          documentStorageDriver: 'r2',
+          r2AccountId: 'account',
+          r2AccessKeyId: 'key',
+          r2SecretAccessKey: 'secret',
+          r2Bucket: 'voithos-private-documents',
+          r2Endpoint: 'https://account.r2.cloudflarestorage.com',
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/services/r2StorageClient.js')]: {
+        createR2StorageClient: () => ({
+          putObject: async (input) => {
+            r2Writes.push(input);
+          },
+          getObject: async () => Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]),
+          deleteObject: async (input) => {
+            r2Deletes.push(input);
+          },
+        }),
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientRepository.js')]: {
+        patientRepository: {
+          findById: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+          findByIdAndClinic: async () => ({ id: 'patient-1', clinicId: 'clinic-auth' }),
+        },
+      },
+      [path.resolve(__dirname, '../../backend/src/repositories/patientClinicalRepository.js')]: {
+        patientClinicalRepository: {},
+      },
+    }
+  );
+  t.after(restore);
+
+  await storageModule.patientDocumentStorageService.storePatientProfilePhoto({
+    clinicId: 'clinic-auth',
+    patientId: 'patient-1',
+    buffer: Buffer.from([0xFF, 0xD8, 0xFF, 0xD9]),
+    fileName: 'nova.jpg',
+    contentType: 'image/jpeg',
+    previousStorageKey: 'clinic-auth/patient-1/profile-photo-old.jpg',
+    previousStorageBackend: 'r2',
+  });
+
+  assert.equal(r2Writes.length, 1);
+  assert.deepEqual(r2Deletes.map((item) => item.key), ['clinic-auth/patient-1/profile-photo-old.jpg']);
 });
 
 test('patientDocumentStorageService bloqueia leitura de anexo de paciente de outra clinica', async (t) => {
