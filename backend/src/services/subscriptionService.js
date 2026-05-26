@@ -109,6 +109,50 @@ const resolveSubscriptionAmount = (subscription, fallbackAmount) => {
   return roundMoney(storedAmount > 0 ? storedAmount : fallbackAmount);
 };
 
+const toIsoStringOrNull = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const sanitizePaymentForClient = (payment) => {
+  if (!payment) return null;
+  const provider = normalizeProvider(payment.provider);
+  return {
+    id: normalizeText(payment.id),
+    amount: roundMoney(payment.amount),
+    status: normalizeText(payment.status).toUpperCase(),
+    provider: provider.includes('ASAAS') ? 'ASAAS' : provider,
+    paymentLink: normalizeText(payment.paymentLink),
+    paidAt: toIsoStringOrNull(payment.paidAt),
+    createdAt: toIsoStringOrNull(payment.createdAt),
+    updatedAt: toIsoStringOrNull(payment.updatedAt),
+  };
+};
+
+const sanitizeSubscriptionForClient = (subscription) => {
+  if (!subscription) return null;
+  const payments = Array.isArray(subscription.payments)
+    ? subscription.payments.map(sanitizePaymentForClient).filter(Boolean)
+    : [];
+  return {
+    id: normalizeText(subscription.id),
+    planType: normalizeText(subscription.planType).toUpperCase(),
+    status: normalizeText(subscription.status).toUpperCase(),
+    amount: roundMoney(subscription.amount),
+    startDate: toIsoStringOrNull(subscription.startDate),
+    endDate: toIsoStringOrNull(subscription.endDate),
+    graceUntil: toIsoStringOrNull(subscription.graceUntil),
+    trialStartedAt: toIsoStringOrNull(subscription.trialStartedAt),
+    trialEndsAt: toIsoStringOrNull(subscription.trialEndsAt),
+    activatedAt: toIsoStringOrNull(subscription.activatedAt),
+    lastPayment: sanitizePaymentForClient(subscription.lastPayment),
+    payments,
+    createdAt: toIsoStringOrNull(subscription.createdAt),
+    updatedAt: toIsoStringOrNull(subscription.updatedAt),
+  };
+};
+
 const normalizeCheckoutName = (value, fallback = 'Voithos') => {
   const raw = String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!raw) return fallback;
@@ -365,7 +409,7 @@ const buildOverview = (subscription, now = new Date(), options = {}) => {
     now,
   });
   return {
-    subscription,
+    subscription: sanitizeSubscriptionForClient(subscription),
     paymentLink: subscription?.lastPayment?.paymentLink || '',
     effectiveStatus,
     accessAllowed: typeof options.accessAllowed === 'boolean'

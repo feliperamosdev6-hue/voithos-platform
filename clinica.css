@@ -718,6 +718,13 @@
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .form-actions {
   display: flex;
   align-items: center;
@@ -728,6 +735,207 @@
 .form-status {
   color: #64748b;
   font-size: 0.85rem;
+}
+
+.subscription-panel {
+  gap: 20px;
+}
+
+.subscription-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.subscription-panel-head h2 {
+  margin: 12px 0 6px;
+  font-size: 1.35rem;
+  color: #0f172a;
+}
+
+.subscription-panel-head p {
+  margin: 0;
+  color: #64748b;
+}
+
+.subscription-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.subscription-status-pill[data-status="TRIALING"] {
+  color: #0f766e;
+  background: rgba(15, 118, 110, 0.1);
+  border-color: rgba(15, 118, 110, 0.22);
+}
+
+.subscription-status-pill[data-status="ACTIVE"] {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.subscription-status-pill[data-status="READ_ONLY"] {
+  color: #9a3412;
+  background: rgba(249, 115, 22, 0.12);
+  border-color: rgba(249, 115, 22, 0.24);
+}
+
+.subscription-status-pill[data-status="PAYMENT_REQUIRED"] {
+  color: #991b1b;
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+.subscription-trial-highlight {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 4px 18px;
+  align-items: center;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  border-radius: 18px;
+  padding: 18px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+}
+
+.subscription-trial-highlight[data-state="expired"] {
+  border-color: rgba(249, 115, 22, 0.22);
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+}
+
+.subscription-trial-label {
+  grid-row: span 2;
+  color: #0f766e;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.subscription-trial-highlight[data-state="expired"] .subscription-trial-label {
+  color: #9a3412;
+}
+
+.subscription-trial-highlight strong {
+  font-size: 1.45rem;
+  color: #0f172a;
+}
+
+.subscription-trial-highlight small {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.subscription-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.subscription-metric,
+.subscription-detail-block {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.subscription-metric {
+  display: grid;
+  gap: 8px;
+}
+
+.subscription-metric span,
+.subscription-payment-meta {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.subscription-metric strong {
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.subscription-billing-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.subscription-detail-block h3 {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.subscription-detail-block p {
+  margin: 0 0 12px;
+  color: #64748b;
+}
+
+.subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.subscription-feedback {
+  display: block;
+  min-height: 18px;
+  margin-top: 10px;
+  color: #64748b;
+}
+
+.subscription-feedback[data-tone="success"] {
+  color: #0f766e;
+}
+
+.subscription-feedback[data-tone="error"] {
+  color: #b42318;
+}
+
+.subscription-payment-history {
+  display: grid;
+  gap: 8px;
+}
+
+.subscription-payment-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 14px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.subscription-payment-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.subscription-payment-title {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.subscription-payment-amount {
+  font-weight: 800;
+  color: #0f766e;
+}
+
+.subscription-empty-state {
+  color: #64748b;
+  font-size: 0.9rem;
 }
 
 @media (max-width: 980px) {
@@ -758,6 +966,20 @@
   .form-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .subscription-panel-head,
+  .subscription-billing-row {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .subscription-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .subscription-trial-highlight {
+    grid-template-columns: 1fr;
   }
 
   .whatsapp-engine-header {

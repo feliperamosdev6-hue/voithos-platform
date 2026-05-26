@@ -1,7 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
   const appApi = window.appApi || {};
   const clinicApi = appApi.clinic || {};
+  const subscriptionApi = appApi.subscription || {};
   const form = document.getElementById('clinic-form');
+  const pageTitle = document.getElementById('clinic-page-title');
+  const pageSubtitle = document.getElementById('clinic-page-subtitle');
   const statusEl = document.getElementById('clinic-status');
   const logoInput = document.getElementById('clinic-logo');
   const logoPreview = document.getElementById('logo-preview');
@@ -12,6 +15,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const importPreview = document.getElementById('clinic-import-preview');
   const importApplyButton = document.getElementById('clinic-import-apply');
   const importClearButton = document.getElementById('clinic-import-clear');
+  const tabTriggers = Array.from(document.querySelectorAll('[data-clinic-tab-trigger]'));
+  const tabPanels = Array.from(document.querySelectorAll('[data-clinic-tab-panel]'));
+  const subscriptionPanel = document.getElementById('clinic-subscription-panel');
+  const subscriptionHeadline = document.getElementById('subscription-headline');
+  const subscriptionSummary = document.getElementById('subscription-summary');
+  const subscriptionStatusPill = document.getElementById('subscription-status-pill');
+  const subscriptionTrialHighlight = document.getElementById('subscription-trial-highlight');
+  const subscriptionTrialDays = document.getElementById('subscription-trial-days');
+  const subscriptionTrialCopy = document.getElementById('subscription-trial-copy');
+  const subscriptionPlan = document.getElementById('subscription-plan');
+  const subscriptionMonthlyAmount = document.getElementById('subscription-monthly-amount');
+  const subscriptionTrialEnds = document.getElementById('subscription-trial-ends');
+  const subscriptionNextDue = document.getElementById('subscription-next-due');
+  const subscriptionLastPayment = document.getElementById('subscription-last-payment');
+  const subscriptionPaymentHistory = document.getElementById('subscription-payment-history');
+  const subscriptionActivateButton = document.getElementById('subscription-activate-button');
+  const subscriptionRefreshButton = document.getElementById('subscription-refresh-button');
+  const subscriptionFeedback = document.getElementById('subscription-feedback');
 
   const fields = {
     cnpjCpf: document.getElementById('clinic-cnpj'),
@@ -65,6 +86,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let logoFile = '';
   let logoRemoved = false;
   let pendingImportPayload = null;
+  let subscriptionOverview = null;
+  let subscriptionLoaded = false;
+  let subscriptionLoading = false;
   let whatsAppPollTimer = null;
   let whatsAppQrState = {
     qrDataUrl: '',
@@ -73,6 +97,19 @@ document.addEventListener('DOMContentLoaded', () => {
     status: '',
   };
   const CRO_PREFIX = 'CRO-';
+  const PLAN_LABELS = {
+    MONTHLY: 'Mensal',
+    QUARTERLY: 'Trimestral',
+    SEMIANNUAL: 'Semestral',
+    ANNUAL: 'Anual',
+    LEGACY: 'Legado',
+  };
+  const PLAN_MONTH_DIVISOR = {
+    MONTHLY: 1,
+    QUARTERLY: 3,
+    SEMIANNUAL: 6,
+    ANNUAL: 12,
+  };
 
   const onlyDigits = (value) => String(value || '').replace(/\D/g, '');
   const formatCroValue = (value) => {
@@ -414,6 +451,273 @@ document.addEventListener('DOMContentLoaded', () => {
       dateStyle: 'short',
       timeStyle: 'short',
     }).format(date);
+  };
+
+  const formatDateOnly = (value, fallback = '--') => {
+    if (!value) return fallback;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return fallback;
+    return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date);
+  };
+
+  const formatCurrency = (value, fallback = '--') => {
+    const amount = Number(value || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return fallback;
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(amount);
+  };
+
+  const normalizePlanType = (value) => String(value || '').trim().toUpperCase();
+
+  const getSubscriptionPlan = (overview = {}) => {
+    const subscription = overview?.subscription || {};
+    const planType = normalizePlanType(subscription?.planType) || 'MONTHLY';
+    const catalog = Array.isArray(overview?.plans) ? overview.plans : [];
+    const catalogPlan = catalog.find((plan) => normalizePlanType(plan?.planType) === planType) || {};
+    const amount = Number(subscription?.amount || catalogPlan?.amount || 0);
+    return {
+      planType,
+      label: PLAN_LABELS[planType] || planType || 'Mensal',
+      amount,
+      monthlyAmount: amount > 0 ? amount / (PLAN_MONTH_DIVISOR[planType] || 1) : 0,
+    };
+  };
+
+  const resolveSubscriptionStatus = (overview = {}) => {
+    const effectiveStatus = String(overview?.effectiveStatus || overview?.subscription?.status || '').trim().toUpperCase();
+    const accessMode = String(overview?.accessMode || '').trim().toUpperCase();
+    if (overview?.readOnly === true || accessMode === 'READ_ONLY' || effectiveStatus === 'TRIAL_EXPIRED') return 'READ_ONLY';
+    if (effectiveStatus === 'TRIALING') return 'TRIALING';
+    if (effectiveStatus === 'ACTIVE' || effectiveStatus === 'GRACE_PERIOD') return 'ACTIVE';
+    return 'PAYMENT_REQUIRED';
+  };
+
+  const getTrialDaysRemaining = (trialEndsAt) => {
+    const end = trialEndsAt ? new Date(trialEndsAt) : null;
+    if (!end || Number.isNaN(end.getTime())) return null;
+    const remainingMs = end.getTime() - Date.now();
+    return Math.max(0, Math.ceil(remainingMs / (24 * 60 * 60 * 1000)));
+  };
+
+  const resolvePaymentLink = (...values) => values
+    .map((value) => String(value || '').trim())
+    .find(Boolean) || '';
+
+  const setSubscriptionFeedback = (message = '', tone = 'muted') => {
+    if (!subscriptionFeedback) return;
+    subscriptionFeedback.textContent = message;
+    subscriptionFeedback.dataset.tone = tone;
+  };
+
+  const setSubscriptionLoading = (loading) => {
+    subscriptionLoading = loading === true;
+    if (subscriptionActivateButton) {
+      const currentStatus = resolveSubscriptionStatus(subscriptionOverview || {});
+      subscriptionActivateButton.disabled = subscriptionLoading || currentStatus === 'ACTIVE';
+    }
+    if (subscriptionRefreshButton) subscriptionRefreshButton.disabled = subscriptionLoading;
+  };
+
+  const openCheckoutLink = async (paymentLink) => {
+    const link = String(paymentLink || '').trim();
+    if (!link) throw new Error('Checkout indisponivel no momento.');
+    const isDesktopMode = String(appApi?.mode || '').trim().toLowerCase() === 'desktop';
+    if (isDesktopMode && typeof appApi?.openExternalUrl === 'function') {
+      await appApi.openExternalUrl(link);
+      return;
+    }
+    window.open(link, '_blank', 'noopener,noreferrer');
+  };
+
+  const renderPaymentSummary = (payment) => {
+    if (!payment) return 'Nenhum pagamento registrado.';
+    const status = String(payment?.status || '').trim().toUpperCase() || 'PENDING';
+    const paidAt = payment?.paidAt ? `Pago em ${formatDateTime(payment.paidAt, '--')}` : `Criado em ${formatDateTime(payment?.createdAt, '--')}`;
+    return `
+      <div class="subscription-payment-title">${status}</div>
+      <div class="subscription-payment-meta">${paidAt}</div>
+      <div class="subscription-payment-amount">${formatCurrency(payment?.amount)}</div>
+    `;
+  };
+
+  const renderSubscriptionHistory = (payments = []) => {
+    if (!subscriptionPaymentHistory) return;
+    const safePayments = Array.isArray(payments) ? payments : [];
+    if (!safePayments.length) {
+      subscriptionPaymentHistory.innerHTML = '<div class="subscription-empty-state">Nenhuma cobranca encontrada.</div>';
+      return;
+    }
+    subscriptionPaymentHistory.innerHTML = safePayments.slice(0, 8).map((payment) => {
+      const status = String(payment?.status || '').trim().toUpperCase() || 'PENDING';
+      const dateLabel = payment?.paidAt
+        ? `Pago em ${formatDateTime(payment.paidAt, '--')}`
+        : `Criado em ${formatDateTime(payment?.createdAt, '--')}`;
+      return `
+        <div class="subscription-payment-row">
+          <div>
+            <div class="subscription-payment-title">${status}</div>
+            <div class="subscription-payment-meta">${dateLabel} · ${payment?.provider || 'ASAAS'}</div>
+          </div>
+          <div class="subscription-payment-amount">${formatCurrency(payment?.amount)}</div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const renderSubscription = (overview = {}) => {
+    subscriptionOverview = overview;
+    const subscription = overview?.subscription || null;
+    const status = resolveSubscriptionStatus(overview);
+    const plan = getSubscriptionPlan(overview);
+    const trialEndsAt = subscription?.trialEndsAt || '';
+    const trialDays = getTrialDaysRemaining(trialEndsAt);
+    const paymentLink = resolvePaymentLink(overview?.paymentLink, subscription?.lastPayment?.paymentLink);
+
+    if (subscriptionStatusPill) {
+      subscriptionStatusPill.textContent = status;
+      subscriptionStatusPill.dataset.status = status;
+    }
+
+    if (subscriptionHeadline) {
+      subscriptionHeadline.textContent = status === 'READ_ONLY'
+        ? 'Modo visualizacao'
+        : status === 'ACTIVE'
+          ? 'Assinatura ativa'
+          : status === 'TRIALING'
+            ? 'Teste gratis ativo'
+            : 'Pagamento necessario';
+    }
+
+    if (subscriptionSummary) {
+      subscriptionSummary.textContent = status === 'READ_ONLY'
+        ? 'Seu periodo de teste expirou. Ative a assinatura para voltar a editar dados.'
+        : status === 'ACTIVE'
+          ? 'Sua clinica esta com acesso completo.'
+          : status === 'TRIALING'
+            ? 'Use a Voithos normalmente durante o periodo de teste.'
+            : 'Gere o checkout seguro do Asaas para ativar a assinatura.';
+    }
+
+    if (subscriptionTrialHighlight) {
+      subscriptionTrialHighlight.dataset.state = status === 'READ_ONLY' ? 'expired' : 'active';
+    }
+    if (subscriptionTrialDays) {
+      subscriptionTrialDays.textContent = status === 'READ_ONLY'
+        ? 'Modo visualizacao'
+        : trialDays === null
+          ? '--'
+          : `Teste grátis: ${trialDays} dia${trialDays === 1 ? '' : 's'} restante${trialDays === 1 ? '' : 's'}`;
+    }
+    if (subscriptionTrialCopy) {
+      subscriptionTrialCopy.textContent = status === 'READ_ONLY'
+        ? 'O trial expirou. A leitura continua liberada, mas edicoes exigem assinatura ativa.'
+        : trialEndsAt
+          ? `Disponivel ate ${formatDateOnly(trialEndsAt)}.`
+          : 'Periodo de teste indisponivel para esta assinatura.';
+    }
+
+    if (subscriptionPlan) subscriptionPlan.textContent = plan.label;
+    if (subscriptionMonthlyAmount) subscriptionMonthlyAmount.textContent = formatCurrency(plan.monthlyAmount);
+    if (subscriptionTrialEnds) subscriptionTrialEnds.textContent = formatDateOnly(trialEndsAt);
+    if (subscriptionNextDue) subscriptionNextDue.textContent = formatDateOnly(subscription?.endDate || subscription?.graceUntil);
+    if (subscriptionLastPayment) subscriptionLastPayment.innerHTML = renderPaymentSummary(subscription?.lastPayment);
+    renderSubscriptionHistory(subscription?.payments || []);
+
+    if (subscriptionActivateButton) {
+      subscriptionActivateButton.textContent = paymentLink ? 'Abrir checkout Asaas' : 'Ativar assinatura';
+      subscriptionActivateButton.disabled = subscriptionLoading || status === 'ACTIVE';
+    }
+    if (subscriptionRefreshButton) subscriptionRefreshButton.disabled = subscriptionLoading;
+  };
+
+  const loadSubscription = async ({ force = false } = {}) => {
+    if (!subscriptionPanel || !subscriptionApi.getMySubscription) return;
+    if (subscriptionLoaded && !force) return;
+    setSubscriptionLoading(true);
+    setSubscriptionFeedback('Carregando assinatura...', 'muted');
+    try {
+      const overview = await subscriptionApi.getMySubscription();
+      subscriptionLoaded = true;
+      renderSubscription(overview || {});
+      setSubscriptionFeedback('', 'muted');
+    } catch (error) {
+      console.warn('[CLINICA] Falha ao carregar assinatura', error);
+      setSubscriptionFeedback(error?.message || 'Nao foi possivel carregar os dados da assinatura.', 'error');
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
+
+  const activateSubscription = async () => {
+    if (!subscriptionApi.createCheckout) {
+      setSubscriptionFeedback('Checkout indisponivel neste ambiente.', 'error');
+      return;
+    }
+
+    setSubscriptionLoading(true);
+    setSubscriptionFeedback('Preparando checkout seguro do Asaas...', 'muted');
+    try {
+      let overview = subscriptionOverview;
+      if (!overview && subscriptionApi.getMySubscription) {
+        overview = await subscriptionApi.getMySubscription();
+      }
+
+      let subscription = overview?.subscription || null;
+      const plan = getSubscriptionPlan(overview || {});
+      let paymentLink = resolvePaymentLink(overview?.paymentLink, subscription?.lastPayment?.paymentLink);
+
+      if (!subscription && subscriptionApi.create) {
+        await subscriptionApi.create({
+          planType: plan.planType || 'MONTHLY',
+          provider: 'MANUAL',
+          gatewayMode: 'CHECKOUT',
+        });
+        overview = await subscriptionApi.getMySubscription?.();
+        subscription = overview?.subscription || null;
+        paymentLink = resolvePaymentLink(overview?.paymentLink, subscription?.lastPayment?.paymentLink);
+      }
+
+      if (!paymentLink) {
+        const checkout = await subscriptionApi.createCheckout({
+          planType: plan.planType || subscription?.planType || 'MONTHLY',
+          paymentMethod: 'PIX',
+        });
+        paymentLink = resolvePaymentLink(checkout?.paymentLink, checkout?.invoiceUrl, checkout?.url, checkout?.checkoutUrl);
+      }
+
+      await loadSubscription({ force: true });
+      await openCheckoutLink(paymentLink);
+      setSubscriptionFeedback('Checkout aberto. A ativacao acontece automaticamente quando o webhook Asaas confirmar o pagamento.', 'success');
+    } catch (error) {
+      console.error('[CLINICA] Falha ao gerar checkout', error);
+      setSubscriptionFeedback(error?.message || 'Nao foi possivel gerar o checkout agora.', 'error');
+    } finally {
+      setSubscriptionLoading(false);
+    }
+  };
+
+  const showClinicTab = (tabName = 'profile') => {
+    const normalized = tabName === 'subscription' ? 'subscription' : 'profile';
+    tabPanels.forEach((panel) => {
+      panel.classList.toggle('hidden', panel.getAttribute('data-clinic-tab-panel') !== normalized);
+    });
+    tabTriggers.forEach((trigger) => {
+      trigger.classList.toggle('active', trigger.getAttribute('data-clinic-tab-trigger') === normalized);
+    });
+    if (pageTitle) pageTitle.textContent = normalized === 'subscription' ? 'Assinaturas' : 'Dados da clinica';
+    if (pageSubtitle) {
+      pageSubtitle.textContent = normalized === 'subscription'
+        ? 'Status, trial e ativacao da assinatura da clinica.'
+        : 'Informacoes principais e identidade visual.';
+    }
+    if (normalized === 'subscription') {
+      window.history.replaceState({}, document.title, '#assinaturas');
+      void loadSubscription();
+    } else if (window.location.hash === '#assinaturas') {
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+    }
   };
 
   const formatWhatsAppStatus = (status) => {
@@ -1101,6 +1405,34 @@ document.addEventListener('DOMContentLoaded', () => {
     void applyClinicImport();
   });
 
+  tabTriggers.forEach((trigger) => {
+    trigger.addEventListener('click', (event) => {
+      const tabName = trigger.getAttribute('data-clinic-tab-trigger');
+      if (!tabName) return;
+      event.preventDefault();
+      showClinicTab(tabName);
+    });
+  });
+
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash === '#assinaturas') {
+      showClinicTab('subscription');
+    }
+  });
+
+  window.addEventListener('voithos:subscription-read-only', () => {
+    showClinicTab('subscription');
+  });
+
+  subscriptionActivateButton?.addEventListener('click', () => {
+    void activateSubscription();
+  });
+
+  subscriptionRefreshButton?.addEventListener('click', () => {
+    subscriptionLoaded = false;
+    void loadSubscription({ force: true });
+  });
+
   Object.values(fields).forEach((input) => {
     input?.addEventListener('input', () => {
       setStatus('Alteracoes pendentes.', true);
@@ -1281,5 +1613,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     void loadWhatsAppConnection(true);
   });
+  if (window.location.hash === '#assinaturas') {
+    showClinicTab('subscription');
+  } else {
+    showClinicTab('profile');
+  }
   loadClinic();
 });

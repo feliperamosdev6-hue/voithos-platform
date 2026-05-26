@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const MOBILE_NAV_ID = 'voithos-mobile-bottom-nav';
   const SUBSCRIPTION_BANNER_STYLE_ID = 'voithos-subscription-access-styles';
   const SUBSCRIPTION_BANNER_ID = 'voithos-subscription-access-banner';
+  const SUBSCRIPTION_PAYMENT_HREF = 'clinica.html#assinaturas';
   const READ_ONLY_WRITE_SELECTOR = [
     '[data-subscription-write]',
     '[data-requires-write]',
@@ -290,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
       banner.setAttribute('role', 'status');
       banner.innerHTML = `
         <span class="subscription-access-banner__text"></span>
-        <a class="subscription-access-banner__cta" href="login.html?resume=1" data-subscription-payment-cta="true">Ativar assinatura</a>
+        <a class="subscription-access-banner__cta" href="${SUBSCRIPTION_PAYMENT_HREF}" data-subscription-payment-cta="true">Ativar assinatura</a>
       `;
       document.body.prepend(banner);
     }
@@ -359,6 +360,16 @@ document.addEventListener('DOMContentLoaded', () => {
     renderSubscriptionBanner(event?.detail?.message || 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
     ensureWriteControlObserver();
     applyWriteControlsReadOnly();
+  });
+
+  document.addEventListener('click', (event) => {
+    const cta = event.target?.closest?.('[data-subscription-payment-cta="true"]');
+    if (!cta) return;
+    const page = String(window.location.pathname || '').split('/').pop().toLowerCase();
+    if (page !== 'clinica.html') return;
+    event.preventDefault();
+    window.location.hash = 'assinaturas';
+    window.dispatchEvent(new Event('hashchange'));
   });
 
   document.addEventListener('click', (event) => {

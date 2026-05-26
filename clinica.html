@@ -97,7 +97,8 @@
                         <span class="nav-caret" aria-hidden="true">▾</span>
                     </button>
                     <div class="nav-group-list">
-                        <a class="nav-item active" href="#">Dados da clinica</a>
+                        <a class="nav-item active" href="#dados" data-clinic-tab-trigger="profile">Dados da clinica</a>
+                        <a class="nav-item" href="#assinaturas" data-clinic-tab-trigger="subscription">Assinaturas</a>
                         <span class="nav-item disabled">Conexao do WhatsApp nesta pagina</span>
                         <a class="nav-item" href="users.html">Gerenciar usuarios</a>
                         <a class="nav-item" href="procedimentos.html">Lista de procedimentos</a>
@@ -143,11 +144,11 @@
 
         <section class="clinic-content">
             <div class="clinic-header">
-                <h1>Dados da clinica</h1>
-                <p>Informacoes principais e identidade visual.</p>
+                <h1 id="clinic-page-title">Dados da clinica</h1>
+                <p id="clinic-page-subtitle">Informacoes principais e identidade visual.</p>
             </div>
 
-            <form class="clinic-card" id="clinic-form">
+            <form class="clinic-card" id="clinic-form" data-clinic-tab-panel="profile">
                 <div class="section-title">Informacoes de cadastro</div>
                 <div class="clinic-grid two">
                     <label class="field">
@@ -337,6 +338,65 @@
                     <button class="btn-primary" type="submit">Salvar alteracoes</button>
                 </div>
             </form>
+
+            <section class="clinic-card subscription-panel hidden" id="clinic-subscription-panel" data-clinic-tab-panel="subscription">
+                <div class="subscription-panel-head">
+                    <div>
+                        <div class="section-title">Assinatura</div>
+                        <h2 id="subscription-headline">Carregando assinatura...</h2>
+                        <p id="subscription-summary">Acompanhe o status comercial da sua clinica.</p>
+                    </div>
+                    <span class="subscription-status-pill" id="subscription-status-pill">--</span>
+                </div>
+
+                <div class="subscription-trial-highlight" id="subscription-trial-highlight">
+                    <span class="subscription-trial-label">Teste gratis</span>
+                    <strong id="subscription-trial-days">--</strong>
+                    <small id="subscription-trial-copy">Calculando periodo de teste.</small>
+                </div>
+
+                <div class="subscription-metrics">
+                    <div class="subscription-metric">
+                        <span>Plano escolhido</span>
+                        <strong id="subscription-plan">--</strong>
+                    </div>
+                    <div class="subscription-metric">
+                        <span>Valor mensal</span>
+                        <strong id="subscription-monthly-amount">--</strong>
+                    </div>
+                    <div class="subscription-metric">
+                        <span>Fim do trial</span>
+                        <strong id="subscription-trial-ends">--</strong>
+                    </div>
+                    <div class="subscription-metric">
+                        <span>Proxima cobranca</span>
+                        <strong id="subscription-next-due">--</strong>
+                    </div>
+                </div>
+
+                <div class="subscription-billing-row">
+                    <section class="subscription-detail-block">
+                        <h3>Ultimo pagamento</h3>
+                        <div class="subscription-last-payment" id="subscription-last-payment">Nenhum pagamento registrado.</div>
+                    </section>
+                    <section class="subscription-detail-block">
+                        <h3>Ativacao</h3>
+                        <p id="subscription-activation-copy">O pagamento e confirmado automaticamente pelo webhook Asaas.</p>
+                        <div class="subscription-actions">
+                            <button class="btn-primary" type="button" id="subscription-activate-button" data-subscription-payment-cta="true">Ativar assinatura</button>
+                            <button class="btn-secondary" type="button" id="subscription-refresh-button">Atualizar status</button>
+                        </div>
+                        <small class="subscription-feedback" id="subscription-feedback"></small>
+                    </section>
+                </div>
+
+                <section class="subscription-detail-block">
+                    <h3>Historico de pagamentos</h3>
+                    <div class="subscription-payment-history" id="subscription-payment-history">
+                        <div class="subscription-empty-state">Nenhuma cobranca encontrada.</div>
+                    </div>
+                </section>
+            </section>
         </section>
     </main>
 

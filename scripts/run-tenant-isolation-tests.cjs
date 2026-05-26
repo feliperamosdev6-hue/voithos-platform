@@ -132,6 +132,97 @@ register('subscriptionService.refreshPaymentStatus consulta apenas estado persis
     assert.equal(activationCalled, false);
     assert.equal(result?.effectiveStatus, 'PENDING_PAYMENT');
     assert.equal(result?.subscription?.lastPayment?.status, 'PENDING');
+    assert.equal(Object.prototype.hasOwnProperty.call(result?.subscription?.lastPayment || {}, 'externalPaymentId'), false);
+  } finally {
+    restore();
+  }
+});
+
+register('subscriptionService.createCheckoutSession cria checkout server-side sem ativar assinatura', async () => {
+  let checkoutPayload = null;
+  let renewalPaymentPayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          publicAppBaseUrl: 'https://app.voithos.test',
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {
+          findProfileById: async () => ({
+            id: 'clinic-auth',
+            nomeFantasia: 'Clinica Teste',
+            email: 'clinic@example.com',
+            telefoneComercial: '11999999999',
+            cnpjCpf: '12345678000190',
+            operationalSettings: {
+              clinicProfile: {
+                endereco: {
+                  rua: 'Rua Teste',
+                  numero: '123',
+                  bairro: 'Centro',
+                  cep: '01001000',
+                },
+              },
+            },
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findByClinicId: async () => ({
+            id: 'sub-1',
+            clinicId: 'clinic-auth',
+            planType: 'MONTHLY',
+            amount: 94.9,
+            status: 'TRIALING',
+            trialStartedAt: new Date('2026-05-25T00:00:00.000Z'),
+            trialEndsAt: new Date('2026-06-01T00:00:00.000Z'),
+            lastPayment: null,
+            payments: [],
+          }),
+          createRenewalPayment: async (payload) => {
+            renewalPaymentPayload = payload;
+            return { id: 'sub-1' };
+          },
+          updatePaymentGatewayData: async () => {
+            throw new Error('subscription without lastPayment should create a payment');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: {
+        asaasService: {
+          isConfigured: () => true,
+          createCheckout: async (payload) => {
+            checkoutPayload = payload;
+            return { id: 'checkout-1', url: 'https://asaas.example/checkout-1' };
+          },
+          buildCheckoutUrl: (id) => `https://asaas.example/${id}`,
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/promotionOfferService.js')]: { promotionOfferService: {} },
+    }
+  );
+
+  try {
+    const result = await serviceModule.subscriptionService.createCheckoutSession({
+      clinicId: 'clinic-auth',
+      planType: 'MONTHLY',
+      paymentMethod: 'PIX',
+    });
+
+    assert.equal(result?.checkoutId, 'checkout-1');
+    assert.equal(result?.paymentLink, 'https://asaas.example/checkout-1');
+    assert.equal(checkoutPayload?.items?.[0]?.value, 94.9);
+    assert.equal(checkoutPayload?.callback?.successUrl, 'https://app.voithos.test/payment-return.html?payment=success');
+    assert.equal(renewalPaymentPayload?.clinicId, 'clinic-auth');
+    assert.equal(renewalPaymentPayload?.provider, 'ASAAS_CHECKOUT');
+    assert.equal(renewalPaymentPayload?.resetStatusToPending, false);
   } finally {
     restore();
   }
@@ -197,6 +288,87 @@ register('subscriptionService.getAccessOverview retorna READ_ONLY para trial exp
     assert.equal(result?.readOnly, true);
     assert.equal(result?.accessAllowed, true);
     assert.equal(result?.warning, 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
+  } finally {
+    restore();
+  }
+});
+
+register('subscriptionService.getAccessOverview mantem FULL para trial ativo e assinatura ativa', async () => {
+  const subscriptions = {
+    'clinic-trial': {
+      id: 'sub-trial-active',
+      clinicId: 'clinic-trial',
+      planType: 'MONTHLY',
+      amount: 94.9,
+      status: 'TRIALING',
+      trialStartedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      trialEndsAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
+      lastPayment: null,
+      payments: [],
+    },
+    'clinic-active': {
+      id: 'sub-active',
+      clinicId: 'clinic-active',
+      planType: 'MONTHLY',
+      amount: 94.9,
+      status: 'ACTIVE',
+      startDate: new Date('2026-05-01T00:00:00.000Z'),
+      endDate: new Date('2026-06-01T00:00:00.000Z'),
+      graceUntil: new Date('2026-06-04T00:00:00.000Z'),
+      lastPayment: {
+        id: 'payment-paid',
+        status: 'PAID',
+        amount: 94.9,
+        provider: 'ASAAS_CHECKOUT',
+        externalPaymentId: 'checkout-paid',
+        paymentLink: 'https://checkout.example/paid',
+        paidAt: new Date('2026-05-01T00:00:00.000Z'),
+        createdAt: new Date('2026-05-01T00:00:00.000Z'),
+      },
+      payments: [],
+    },
+  };
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: { clinicRepository: {} },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findByClinicId: async ({ clinicId }) => subscriptions[clinicId] || null,
+          updateStatus: async () => {
+            throw new Error('active access modes should not persist status');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: { asaasService: {} },
+      [path.resolve(__dirname, '../backend/src/services/promotionOfferService.js')]: { promotionOfferService: {} },
+    }
+  );
+
+  try {
+    const trial = await serviceModule.subscriptionService.getAccessOverview({
+      clinicId: 'clinic-trial',
+      role: 'DENTIST',
+    });
+    const active = await serviceModule.subscriptionService.getAccessOverview({
+      clinicId: 'clinic-active',
+      role: 'DENTIST',
+    });
+
+    assert.equal(trial?.effectiveStatus, 'TRIALING');
+    assert.equal(trial?.accessMode, 'FULL');
+    assert.equal(trial?.readOnly, false);
+    assert.equal(active?.effectiveStatus, 'ACTIVE');
+    assert.equal(active?.accessMode, 'FULL');
+    assert.equal(active?.readOnly, false);
+    assert.equal(Object.prototype.hasOwnProperty.call(active?.subscription?.lastPayment || {}, 'externalPaymentId'), false);
   } finally {
     restore();
   }
