@@ -563,6 +563,8 @@ const deriveSubscriptionEffectiveStatusForDashboard = (subscription) => {
     }
   }
 
+  if (currentStatus === 'TRIALING') return 'TRIALING';
+
   const nowTime = Date.now();
   const endTime = subscription.endDate ? new Date(subscription.endDate).getTime() : 0;
   const graceTime = subscription.graceUntil ? new Date(subscription.graceUntil).getTime() : 0;
@@ -613,6 +615,16 @@ const deriveOnboardingStage = ({ onboardingState, subscription }) => {
     return {
       stage: 'GRACE_PERIOD',
       label: 'Assinatura em tolerancia',
+      selectedPlan,
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (effectiveSubscriptionStatus === 'TRIALING') {
+    return {
+      stage: 'TRIALING',
+      label: 'Teste gratis ativo',
       selectedPlan,
       operationType,
       effectiveSubscriptionStatus,
@@ -2680,6 +2692,7 @@ const clinicService = {
         clinicsAwaitingProfile: 0,
         clinicsAwaitingPayment: 0,
         activeSubscriptions: 0,
+        trialingSubscriptions: 0,
         gracePeriodSubscriptions: 0,
         blockedSubscriptions: 0,
         canceledSubscriptions: 0,
@@ -2696,6 +2709,7 @@ const clinicService = {
         EMAIL_VERIFICATION_PENDING: 0,
         PROFILE_PENDING: 0,
         PAYMENT_PENDING: 0,
+        TRIALING: 0,
         ACTIVE: 0,
         GRACE_PERIOD: 0,
         BLOCKED: 0,
@@ -2719,6 +2733,7 @@ const clinicService = {
 
         if (stageInfo.stage === 'PROFILE_PENDING') summary.clinicsAwaitingProfile += 1;
         if (stageInfo.stage === 'PAYMENT_PENDING') summary.clinicsAwaitingPayment += 1;
+        if (stageInfo.stage === 'TRIALING') summary.trialingSubscriptions += 1;
         if (stageInfo.stage === 'ACTIVE') summary.activeSubscriptions += 1;
         if (stageInfo.stage === 'GRACE_PERIOD') summary.gracePeriodSubscriptions += 1;
         if (stageInfo.stage === 'BLOCKED') summary.blockedSubscriptions += 1;
@@ -2844,6 +2859,7 @@ const clinicService = {
             clinicsAwaitingProfile: 0,
             clinicsAwaitingPayment: 0,
             activeSubscriptions: 0,
+            trialingSubscriptions: 0,
             gracePeriodSubscriptions: 0,
             blockedSubscriptions: 0,
             canceledSubscriptions: 0,

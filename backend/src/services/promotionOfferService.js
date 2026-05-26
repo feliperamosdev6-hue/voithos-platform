@@ -247,6 +247,34 @@ const promotionOfferService = {
     return true;
   },
 
+  incrementSubscriptionUsageOnce: async ({ offerId, clinicId, subscriptionId, paymentExternalId }) => {
+    const normalizedOfferId = cleanText(offerId, 80);
+    const normalizedClinicId = cleanText(clinicId, 80);
+    const normalizedSubscriptionId = cleanText(subscriptionId, 80);
+    const normalizedPaymentExternalId = cleanText(paymentExternalId, 160);
+    if (!normalizedOfferId || !normalizedSubscriptionId) return false;
+    const rows = await prisma.$queryRaw`
+      INSERT INTO "PromotionOfferUsage" ("id", "promotionOfferId", "clinicId", "subscriptionId", "paymentExternalId", "usedAt")
+      VALUES (
+        ${crypto.randomUUID()},
+        ${normalizedOfferId},
+        ${normalizedClinicId || null},
+        ${normalizedSubscriptionId},
+        ${normalizedPaymentExternalId || null},
+        NOW()
+      )
+      ON CONFLICT ("promotionOfferId", "subscriptionId") DO NOTHING
+      RETURNING "id"
+    `;
+    if (!rows?.[0]?.id) return false;
+    await prisma.$executeRaw`
+      UPDATE "PromotionOffer"
+      SET "usedCount" = "usedCount" + 1, "updatedAt" = NOW()
+      WHERE "id" = ${normalizedOfferId}
+    `;
+    return true;
+  },
+
   mapOffer,
   PLAN_DEFINITIONS,
 };

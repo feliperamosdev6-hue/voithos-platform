@@ -4,6 +4,7 @@ const { clinicRepository } = require('../repositories/clinicRepository');
 const { subscriptionRepository } = require('../repositories/subscriptionRepository');
 const { authService } = require('./authService');
 const { asaasService } = require('./payment/asaasService');
+const { promotionOfferService } = require('./promotionOfferService');
 
 const GRACE_PERIOD_DAYS = 3;
 const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
@@ -48,7 +49,7 @@ const SUBSCRIPTION_PLANS = Object.freeze({
   }),
 });
 
-const ACCESS_ALLOWED_STATUSES = new Set(['ACTIVE', 'GRACE_PERIOD', LEGACY_ACCESS_STATUS]);
+const ACCESS_ALLOWED_STATUSES = new Set(['TRIALING', 'ACTIVE', 'GRACE_PERIOD', LEGACY_ACCESS_STATUS]);
 const VALID_CONFIRM_PAYMENT_STATUSES = new Set(['PENDING', 'PAID']);
 
 const normalizeText = (value) => String(value || '').trim();
@@ -94,6 +95,10 @@ const addDays = (date, days) => {
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const resolveTodayIsoDate = () => new Date().toISOString().slice(0, 10);
+const resolveSubscriptionAmount = (subscription, fallbackAmount) => {
+  const storedAmount = Number(subscription?.amount || 0);
+  return roundMoney(storedAmount > 0 ? storedAmount : fallbackAmount);
+};
 
 const normalizeCheckoutName = (value, fallback = 'Voithos') => {
   const raw = String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -263,6 +268,10 @@ const deriveSubscriptionStatus = (subscription, now = new Date()) => {
     return 'CANCELED';
   }
 
+  if (currentStatus === 'TRIALING') {
+    return 'TRIALING';
+  }
+
   if (currentStatus === 'PENDING_PAYMENT') {
     const lastPaymentStatus = normalizeText(subscription.lastPayment?.status).toUpperCase();
     if (!subscription.endDate || !subscription.graceUntil || lastPaymentStatus === 'PENDING') {
@@ -332,6 +341,29 @@ const syncLifecycle = async (subscription, now = new Date()) => {
     subscriptionId: subscription.id,
     status: effectiveStatus,
   });
+};
+
+const recordPromotionUsageForActivatedSubscription = async ({ clinicId, subscription, externalPaymentId }) => {
+  try {
+    const clinic = await clinicRepository.findById(clinicId);
+    const onboarding = clinic?.operationalSettings?.onboarding || {};
+    const promotion = onboarding?.promotion || {};
+    const promotionOfferId = normalizeText(promotion?.promotionOfferId);
+    if (!promotionOfferId || !subscription?.id) return false;
+    return promotionOfferService.incrementSubscriptionUsageOnce({
+      offerId: promotionOfferId,
+      clinicId,
+      subscriptionId: subscription.id,
+      paymentExternalId: externalPaymentId,
+    });
+  } catch (error) {
+    console.warn('[subscription][promotion-usage] failed to record promotion usage', {
+      clinicId,
+      subscriptionId: subscription?.id || '',
+      error: error?.message || String(error || ''),
+    });
+    return false;
+  }
 };
 
 const getStoredSubscriptionOverview = async ({ clinicId, role }) => {
@@ -524,7 +556,11 @@ const subscriptionService = {
       throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
     }
 
-    const plan = getPlanDefinition(subscription.planType || normalizedPlanType);
+    const basePlan = getPlanDefinition(subscription.planType || normalizedPlanType);
+    const plan = {
+      ...basePlan,
+      amount: resolveSubscriptionAmount(subscription, basePlan.amount),
+    };
     const clinic = await clinicRepository.findProfileById(clinicId);
     if (!clinic) {
       throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
@@ -567,6 +603,16 @@ const subscriptionService = {
         provider: ASAAS_CHECKOUT_PROVIDER,
         externalPaymentId: checkoutId,
         paymentLink: checkoutUrl || null,
+      });
+    } else {
+      await subscriptionRepository.createRenewalPayment({
+        clinicId,
+        planType: plan.planType,
+        amount: roundMoney(plan.amount),
+        provider: ASAAS_CHECKOUT_PROVIDER,
+        externalPaymentId: checkoutId,
+        paymentLink: checkoutUrl || null,
+        resetStatusToPending: false,
       });
     }
 
@@ -629,6 +675,12 @@ const subscriptionService = {
       startDate,
       endDate,
       graceUntil,
+    });
+
+    await recordPromotionUsageForActivatedSubscription({
+      clinicId,
+      subscription,
+      externalPaymentId: normalizeText(externalPaymentId) || payment.externalPaymentId || null,
     });
 
     return buildOverview(subscription, confirmedAt);
@@ -696,7 +748,8 @@ const subscriptionService = {
 
     const paidAt = resolvePaidAtFromAsaasPayment(payment);
     const currentStatus = normalizeText(paymentRecord?.subscription?.status).toUpperCase();
-    if (currentStatus === 'ACTIVE') {
+    const paymentRecordStatus = normalizeText(paymentRecord?.status).toUpperCase();
+    if (currentStatus === 'ACTIVE' && paymentRecordStatus === 'PAID') {
       return { handled: true, alreadyActive: true };
     }
 

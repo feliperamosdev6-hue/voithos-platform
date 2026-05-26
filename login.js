@@ -429,6 +429,8 @@ document.addEventListener('DOMContentLoaded', () => {
   ) === 'ANNUAL';
 
   const getSelectedPaymentMethodDefinition = () => PAYMENT_METHOD_DEFINITIONS[onboardingFlowState.checkoutPaymentMethod] || PAYMENT_METHOD_DEFINITIONS.PIX;
+  const isOperationalAccessStatus = (status) => ['ACTIVE', 'GRACE_PERIOD', 'TRIALING', 'LEGACY_ACCESS', 'ENFORCEMENT_DISABLED']
+    .includes(String(status || '').trim().toUpperCase());
 
   const isLegacyPaymentLink = (value) => {
     const normalized = String(value || '').trim();
@@ -589,9 +591,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (effectiveStatus === 'ACTIVE' || effectiveStatus === 'GRACE_PERIOD') {
-      if (paymentStatusTitle) paymentStatusTitle.textContent = 'Assinatura ativa';
-      if (paymentStatusCopy) paymentStatusCopy.textContent = 'Pagamento confirmado. O acesso completo ao webapp ja pode ser liberado.';
+    if (isOperationalAccessStatus(effectiveStatus)) {
+      const trialing = effectiveStatus === 'TRIALING';
+      if (paymentStatusTitle) paymentStatusTitle.textContent = trialing ? 'Teste gratis ativo' : 'Assinatura ativa';
+      if (paymentStatusCopy) {
+        paymentStatusCopy.textContent = trialing
+          ? 'Sua clinica ja pode usar a Voithos durante o periodo de teste.'
+          : 'Pagamento confirmado. O acesso completo ao webapp ja pode ser liberado.';
+      }
       if (paymentReadyCard) paymentReadyCard.classList.add('hidden');
       if (paymentLinkButton) paymentLinkButton.classList.add('hidden');
       if (preparePaymentButton) preparePaymentButton.textContent = 'Entrar no sistema';
@@ -628,7 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!selectedPlanType) return false;
     if (!operationType) return true;
-    return !['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus);
+    return !isOperationalAccessStatus(effectiveStatus);
   };
 
   const syncOnboardingState = async () => {
@@ -1076,7 +1083,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
       }
 
-      if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
+      if (isOperationalAccessStatus(effectiveStatus)) {
         if (!onboardingFlowState.onboardingState?.completedAt && clinicApi?.updateOnboardingState) {
           try {
             await clinicApi.updateOnboardingState({
@@ -1596,7 +1603,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   preparePaymentButton?.addEventListener('click', async () => {
     const effectiveStatus = String(onboardingFlowState.subscriptionOverview?.effectiveStatus || '').trim().toUpperCase();
-    if (['ACTIVE', 'GRACE_PERIOD'].includes(effectiveStatus)) {
+    if (isOperationalAccessStatus(effectiveStatus)) {
       routeAuthenticatedUser();
       return;
     }
@@ -1646,7 +1653,7 @@ document.addEventListener('DOMContentLoaded', () => {
           || ''
         ).trim();
         renderPaymentSummary();
-        if (String(refreshed?.effectiveStatus || '').trim().toUpperCase() === 'ACTIVE') {
+        if (isOperationalAccessStatus(refreshed?.effectiveStatus)) {
           clearPaymentReturnContext();
           setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
         } else {

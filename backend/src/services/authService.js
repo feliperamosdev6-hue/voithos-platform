@@ -16,6 +16,7 @@ const SIGNUP_RESEND_WAIT_MINUTES = 2;
 const SIGNUP_RESEND_LIMIT = 3;
 const SIGNUP_RESEND_BLOCK_MINUTES = 15;
 const PENDING_CHECKOUT_TTL_HOURS = 12;
+const TRIAL_DURATION_DAYS = 7;
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
 const isProductionEnv = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 const SUPER_ADMIN_EMAIL = String(
@@ -535,6 +536,7 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
         startDate,
         endDate,
         graceUntil,
+        activatedAt: paidAt,
       },
     });
 
@@ -630,6 +632,175 @@ const finalizePendingSignup = async (pendingSignup, paymentContext = {}) => {
   };
 };
 
+const finalizePendingSignupTrial = async (pendingSignup) => {
+  const signupData = extractPendingSignupData(pendingSignup);
+  const passwordHash = String(pendingSignup?.passwordHash || '').trim();
+  if (!signupData.nomeFantasia || !signupData.adminNome || !signupData.adminEmail || !signupData.documentNumber) {
+    throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup data is invalid.');
+  }
+  if (!passwordHash) {
+    throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup password hash is missing.');
+  }
+
+  const duplicateClinic = await clinicRepository.findByDocument(signupData.documentNumber);
+  if (duplicateClinic) {
+    throw new AppError(409, 'CLINIC_DOCUMENT_EXISTS', 'CPF/CNPJ already exists.');
+  }
+
+  const duplicateUser = await userRepository.findByEmail(signupData.adminEmail);
+  if (duplicateUser) {
+    throw new AppError(409, 'USER_EMAIL_EXISTS', 'Admin email already exists.');
+  }
+
+  const selectedPlan = signupData.selectedPlan || 'MONTHLY';
+  const plan = PUBLIC_SUBSCRIPTION_PLANS[selectedPlan];
+  if (!plan) {
+    throw new AppError(400, 'PENDING_SIGNUP_INVALID', 'Pending signup plan is invalid.');
+  }
+
+  let contractedAmount = roundMoney(plan.amount);
+  let promotionForActivation = null;
+  if (signupData.promotion?.code) {
+    promotionForActivation = await promotionOfferService.resolveOfferForCheckout({
+      code: signupData.promotion.code,
+      targetEmail: signupData.adminEmail,
+      planType: selectedPlan,
+    });
+    contractedAmount = roundMoney(Number(promotionForActivation.promotionalPriceCents || 0) / 100);
+  }
+
+  const created = await prisma.$transaction(async (tx) => {
+    const trialStartedAt = new Date();
+    const trialEndsAt = addDays(trialStartedAt, TRIAL_DURATION_DAYS);
+    const clinicAddressLine = buildClinicAddressLine(signupData.clinicAddress);
+    const clinic = await tx.clinic.create({
+      data: {
+        nomeFantasia: signupData.nomeFantasia,
+        razaoSocial: signupData.nomeFantasia,
+        cnpjCpf: signupData.documentNumber,
+        email: signupData.clinicEmail || signupData.adminEmail || null,
+        telefoneComercial: signupData.clinicPhone || null,
+        endereco: clinicAddressLine,
+        operationalSettings: {
+          onboarding: {
+            selectedPlan,
+            operationType: '',
+            acquisitionSource: promotionForActivation ? 'promotion' : 'landing',
+            promotion: promotionForActivation ? {
+              promotionOfferId: promotionForActivation.id,
+              promotionCode: promotionForActivation.code,
+              promotionalPriceCents: promotionForActivation.promotionalPriceCents,
+              regularPriceCents: promotionForActivation.regularPriceCents,
+              source: promotionForActivation.source,
+            } : null,
+            startedAt: trialStartedAt.toISOString(),
+            updatedAt: trialStartedAt.toISOString(),
+            completedAt: '',
+          },
+          clinicProfile: {
+            whatsapp: '',
+            cro: '',
+            responsavelTecnico: '',
+            logoDataUrlCache: '',
+            logoVersion: '',
+            endereco: {
+              ...signupData.clinicAddress,
+            },
+          },
+        },
+      },
+    });
+
+    const subscription = await tx.subscription.create({
+      data: {
+        clinicId: clinic.id,
+        planType: plan.planType,
+        amount: contractedAmount,
+        status: 'TRIALING',
+        trialStartedAt,
+        trialEndsAt,
+      },
+    });
+
+    const pendingCheckoutExternalId = String(signupData?.paymentCheckout?.externalPaymentId || '').trim();
+    const pendingCheckoutPaymentLink = String(signupData?.paymentCheckout?.paymentLink || '').trim();
+    if (pendingCheckoutExternalId || pendingCheckoutPaymentLink) {
+      const subscriptionPayment = await tx.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id,
+          clinicId: clinic.id,
+          amount: contractedAmount,
+          status: 'PENDING',
+          provider: ASAAS_CHECKOUT_PROVIDER,
+          externalPaymentId: pendingCheckoutExternalId || null,
+          paymentLink: pendingCheckoutPaymentLink || null,
+        },
+      });
+
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          lastPaymentId: subscriptionPayment.id,
+        },
+      });
+    }
+
+    const user = await tx.user.create({
+      data: {
+        clinicId: clinic.id,
+        nome: signupData.adminNome,
+        email: signupData.adminEmail,
+        passwordHash,
+        role: 'ADMIN',
+        isClinicAdmin: true,
+        ativo: true,
+        emailVerified: true,
+        emailVerificationCode: null,
+        emailVerificationExpiresAt: null,
+      },
+    });
+
+    await tx.$executeRaw`
+      DELETE FROM "PendingSignup"
+      WHERE "email" = ${signupData.adminEmail}
+    `;
+
+    const token = crypto.randomUUID();
+    const expiresAt = addDays(new Date(), SESSION_TTL_DAYS);
+    const session = await tx.session.create({
+      data: {
+        userId: user.id,
+        token,
+        expiresAt,
+      },
+    });
+
+    return {
+      token: session.token,
+      clinic,
+      user,
+      subscription,
+    };
+  });
+
+  return {
+    verified: true,
+    pendingCheckout: false,
+    token: created.token,
+    clinic: {
+      ...created.clinic,
+      clinicId: created.clinic.id,
+    },
+    user: sanitizeUser(created.user),
+    subscription: {
+      ...created.subscription,
+      effectiveStatus: 'TRIALING',
+    },
+    trialStartedAt: created.subscription.trialStartedAt,
+    trialEndsAt: created.subscription.trialEndsAt,
+  };
+};
+
 const confirmEmailVerification = async ({ email, code }) => {
   const normalizedEmail = normalizeEmail(email);
   const normalizedCode = normalizeCode(code);
@@ -673,35 +844,13 @@ const confirmEmailVerification = async ({ email, code }) => {
       });
       throw new AppError(400, 'INVALID_VERIFICATION_CODE', 'Invalid or expired verification code.');
     }
-    const signupData = pendingSignup.signupData && typeof pendingSignup.signupData === 'object'
-      ? pendingSignup.signupData
-      : {};
-    const checkoutToken = String(signupData.checkoutToken || crypto.randomUUID()).trim();
-    const nextSignupData = {
-      ...signupData,
-      checkoutToken,
-      emailVerifiedAt: signupData.emailVerifiedAt || new Date().toISOString(),
-    };
-    const updatedPendingSignup = await pendingSignupRepository.updateSignupDataByEmail({
-      email: normalizedEmail,
-      signupData: nextSignupData,
-    });
+    const result = await finalizePendingSignupTrial(pendingSignup);
     logAuthDiagnostic('email_verification_pending_signup_verified', {
       endpoint: '/auth/email-verification/confirm',
       email: normalizedEmail,
       status: 'success',
     });
-    return {
-      verified: true,
-      pendingCheckout: true,
-      pendingSignupToken: checkoutToken,
-      email: normalizedEmail,
-      selectedPlan: normalizeSelectedPlan(nextSignupData.selectedPlan),
-      operationType: String(nextSignupData.operationType || '').trim(),
-      paymentLink: String(nextSignupData.paymentCheckout?.paymentLink || '').trim() || null,
-      paymentExpiresAt: nextSignupData.paymentCheckout?.expiresAt || null,
-      pendingSignupId: updatedPendingSignup?.id || pendingSignup.id,
-    };
+    return result;
   }
 
   logAuthDiagnostic('email_verification_fallback_user_lookup', {

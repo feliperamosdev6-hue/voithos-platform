@@ -247,6 +247,7 @@ const subscriptionRepository = {
         startDate,
         endDate,
         graceUntil,
+        activatedAt: paidAt,
         lastPaymentId: payment.id,
       },
       include: subscriptionInclude,

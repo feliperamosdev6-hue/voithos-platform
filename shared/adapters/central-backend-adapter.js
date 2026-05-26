@@ -388,6 +388,12 @@ const createCentralBackendAdapter = (options = {}) => {
     senha,
     passwordConfirmation,
     confirmarSenha,
+    selectedPlan,
+    planType,
+    plan,
+    promotionCode,
+    promo,
+    offer,
   } = {}) => {
     const response = await withTimeout(`${config.baseUrl}/auth/signup`, {
       method: 'POST',
@@ -409,6 +415,8 @@ const createCentralBackendAdapter = (options = {}) => {
         uf: uf || '',
         password: password || senha || '',
         passwordConfirmation: passwordConfirmation || confirmarSenha || '',
+        selectedPlan: selectedPlan || planType || plan || '',
+        promotionCode: promotionCode || promo || offer || '',
       }),
     });
     await ensureOk(response);

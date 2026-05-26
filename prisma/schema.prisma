@@ -176,6 +176,7 @@ enum SubscriptionPlanType {
 }
 
 enum SubscriptionStatus {
+  TRIALING
   PENDING_PAYMENT
   ACTIVE
   GRACE_PERIOD
@@ -330,6 +331,7 @@ model PromotionOfferUsage {
   usedAt           DateTime       @default(now())
 
   @@unique([promotionOfferId, pendingSignupId])
+  @@unique([promotionOfferId, subscriptionId])
   @@index([promotionOfferId, usedAt])
   @@index([clinicId])
 }
@@ -1057,6 +1059,9 @@ model Subscription {
   startDate     DateTime?
   endDate       DateTime?
   graceUntil    DateTime?
+  trialStartedAt DateTime?
+  trialEndsAt   DateTime?
+  activatedAt   DateTime?
   lastPaymentId String?
   lastPayment   SubscriptionPayment?   @relation("SubscriptionLastPayment", fields: [lastPaymentId], references: [id], onDelete: SetNull)
   payments      SubscriptionPayment[]  @relation("SubscriptionPayments")
