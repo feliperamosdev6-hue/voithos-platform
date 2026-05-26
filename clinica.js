@@ -460,6 +460,13 @@ document.addEventListener('DOMContentLoaded', () => {
     return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(date);
   };
 
+  const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
   const formatCurrency = (value, fallback = '--') => {
     const amount = Number(value || 0);
     if (!Number.isFinite(amount) || amount <= 0) return fallback;
@@ -536,8 +543,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const status = String(payment?.status || '').trim().toUpperCase() || 'PENDING';
     const paidAt = payment?.paidAt ? `Pago em ${formatDateTime(payment.paidAt, '--')}` : `Criado em ${formatDateTime(payment?.createdAt, '--')}`;
     return `
-      <div class="subscription-payment-title">${status}</div>
-      <div class="subscription-payment-meta">${paidAt}</div>
+      <div class="subscription-payment-title">${escapeHtml(status)}</div>
+      <div class="subscription-payment-meta">${escapeHtml(paidAt)}</div>
       <div class="subscription-payment-amount">${formatCurrency(payment?.amount)}</div>
     `;
   };
@@ -557,8 +564,8 @@ document.addEventListener('DOMContentLoaded', () => {
       return `
         <div class="subscription-payment-row">
           <div>
-            <div class="subscription-payment-title">${status}</div>
-            <div class="subscription-payment-meta">${dateLabel} · ${payment?.provider || 'ASAAS'}</div>
+            <div class="subscription-payment-title">${escapeHtml(status)}</div>
+            <div class="subscription-payment-meta">${escapeHtml(`${dateLabel} · ${payment?.provider || 'ASAAS'}`)}</div>
           </div>
           <div class="subscription-payment-amount">${formatCurrency(payment?.amount)}</div>
         </div>

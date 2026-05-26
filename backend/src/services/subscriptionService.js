@@ -118,11 +118,16 @@ const toIsoStringOrNull = (value) => {
 const sanitizePaymentForClient = (payment) => {
   if (!payment) return null;
   const provider = normalizeProvider(payment.provider);
+  const providerLabel = provider.includes('ASAAS')
+    ? 'ASAAS'
+    : provider === 'MANUAL'
+      ? 'MANUAL'
+      : 'OTHER';
   return {
     id: normalizeText(payment.id),
     amount: roundMoney(payment.amount),
     status: normalizeText(payment.status).toUpperCase(),
-    provider: provider.includes('ASAAS') ? 'ASAAS' : provider,
+    provider: providerLabel,
     paymentLink: normalizeText(payment.paymentLink),
     paidAt: toIsoStringOrNull(payment.paidAt),
     createdAt: toIsoStringOrNull(payment.createdAt),
