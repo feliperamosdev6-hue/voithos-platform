@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
-const { checkSubscription } = require('../middlewares/checkSubscription');
+const { checkSubscription, requireSubscriptionAccess } = require('../middlewares/checkSubscription');
 const { validate } = require('../middlewares/validate');
 const {
   createAppointment,
@@ -15,6 +15,7 @@ const {
 } = require('../controllers/appointmentController');
 
 const router = express.Router();
+const requireWriteAccess = requireSubscriptionAccess('WRITE');
 
 const validateCreateAppointment = validate((req) => {
   const issues = [];
@@ -82,12 +83,12 @@ router.use(authenticate, checkSubscription);
 
 router.get('/', listAppointments);
 router.get('/:id', getAppointmentById);
-router.post('/', validateCreateAppointment, createAppointment);
-router.post('/:id/send-confirmation', sendAppointmentConfirmation);
-router.post('/:id/send-reminder', sendAppointmentReminder);
-router.patch('/:id', validateUpdateAppointment, updateAppointment);
-router.patch('/:id/status', validateUpdateStatus, updateAppointmentStatus);
-router.patch('/:id/attendance', validateUpdateAttendance, updateAppointmentAttendance);
-router.delete('/:id', deleteAppointment);
+router.post('/', requireWriteAccess, validateCreateAppointment, createAppointment);
+router.post('/:id/send-confirmation', requireWriteAccess, sendAppointmentConfirmation);
+router.post('/:id/send-reminder', requireWriteAccess, sendAppointmentReminder);
+router.patch('/:id', requireWriteAccess, validateUpdateAppointment, updateAppointment);
+router.patch('/:id/status', requireWriteAccess, validateUpdateStatus, updateAppointmentStatus);
+router.patch('/:id/attendance', requireWriteAccess, validateUpdateAttendance, updateAppointmentAttendance);
+router.delete('/:id', requireWriteAccess, deleteAppointment);
 
 module.exports = router;

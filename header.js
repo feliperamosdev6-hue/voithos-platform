@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const authApi = window.appApi?.auth || window.auth || {};
+  const subscriptionApi = window.appApi?.subscription || window.subscription || {};
   const userMenuToggle = document.getElementById('user-menu-toggle');
   const userMenuDropdown = document.getElementById('user-menu-dropdown');
   const userNameEl = document.getElementById('user-name');
@@ -19,6 +20,26 @@ document.addEventListener('DOMContentLoaded', () => {
   let headerContextPromise = null;
   const MOBILE_NAV_STYLE_ID = 'voithos-mobile-bottom-nav-styles';
   const MOBILE_NAV_ID = 'voithos-mobile-bottom-nav';
+  const SUBSCRIPTION_BANNER_STYLE_ID = 'voithos-subscription-access-styles';
+  const SUBSCRIPTION_BANNER_ID = 'voithos-subscription-access-banner';
+  const READ_ONLY_WRITE_SELECTOR = [
+    '[data-subscription-write]',
+    '[data-requires-write]',
+    'button[id*="save" i]',
+    'button[id*="salvar" i]',
+    'button[id*="delete" i]',
+    'button[id*="excluir" i]',
+    'button[id*="add" i]',
+    'button[id*="novo" i]',
+    'button[id*="create" i]',
+    'button[id*="criar" i]',
+    'button[id*="send" i]',
+    'button[id*="enviar" i]',
+    'button[id*="upload" i]',
+    'input[type="file"]',
+  ].join(',');
+  let subscriptionReadOnlyActive = false;
+  let writeControlObserver = null;
 
   const ensureMobileBottomNavStyles = () => {
     if (document.getElementById(MOBILE_NAV_STYLE_ID)) return;
@@ -192,6 +213,162 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(nav);
     document.body.classList.add('has-mobile-bottom-nav');
   };
+
+  const ensureSubscriptionBannerStyles = () => {
+    if (document.getElementById(SUBSCRIPTION_BANNER_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = SUBSCRIPTION_BANNER_STYLE_ID;
+    style.textContent = `
+      .subscription-access-banner {
+        position: sticky;
+        top: 0;
+        z-index: 1390;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 10px 16px;
+        background: #fff7ed;
+        border-bottom: 1px solid rgba(194, 65, 12, 0.18);
+        color: #7c2d12;
+        font-size: 0.9rem;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+
+      .subscription-access-banner__text {
+        min-width: 0;
+      }
+
+      .subscription-access-banner__cta {
+        flex: 0 0 auto;
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #0f766e;
+        color: #ffffff;
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 800;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+
+      .subscription-read-only-control-disabled {
+        opacity: 0.56 !important;
+        cursor: not-allowed !important;
+      }
+
+      @media (max-width: 640px) {
+        .subscription-access-banner {
+          align-items: stretch;
+          flex-direction: column;
+          gap: 8px;
+          padding: 10px 12px;
+        }
+
+        .subscription-access-banner__cta {
+          text-align: center;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  };
+
+  const isSuperAdminContext = (user = currentUser) => {
+    const role = String(user?.role || user?.tipo || user?.perfil || '').trim().toLowerCase();
+    return role === 'super_admin' || role === 'super-admin' || role === 'superadmin';
+  };
+
+  const renderSubscriptionBanner = (message) => {
+    ensureSubscriptionBannerStyles();
+    let banner = document.getElementById(SUBSCRIPTION_BANNER_ID);
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = SUBSCRIPTION_BANNER_ID;
+      banner.className = 'subscription-access-banner';
+      banner.setAttribute('role', 'status');
+      banner.innerHTML = `
+        <span class="subscription-access-banner__text"></span>
+        <a class="subscription-access-banner__cta" href="login.html?resume=1" data-subscription-payment-cta="true">Ativar assinatura</a>
+      `;
+      document.body.prepend(banner);
+    }
+    const text = banner.querySelector('.subscription-access-banner__text');
+    if (text) text.textContent = message || 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.';
+  };
+
+  const clearSubscriptionBanner = () => {
+    const banner = document.getElementById(SUBSCRIPTION_BANNER_ID);
+    if (banner) banner.remove();
+  };
+
+  const applyWriteControlsReadOnly = () => {
+    document.body.classList.toggle('subscription-read-only', subscriptionReadOnlyActive);
+    document.body.dataset.subscriptionAccessMode = subscriptionReadOnlyActive ? 'READ_ONLY' : 'FULL';
+    document.querySelectorAll(READ_ONLY_WRITE_SELECTOR).forEach((control) => {
+      if (control?.matches?.('[data-subscription-payment-cta="true"]')) return;
+      control.classList.toggle('subscription-read-only-control-disabled', subscriptionReadOnlyActive);
+      control.setAttribute('aria-disabled', subscriptionReadOnlyActive ? 'true' : 'false');
+      if ('disabled' in control) {
+        if (subscriptionReadOnlyActive) {
+          if (control.disabled !== true) control.dataset.subscriptionDisabledByReadOnly = 'true';
+          control.disabled = true;
+        } else if (control.dataset.subscriptionDisabledByReadOnly === 'true') {
+          control.disabled = false;
+          delete control.dataset.subscriptionDisabledByReadOnly;
+        }
+      }
+    });
+  };
+
+  const ensureWriteControlObserver = () => {
+    if (writeControlObserver || typeof MutationObserver === 'undefined') return;
+    writeControlObserver = new MutationObserver(() => {
+      if (subscriptionReadOnlyActive) applyWriteControlsReadOnly();
+    });
+    writeControlObserver.observe(document.body, { childList: true, subtree: true });
+  };
+
+  const applySubscriptionAccessOverview = (overview = {}) => {
+    if (isSuperAdminContext()) return;
+    const accessMode = String(overview?.accessMode || '').trim().toUpperCase();
+    const effectiveStatus = String(overview?.effectiveStatus || '').trim().toUpperCase();
+    const readOnly = overview?.readOnly === true || accessMode === 'READ_ONLY' || effectiveStatus === 'TRIAL_EXPIRED';
+    subscriptionReadOnlyActive = readOnly;
+    ensureWriteControlObserver();
+    applyWriteControlsReadOnly();
+    if (readOnly) {
+      renderSubscriptionBanner(overview?.warning || 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
+    } else {
+      clearSubscriptionBanner();
+    }
+  };
+
+  const loadSubscriptionAccess = async () => {
+    if (isSuperAdminContext()) return;
+    if (typeof subscriptionApi.getMySubscription !== 'function') return;
+    const overview = await subscriptionApi.getMySubscription();
+    if (overview && typeof overview === 'object') {
+      applySubscriptionAccessOverview(overview);
+    }
+  };
+
+  window.addEventListener('voithos:subscription-read-only', (event) => {
+    subscriptionReadOnlyActive = true;
+    renderSubscriptionBanner(event?.detail?.message || 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
+    ensureWriteControlObserver();
+    applyWriteControlsReadOnly();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!subscriptionReadOnlyActive) return;
+    const blockedTarget = event.target?.closest?.('[data-subscription-write], [data-requires-write], .subscription-read-only-control-disabled');
+    if (!blockedTarget) return;
+    event.preventDefault();
+    event.stopPropagation();
+    renderSubscriptionBanner('Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
+  }, true);
   const ensureAttnPaymentsItem = () => {
     if (!attnDropdown) return;
     const existing = attnDropdown.querySelector('a.attn-item[href="pagamentos.html"]');
@@ -557,6 +734,9 @@ document.addEventListener('DOMContentLoaded', () => {
         writeHeaderCache(freshHeader);
         renderHeaderContext(freshHeader, { source: 'backend' });
       }
+      loadSubscriptionAccess().catch((error) => {
+        console.warn('[HEADER] falha ao resolver acesso da assinatura', error);
+      });
 
       if (userMenuDropdown && !clinicItem) {
         clinicItem = document.createElement('button');

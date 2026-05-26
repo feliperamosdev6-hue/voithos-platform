@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
-const { checkSubscription } = require('../middlewares/checkSubscription');
+const { checkSubscription, requireSubscriptionAccess } = require('../middlewares/checkSubscription');
 const {
   listTemplates,
   listCampaigns,
@@ -18,6 +18,7 @@ const {
 } = require('../controllers/campaignController');
 
 const router = express.Router();
+const requireWriteAccess = requireSubscriptionAccess('WRITE');
 
 router.use(authenticate, checkSubscription);
 router.get('/templates', listTemplates);
@@ -30,8 +31,8 @@ router.get('/logs', listDispatchLogs);
 router.get('/:id', getCampaignById);
 router.patch('/:id', updateCampaign);
 router.delete('/:id', deleteCampaign);
-router.post('/:id/batches', createBatch);
+router.post('/:id/batches', requireWriteAccess, createBatch);
 router.get('/:id/result', getCampaignResult);
-router.patch('/dispatches/:dispatchId', updateDispatch);
+router.patch('/dispatches/:dispatchId', requireWriteAccess, updateDispatch);
 
 module.exports = router;

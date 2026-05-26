@@ -605,11 +605,14 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (paymentStatusTitle) paymentStatusTitle.textContent = 'Pagamento pendente';
+    const trialExpired = effectiveStatus === 'TRIAL_EXPIRED' || overview?.readOnly === true;
+    if (paymentStatusTitle) paymentStatusTitle.textContent = trialExpired ? 'Teste gratis expirado' : 'Pagamento pendente';
     if (paymentStatusCopy) {
-      paymentStatusCopy.textContent = paymentLink
-        ? 'Sua assinatura esta pendente. Abra o checkout do Asaas para concluir o pagamento e depois atualize o status.'
-        : 'Sua assinatura esta pendente. Gere um checkout seguro para concluir o pagamento.';
+      paymentStatusCopy.textContent = trialExpired
+        ? 'Seu periodo de teste terminou. Gere ou abra o checkout seguro do Asaas para ativar sua assinatura.'
+        : paymentLink
+          ? 'Sua assinatura esta pendente. Abra o checkout do Asaas para concluir o pagamento e depois atualize o status.'
+          : 'Sua assinatura esta pendente. Gere um checkout seguro para concluir o pagamento.';
     }
     if (paymentReadyCard) {
       paymentReadyCard.classList.toggle('hidden', !paymentLink);

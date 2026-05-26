@@ -9,6 +9,14 @@ const { promotionOfferService } = require('./promotionOfferService');
 const GRACE_PERIOD_DAYS = 3;
 const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
 const ENFORCEMENT_DISABLED_STATUS = 'ENFORCEMENT_DISABLED';
+const TRIAL_EXPIRED_STATUS = 'TRIAL_EXPIRED';
+const SUBSCRIPTION_READ_ONLY_CODE = 'SUBSCRIPTION_READ_ONLY';
+const SUBSCRIPTION_READ_ONLY_MESSAGE = 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.';
+const ACCESS_MODES = Object.freeze({
+  FULL: 'FULL',
+  READ_ONLY: 'READ_ONLY',
+  DENIED: 'DENIED',
+});
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
 const CHECKOUT_PAYMENT_METHODS = Object.freeze({
   PIX: 'PIX',
@@ -50,6 +58,7 @@ const SUBSCRIPTION_PLANS = Object.freeze({
 });
 
 const ACCESS_ALLOWED_STATUSES = new Set(['TRIALING', 'ACTIVE', 'GRACE_PERIOD', LEGACY_ACCESS_STATUS]);
+const PERSISTABLE_SUBSCRIPTION_STATUSES = new Set(['PENDING_PAYMENT', 'ACTIVE', 'GRACE_PERIOD', 'BLOCKED', 'CANCELED', 'TRIALING']);
 const VALID_CONFIRM_PAYMENT_STATUSES = new Set(['PENDING', 'PAID']);
 
 const normalizeText = (value) => String(value || '').trim();
@@ -241,6 +250,21 @@ const isWebhookPaymentConfirmationEvent = (eventType) => {
 const getPlanDefinition = (planType) => SUBSCRIPTION_PLANS[normalizePlanType(planType)];
 const getPublicPlanCatalog = () => Object.values(SUBSCRIPTION_PLANS).filter((plan) => plan.public === true);
 
+const getValidDateTime = (value) => {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const isTrialExpired = (subscription, now = new Date()) => {
+  const status = normalizeText(subscription?.status).toUpperCase();
+  if (status !== 'TRIALING') return false;
+  const trialEndsTime = getValidDateTime(subscription?.trialEndsAt);
+  if (!trialEndsTime) return false;
+  return now.getTime() >= trialEndsTime;
+};
+
 const isLegacyClinicByCutoff = (clinic) => {
   const activationAt = parseEnvDate(appEnv.subscriptionCommercialActivationAt);
   if (!activationAt) return true;
@@ -269,7 +293,7 @@ const deriveSubscriptionStatus = (subscription, now = new Date()) => {
   }
 
   if (currentStatus === 'TRIALING') {
-    return 'TRIALING';
+    return isTrialExpired(subscription, now) ? TRIAL_EXPIRED_STATUS : 'TRIALING';
   }
 
   if (currentStatus === 'PENDING_PAYMENT') {
@@ -311,19 +335,50 @@ const buildGraceMessage = (subscription, now = new Date()) => {
     : 'Assinatura em tolerancia. O bloqueio pode ocorrer a qualquer momento apos o prazo.';
 };
 
+const resolveAccessMode = ({ effectiveStatus, subscription, bypassed = false, now = new Date() }) => {
+  if (bypassed === true) return ACCESS_MODES.FULL;
+
+  const normalizedStatus = normalizeText(effectiveStatus).toUpperCase();
+  if (
+    normalizedStatus === 'ACTIVE'
+    || normalizedStatus === 'GRACE_PERIOD'
+    || normalizedStatus === 'TRIALING'
+    || normalizedStatus === LEGACY_ACCESS_STATUS
+    || normalizedStatus === ENFORCEMENT_DISABLED_STATUS
+  ) {
+    return ACCESS_MODES.FULL;
+  }
+
+  if (normalizedStatus === TRIAL_EXPIRED_STATUS || isTrialExpired(subscription, now)) {
+    return ACCESS_MODES.READ_ONLY;
+  }
+
+  return ACCESS_MODES.DENIED;
+};
+
 const buildOverview = (subscription, now = new Date(), options = {}) => {
   const effectiveStatus = options.effectiveStatus || deriveSubscriptionStatus(subscription, now);
+  const accessMode = options.accessMode || resolveAccessMode({
+    effectiveStatus,
+    subscription,
+    bypassed: options.bypassed === true,
+    now,
+  });
   return {
     subscription,
     paymentLink: subscription?.lastPayment?.paymentLink || '',
     effectiveStatus,
     accessAllowed: typeof options.accessAllowed === 'boolean'
       ? options.accessAllowed
-      : ACCESS_ALLOWED_STATUSES.has(effectiveStatus) || options.bypassed === true,
+      : accessMode !== ACCESS_MODES.DENIED,
+    accessMode,
+    readOnly: accessMode === ACCESS_MODES.READ_ONLY,
     bypassed: options.bypassed === true,
     enforcementEnabled: appEnv.subscriptionEnforcementEnabled === true,
     legacyAccess: effectiveStatus === LEGACY_ACCESS_STATUS,
-    warning: options.warning || (effectiveStatus === 'GRACE_PERIOD' ? buildGraceMessage(subscription, now) : ''),
+    warning: options.warning
+      || (effectiveStatus === TRIAL_EXPIRED_STATUS ? SUBSCRIPTION_READ_ONLY_MESSAGE : '')
+      || (effectiveStatus === 'GRACE_PERIOD' ? buildGraceMessage(subscription, now) : ''),
     technicalNotice: options.technicalNotice || '',
     plans: getPublicPlanCatalog(),
   };
@@ -334,6 +389,10 @@ const syncLifecycle = async (subscription, now = new Date()) => {
 
   const effectiveStatus = deriveSubscriptionStatus(subscription, now);
   if (effectiveStatus === normalizeText(subscription.status).toUpperCase()) {
+    return subscription;
+  }
+
+  if (!PERSISTABLE_SUBSCRIPTION_STATUSES.has(effectiveStatus)) {
     return subscription;
   }
 
@@ -467,6 +526,8 @@ const subscriptionService = {
           ? LEGACY_ACCESS_STATUS
           : ENFORCEMENT_DISABLED_STATUS,
         accessAllowed: true,
+        accessMode: ACCESS_MODES.FULL,
+        readOnly: false,
         warning: overview.warning || 'Cobranca desativada por feature flag.',
         technicalNotice: overview.technicalNotice || 'subscription_enforcement_disabled',
       };
@@ -790,12 +851,35 @@ const subscriptionService = {
 
     throw new AppError(403, 'SUBSCRIPTION_ACCESS_DENIED', 'Subscription does not allow access to this resource.');
   },
+
+  ensureAccessMode: async ({ clinicId, role, mode = 'READ' }) => {
+    const overview = await subscriptionService.getAccessOverview({ clinicId, role });
+    const requestedMode = normalizeText(mode).toUpperCase() === 'WRITE' ? 'WRITE' : 'READ';
+
+    if (overview.accessMode === ACCESS_MODES.FULL) {
+      return overview;
+    }
+
+    if (overview.accessMode === ACCESS_MODES.READ_ONLY) {
+      if (requestedMode === 'READ') {
+        return overview;
+      }
+      throw new AppError(403, SUBSCRIPTION_READ_ONLY_CODE, SUBSCRIPTION_READ_ONLY_MESSAGE);
+    }
+
+    await subscriptionService.ensureAccess({ clinicId, role });
+    return overview;
+  },
 };
 
 module.exports = {
+  ACCESS_MODES,
   ENFORCEMENT_DISABLED_STATUS,
   GRACE_PERIOD_DAYS,
   LEGACY_ACCESS_STATUS,
+  SUBSCRIPTION_READ_ONLY_CODE,
+  SUBSCRIPTION_READ_ONLY_MESSAGE,
   SUBSCRIPTION_PLANS,
+  TRIAL_EXPIRED_STATUS,
   subscriptionService,
 };

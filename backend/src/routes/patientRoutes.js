@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
-const { checkSubscription } = require('../middlewares/checkSubscription');
+const { checkSubscription, requireSubscriptionAccess } = require('../middlewares/checkSubscription');
 const { validate } = require('../middlewares/validate');
 const {
   createPatient,
@@ -13,6 +13,7 @@ const {
 } = require('../controllers/patientController');
 
 const router = express.Router();
+const requireWriteAccess = requireSubscriptionAccess('WRITE');
 
 const validateCreatePatient = validate((req) => {
   const issues = [];
@@ -27,13 +28,14 @@ router.use(authenticate, checkSubscription);
 router.get('/', listPatients);
 router.put(
   '/:id/profile-photo',
+  requireWriteAccess,
   express.raw({ type: '*/*', limit: '2mb' }),
   uploadPatientProfilePhoto
 );
 router.get('/:id/profile-photo', downloadPatientProfilePhoto);
 router.get('/:id', getPatientById);
-router.post('/', validateCreatePatient, createPatient);
-router.patch('/:id', validateCreatePatient, updatePatient);
-router.delete('/:id', deletePatient);
+router.post('/', requireWriteAccess, validateCreatePatient, createPatient);
+router.patch('/:id', requireWriteAccess, validateCreatePatient, updatePatient);
+router.delete('/:id', requireWriteAccess, deletePatient);
 
 module.exports = router;

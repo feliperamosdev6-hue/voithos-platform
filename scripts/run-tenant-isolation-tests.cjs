@@ -137,6 +137,136 @@ register('subscriptionService.refreshPaymentStatus consulta apenas estado persis
   }
 });
 
+register('subscriptionService.getAccessOverview retorna READ_ONLY para trial expirado sem persistir status', async () => {
+  let updateStatusCalled = false;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {},
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findByClinicId: async () => ({
+            id: 'sub-trial-expired',
+            clinicId: 'clinic-auth',
+            planType: 'MONTHLY',
+            amount: 94.9,
+            status: 'TRIALING',
+            startDate: null,
+            endDate: null,
+            graceUntil: null,
+            trialStartedAt: new Date('2026-05-01T00:00:00.000Z'),
+            trialEndsAt: new Date('2026-05-08T00:00:00.000Z'),
+            lastPayment: {
+              id: 'payment-1',
+              status: 'PENDING',
+              provider: 'ASAAS_CHECKOUT',
+              externalPaymentId: 'checkout-1',
+              paymentLink: 'https://checkout.example',
+            },
+            payments: [],
+          }),
+          updateStatus: async () => {
+            updateStatusCalled = true;
+            throw new Error('computed trial expiration should not be persisted');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: { asaasService: {} },
+      [path.resolve(__dirname, '../backend/src/services/promotionOfferService.js')]: { promotionOfferService: {} },
+    }
+  );
+
+  try {
+    const result = await serviceModule.subscriptionService.getAccessOverview({
+      clinicId: 'clinic-auth',
+      role: 'DENTIST',
+    });
+
+    assert.equal(updateStatusCalled, false);
+    assert.equal(result?.effectiveStatus, 'TRIAL_EXPIRED');
+    assert.equal(result?.accessMode, 'READ_ONLY');
+    assert.equal(result?.readOnly, true);
+    assert.equal(result?.accessAllowed, true);
+    assert.equal(result?.warning, 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
+  } finally {
+    restore();
+  }
+});
+
+register('requireSubscriptionAccess bloqueia WRITE e permite READ em READ_ONLY', async () => {
+  const readOnlyOverview = {
+    subscription: { id: 'sub-trial-expired', clinicId: 'clinic-auth' },
+    effectiveStatus: 'TRIAL_EXPIRED',
+    accessMode: 'READ_ONLY',
+    readOnly: true,
+    accessAllowed: true,
+    warning: 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.',
+    bypassed: false,
+    enforcementEnabled: true,
+    legacyAccess: false,
+    technicalNotice: 'payment_status_read_only',
+  };
+  const { module: middlewareModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/middlewares/checkSubscription.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          subscriptionEnforcementEnabled: true,
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/subscriptionService.js')]: {
+        ACCESS_MODES: {
+          FULL: 'FULL',
+          READ_ONLY: 'READ_ONLY',
+          DENIED: 'DENIED',
+        },
+        SUBSCRIPTION_READ_ONLY_CODE: 'SUBSCRIPTION_READ_ONLY',
+        SUBSCRIPTION_READ_ONLY_MESSAGE: 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.',
+        subscriptionService: {
+          getAccessOverview: async () => readOnlyOverview,
+          ensureAccess: async () => {
+            throw new Error('READ_ONLY should not call denied access path');
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    const req = { auth: { clinicId: 'clinic-auth', role: 'DENTIST' } };
+    let forwardedError = null;
+    await middlewareModule.checkSubscription(req, null, (error) => {
+      forwardedError = error || null;
+    });
+    assert.equal(forwardedError, null);
+    assert.equal(req.subscriptionAccess?.accessMode, 'READ_ONLY');
+
+    forwardedError = null;
+    await middlewareModule.requireSubscriptionAccess('READ')(req, null, (error) => {
+      forwardedError = error || null;
+    });
+    assert.equal(forwardedError, null);
+
+    await middlewareModule.requireSubscriptionAccess('WRITE')(req, null, (error) => {
+      forwardedError = error || null;
+    });
+    assert.equal(forwardedError?.statusCode, 403);
+    assert.equal(forwardedError?.code, 'SUBSCRIPTION_READ_ONLY');
+    assert.equal(forwardedError?.message, 'Seu período de teste expirou. Ative sua assinatura para continuar editando dados.');
+  } finally {
+    restore();
+  }
+});
+
 register('subscriptionService.confirmPayment bloqueia origem diferente de webhook', async () => {
   let lookupCalled = false;
   const { module: serviceModule, restore } = loadModuleWithMocks(

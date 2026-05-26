@@ -563,7 +563,13 @@ const deriveSubscriptionEffectiveStatusForDashboard = (subscription) => {
     }
   }
 
-  if (currentStatus === 'TRIALING') return 'TRIALING';
+  if (currentStatus === 'TRIALING') {
+    const trialEndsTime = subscription.trialEndsAt ? new Date(subscription.trialEndsAt).getTime() : 0;
+    if (trialEndsTime && !Number.isNaN(trialEndsTime) && Date.now() >= trialEndsTime) {
+      return 'TRIAL_EXPIRED';
+    }
+    return 'TRIALING';
+  }
 
   const nowTime = Date.now();
   const endTime = subscription.endDate ? new Date(subscription.endDate).getTime() : 0;
@@ -625,6 +631,16 @@ const deriveOnboardingStage = ({ onboardingState, subscription }) => {
     return {
       stage: 'TRIALING',
       label: 'Teste gratis ativo',
+      selectedPlan,
+      operationType,
+      effectiveSubscriptionStatus,
+    };
+  }
+
+  if (effectiveSubscriptionStatus === 'TRIAL_EXPIRED') {
+    return {
+      stage: 'TRIAL_EXPIRED',
+      label: 'Teste gratis expirado',
       selectedPlan,
       operationType,
       effectiveSubscriptionStatus,
@@ -2693,6 +2709,7 @@ const clinicService = {
         clinicsAwaitingPayment: 0,
         activeSubscriptions: 0,
         trialingSubscriptions: 0,
+        trialExpiredSubscriptions: 0,
         gracePeriodSubscriptions: 0,
         blockedSubscriptions: 0,
         canceledSubscriptions: 0,
@@ -2710,6 +2727,7 @@ const clinicService = {
         PROFILE_PENDING: 0,
         PAYMENT_PENDING: 0,
         TRIALING: 0,
+        TRIAL_EXPIRED: 0,
         ACTIVE: 0,
         GRACE_PERIOD: 0,
         BLOCKED: 0,
@@ -2734,6 +2752,7 @@ const clinicService = {
         if (stageInfo.stage === 'PROFILE_PENDING') summary.clinicsAwaitingProfile += 1;
         if (stageInfo.stage === 'PAYMENT_PENDING') summary.clinicsAwaitingPayment += 1;
         if (stageInfo.stage === 'TRIALING') summary.trialingSubscriptions += 1;
+        if (stageInfo.stage === 'TRIAL_EXPIRED') summary.trialExpiredSubscriptions += 1;
         if (stageInfo.stage === 'ACTIVE') summary.activeSubscriptions += 1;
         if (stageInfo.stage === 'GRACE_PERIOD') summary.gracePeriodSubscriptions += 1;
         if (stageInfo.stage === 'BLOCKED') summary.blockedSubscriptions += 1;

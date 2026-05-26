@@ -1508,6 +1508,30 @@
     return payload;
   };
 
+  const dispatchSubscriptionReadOnly = (error) => {
+    if (cleanText(error?.code).toUpperCase() !== 'SUBSCRIPTION_READ_ONLY') return;
+    try {
+      window.dispatchEvent(new CustomEvent('voithos:subscription-read-only', {
+        detail: {
+          code: error.code,
+          message: error.message,
+          status: error.status,
+        },
+      }));
+    } catch (_error) {
+      // Evento de UI e melhor esforco.
+    }
+  };
+
+  const buildHttpError = (payload, status) => {
+    const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + status);
+    const error = new Error(message);
+    error.status = status;
+    error.code = payload?.error?.code || payload?.code || 'HTTP_ERROR';
+    dispatchSubscriptionReadOnly(error);
+    return error;
+  };
+
   const request = async (method, path, body, options = {}) => {
     logWebAuthDiagnostic('request_started', {
       endpoint: path,
@@ -1530,16 +1554,13 @@
       const payload = await parseResponsePayload(response);
 
       if (!response.ok) {
-        const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
-        const error = new Error(message);
-        error.status = response.status;
-        error.code = payload?.error?.code || payload?.code || 'HTTP_ERROR';
+        const error = buildHttpError(payload, response.status);
         logWebAuthDiagnostic('request_failed', {
           endpoint: path,
           method,
           status: 'http_error',
           responseStatus: response.status,
-          error: message,
+          error: error.message,
           fallback: false,
         });
         throw error;
@@ -1562,8 +1583,7 @@
     const response = await performFetch(method, path, body, options);
     const payload = await parseResponsePayload(response);
     if (!response.ok) {
-      const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
-      throw new Error(message);
+      throw buildHttpError(payload, response.status);
     }
     return payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload;
   };
@@ -1572,8 +1592,7 @@
     const response = await performFetch(method, path, body, options);
     if (!response.ok) {
       const payload = await parseResponsePayload(response);
-      const message = payload?.error?.message || payload?.error || payload?.message || ('HTTP ' + response.status);
-      throw new Error(message);
+      throw buildHttpError(payload, response.status);
     }
     const buffer = await response.arrayBuffer();
     return {

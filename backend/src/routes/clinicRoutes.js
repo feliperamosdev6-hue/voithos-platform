@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { authenticate } = require('../middlewares/authenticate');
-const { checkSubscription } = require('../middlewares/checkSubscription');
+const { checkSubscription, requireSubscriptionAccess } = require('../middlewares/checkSubscription');
 const { authenticateOptional } = require('../middlewares/authenticateOptional');
 const {
   listPromotionOffers,
@@ -55,6 +55,7 @@ const {
 } = require('../controllers/clinicController');
 
 const router = express.Router();
+const requireWriteAccess = requireSubscriptionAccess('WRITE');
 const importUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -95,10 +96,10 @@ router.post('/me/data-import/procedures/preview', importUpload.single('file'), p
 router.post('/me/data-import/procedures/apply', importUpload.single('file'), applyMyProceduresImport);
 router.get('/me/whatsapp/health', getMyWhatsAppEngineHealth);
 router.get('/me/whatsapp/connection', getMyWhatsAppConnection);
-router.post('/me/whatsapp/connection/refresh', refreshMyWhatsAppConnection);
-router.post('/me/whatsapp/connect', connectMyWhatsApp);
-router.post('/me/whatsapp/disconnect', disconnectMyWhatsApp);
-router.delete('/me/whatsapp/instance', deleteMyWhatsAppInstance);
+router.post('/me/whatsapp/connection/refresh', requireWriteAccess, refreshMyWhatsAppConnection);
+router.post('/me/whatsapp/connect', requireWriteAccess, connectMyWhatsApp);
+router.post('/me/whatsapp/disconnect', requireWriteAccess, disconnectMyWhatsApp);
+router.delete('/me/whatsapp/instance', requireWriteAccess, deleteMyWhatsAppInstance);
 router.get('/me/laboratory/dashboard', getMyLaboratoryDashboard);
 router.get('/me/laboratory/orders', listMyLaboratoryOrders);
 router.post('/me/laboratory/orders', createMyLaboratoryOrder);
