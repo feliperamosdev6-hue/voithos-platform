@@ -651,7 +651,7 @@ document.addEventListener('DOMContentLoaded', () => {
       paymentStatusCopy.textContent = trialExpired
         ? 'Seu periodo de teste terminou. Gere ou abra o checkout seguro do Asaas para ativar sua assinatura.'
         : paymentLink
-          ? 'Sua assinatura esta pendente. Abra o checkout do Asaas para concluir o pagamento e depois atualize o status.'
+          ? 'Sua assinatura esta pendente. Abra o checkout do Asaas para concluir o pagamento.'
           : 'Sua assinatura esta pendente. Gere um checkout seguro para concluir o pagamento.';
     }
     if (paymentReadyCard) {
@@ -660,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (paymentReadyCopy) {
       const selectedMethod = getSelectedPaymentMethodDefinition();
       paymentReadyCopy.textContent = paymentLink
-        ? `${selectedMethod.readyLabel} Se voce ja voltou do pagamento, atualize o status para validar a liberacao.`
+        ? `${selectedMethod.readyLabel} Se o link tiver expirado, geramos um novo automaticamente.`
         : `Depois de gerar o checkout, voce seguira para o pagamento seguro do Asaas com os dados da clinica pre-preenchidos para ${selectedMethod.shortLabel.toLowerCase()}.`;
     }
     if (paymentLinkButton) {
@@ -668,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
       paymentLinkButton.disabled = !paymentLink;
       paymentLinkButton.textContent = paymentLink ? 'Continuar para o checkout seguro' : 'Aguardando checkout';
     }
-    if (preparePaymentButton) preparePaymentButton.textContent = paymentLink ? 'Atualizar status do pagamento' : getSelectedPaymentMethodDefinition().actionLabel;
+    if (preparePaymentButton) preparePaymentButton.textContent = paymentLink ? 'Abrir checkout seguro' : getSelectedPaymentMethodDefinition().actionLabel;
   };
 
   const shouldKeepUserInOnboarding = () => {
@@ -1217,19 +1217,11 @@ document.addEventListener('DOMContentLoaded', () => {
     renderPaymentSummary();
   });
   paymentLinkButton?.addEventListener('click', () => {
-    const paymentLink = resolveCheckoutPaymentLink(
-      onboardingFlowState.subscriptionOverview?.paymentLink,
-      onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink,
-      onboardingFlowState.paymentLink
-    );
-    if (!paymentLink) {
-      setPaymentMessage('Ainda nao ha checkout valido disponivel. Gere um novo checkout para continuar.');
+    if (!preparePaymentButton) {
+      setPaymentMessage('Checkout indisponivel neste ambiente.');
       return;
     }
-    openCheckoutLink(paymentLink).catch((error) => {
-      console.error('Falha ao abrir checkout Asaas', error);
-      setPaymentMessage('Nao foi possivel abrir o checkout agora. Tente novamente.');
-    });
+    preparePaymentButton.click();
   });
 
   resendVerificationPlaceholder?.addEventListener('click', async () => {
@@ -1656,54 +1648,18 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (onboardingFlowState.pendingCheckoutMode && (!authApi?.createPendingSignupCheckout || !authApi?.refreshPendingSignupPaymentStatus)) {
+    if (onboardingFlowState.pendingCheckoutMode && !authApi?.createPendingSignupCheckout) {
       setPaymentMessage('Pagamento indisponivel neste ambiente.');
       return;
     }
 
-    if (!onboardingFlowState.pendingCheckoutMode && (!subscriptionApi?.create || !subscriptionApi?.getMySubscription || !subscriptionApi?.createCheckout || !subscriptionApi?.refreshPaymentStatus)) {
+    if (!onboardingFlowState.pendingCheckoutMode && (!subscriptionApi?.create || !subscriptionApi?.getMySubscription || !subscriptionApi?.createCheckout)) {
       setPaymentMessage('Pagamento indisponivel neste ambiente.');
       return;
     }
 
     try {
-      const paymentLink = resolveCheckoutPaymentLink(
-        onboardingFlowState.subscriptionOverview?.paymentLink,
-        onboardingFlowState.subscriptionOverview?.subscription?.lastPayment?.paymentLink,
-        onboardingFlowState.paymentLink
-      );
       const selectedMethod = onboardingFlowState.checkoutPaymentMethod;
-
-      if (paymentLink) {
-        setPaymentMessage('Atualizando status do pagamento...');
-        const refreshed = onboardingFlowState.pendingCheckoutMode
-          ? await authApi.refreshPendingSignupPaymentStatus({
-              email: onboardingFlowState.pendingSignupEmail,
-              pendingSignupToken: onboardingFlowState.pendingSignupToken,
-            })
-          : await subscriptionApi.refreshPaymentStatus();
-        if (refreshed?.token && refreshed?.user) {
-          clearPaymentReturnContext();
-          setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
-          window.setTimeout(routeAuthenticatedUser, 600);
-          return;
-        }
-        onboardingFlowState.subscriptionOverview = refreshed && typeof refreshed === 'object' ? refreshed : onboardingFlowState.subscriptionOverview;
-        onboardingFlowState.paymentLink = String(
-          refreshed?.paymentLink
-          || refreshed?.subscription?.lastPayment?.paymentLink
-          || onboardingFlowState.paymentLink
-          || ''
-        ).trim();
-        renderPaymentSummary();
-        if (isOperationalAccessStatus(refreshed?.effectiveStatus)) {
-          clearPaymentReturnContext();
-          setPaymentMessage('Pagamento confirmado. Seu acesso ja pode ser liberado.');
-        } else {
-          setPaymentMessage('Ainda nao encontramos confirmacao final do pagamento. Se voce acabou de pagar, aguarde alguns instantes e atualize novamente.');
-        }
-        return;
-      }
 
       setPaymentMessage('Preparando assinatura e checkout seguro...');
       if (!onboardingFlowState.pendingCheckoutMode && !onboardingFlowState.subscriptionOverview?.subscription) {
@@ -1727,6 +1683,21 @@ document.addEventListener('DOMContentLoaded', () => {
             paymentMethod: selectedMethod,
             installmentCount: selectedMethod === 'INSTALLMENT' ? onboardingFlowState.installmentCount : undefined,
           });
+      if (checkout?.alreadyActive === true || isOperationalAccessStatus(checkout?.effectiveStatus)) {
+        clearPaymentReturnContext();
+        await syncOnboardingState();
+        renderPaymentSummary();
+        setPaymentMessage('Sua assinatura ja esta ativa. Voce ja pode entrar no sistema.');
+        window.setTimeout(routeAuthenticatedUser, 600);
+        return;
+      }
+      if (checkout?.alreadyPaid === true || checkout?.pendingWebhookSync === true) {
+        onboardingFlowState.paymentLink = '';
+        await syncOnboardingState();
+        renderPaymentSummary();
+        setPaymentMessage('Pagamento encontrado. A liberacao acontece automaticamente quando o webhook Asaas concluir a sincronizacao.');
+        return;
+      }
       onboardingFlowState.paymentLink = resolveCheckoutPaymentLink(
         checkout?.paymentLink,
         checkout?.invoiceUrl,
@@ -1736,7 +1707,12 @@ document.addEventListener('DOMContentLoaded', () => {
       await syncOnboardingState();
       renderPaymentSummary();
       if (onboardingFlowState.paymentLink) {
-        setPaymentMessage('Checkout seguro gerado. Continue para o Asaas e finalize o pagamento no metodo escolhido.');
+        const checkoutMessage = checkout?.replacedExpiredCheckout === true
+          ? 'Geramos um novo link de pagamento para voce.'
+          : checkout?.reusedExistingCheckout === true
+            ? 'Checkout seguro pronto. Continue para o Asaas e finalize o pagamento.'
+            : 'Checkout seguro gerado. Continue para o Asaas e finalize o pagamento no metodo escolhido.';
+        setPaymentMessage(checkoutMessage);
         window.setTimeout(() => {
           openCheckoutLink(onboardingFlowState.paymentLink).catch((error) => {
             console.error('Falha ao abrir checkout Asaas', error);

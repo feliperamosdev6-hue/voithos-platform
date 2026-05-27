@@ -290,6 +290,71 @@ const subscriptionRepository = {
     });
   }),
 
+  createCheckoutPaymentReplacingPending: async ({
+    clinicId,
+    planType,
+    amount,
+    provider,
+    externalPaymentId,
+    paymentLink,
+    replacePaymentId,
+    resetStatusToPending,
+  }) => prisma.$transaction(async (tx) => {
+    const current = await tx.subscription.findUnique({
+      where: {
+        clinicId: toRequiredString(clinicId, 'clinicId'),
+      },
+    });
+
+    if (!current) {
+      return null;
+    }
+
+    const normalizedReplacePaymentId = toNullableString(replacePaymentId);
+    if (normalizedReplacePaymentId) {
+      await tx.subscriptionPayment.updateMany({
+        where: {
+          id: normalizedReplacePaymentId,
+          subscriptionId: current.id,
+          clinicId: current.clinicId,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'CANCELED',
+        },
+      });
+    }
+
+    const updatedSubscription = await tx.subscription.update({
+      where: { id: current.id },
+      data: {
+        planType,
+        amount,
+        status: resetStatusToPending ? 'PENDING_PAYMENT' : current.status,
+      },
+    });
+
+    const payment = await tx.subscriptionPayment.create({
+      data: {
+        subscriptionId: updatedSubscription.id,
+        clinicId: updatedSubscription.clinicId,
+        amount,
+        status: 'PENDING',
+        provider: toRequiredString(provider, 'provider'),
+        externalPaymentId: toNullableString(externalPaymentId),
+        paymentLink: toNullableString(paymentLink),
+      },
+    });
+
+    return tx.subscription.update({
+      where: { id: updatedSubscription.id },
+      data: {
+        lastPaymentId: payment.id,
+      },
+      include: subscriptionInclude,
+    });
+  }),
+
   confirmPaymentAndActivateSubscription: async ({
     clinicId,
     paymentId,

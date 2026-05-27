@@ -25,11 +25,28 @@ const ACCESS_MODES = Object.freeze({
   DENIED: 'DENIED',
 });
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
+const SUBSCRIPTION_CHECKOUT_TTL_MINUTES = 120;
 const CHECKOUT_PAYMENT_METHODS = Object.freeze({
   PIX: 'PIX',
   CREDIT_CARD: 'CREDIT_CARD',
   INSTALLMENT: 'INSTALLMENT',
 });
+const LOCAL_INVALID_PAYMENT_STATUSES = new Set(['FAILED', 'CANCELED', 'CANCELLED', 'EXPIRED', 'OVERDUE']);
+const ASAAS_CONFIRMED_PAYMENT_STATUSES = new Set(['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAID', 'RECEIVED', 'CONFIRMED']);
+const ASAAS_INVALID_PAYMENT_STATUSES = new Set([
+  'CANCELED',
+  'CANCELLED',
+  'DELETED',
+  'REMOVED',
+  'FAILED',
+  'EXPIRED',
+  'OVERDUE',
+  'REFUNDED',
+  'REFUND_REQUESTED',
+  'CHARGEBACK',
+  'CHARGEBACK_REQUESTED',
+]);
+const checkoutSessionLocks = new Map();
 
 const SUBSCRIPTION_PLANS = PLAN_CATALOG;
 
@@ -303,7 +320,7 @@ const buildCheckoutPayload = ({ paymentMethod, installmentCount, plan, customerC
   const payload = {
     billingTypes,
     chargeTypes,
-    minutesToExpire: 120,
+    minutesToExpire: SUBSCRIPTION_CHECKOUT_TTL_MINUTES,
     callback: buildCheckoutCallback(),
     items: [
       {
@@ -357,6 +374,178 @@ const isWebhookPaymentConfirmationEvent = (eventType) => {
   const normalized = normalizeText(eventType).toUpperCase();
   return ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'CHECKOUT_PAID'].includes(normalized);
 };
+
+const runWithCheckoutSessionLock = async (clinicId, task) => {
+  const key = normalizeText(clinicId);
+  if (!key) return task();
+
+  const previous = checkoutSessionLocks.get(key) || Promise.resolve();
+  let releaseCurrent = () => {};
+  const current = new Promise((resolve) => {
+    releaseCurrent = resolve;
+  });
+  const queued = previous.catch(() => undefined).then(() => current);
+  checkoutSessionLocks.set(key, queued);
+
+  await previous.catch(() => undefined);
+  try {
+    return await task();
+  } finally {
+    releaseCurrent();
+    if (checkoutSessionLocks.get(key) === queued) {
+      checkoutSessionLocks.delete(key);
+    }
+  }
+};
+
+const parseAsaasPaymentList = (response) => {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response?.data)) return response.data;
+  if (Array.isArray(response?.payments)) return response.payments;
+  if (Array.isArray(response?.items)) return response.items;
+  return [];
+};
+
+const maskExternalId = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  return normalized.length <= 8 ? normalized : `${normalized.slice(0, 6)}...${normalized.slice(-2)}`;
+};
+
+const inspectAsaasCheckoutPaymentState = async (checkoutId) => {
+  const normalizedCheckoutId = normalizeText(checkoutId);
+  if (!normalizedCheckoutId || typeof asaasService.listPaymentsByCheckoutSession !== 'function') {
+    return { state: 'UNKNOWN', status: '' };
+  }
+
+  try {
+    const response = await asaasService.listPaymentsByCheckoutSession(normalizedCheckoutId);
+    const payments = parseAsaasPaymentList(response);
+    const statuses = payments.map((item) => normalizeText(item?.status).toUpperCase()).filter(Boolean);
+    const paidStatus = statuses.find((status) => ASAAS_CONFIRMED_PAYMENT_STATUSES.has(status));
+    if (paidStatus) return { state: 'PAID', status: paidStatus };
+    const invalidStatus = statuses.find((status) => ASAAS_INVALID_PAYMENT_STATUSES.has(status));
+    if (invalidStatus) return { state: 'INVALID', status: invalidStatus };
+    return { state: 'PENDING', status: statuses[0] || '' };
+  } catch (error) {
+    console.warn('[subscription][checkout-status-lookup-failed]', {
+      checkoutId: maskExternalId(normalizedCheckoutId),
+      error: normalizeText(error?.message || error),
+    });
+    return { state: 'UNKNOWN', status: '' };
+  }
+};
+
+const getCheckoutExpiresAt = (payment) => {
+  const createdAtTime = getValidDateTime(payment?.createdAt);
+  if (!createdAtTime) return null;
+  const expiresAt = new Date(createdAtTime + (SUBSCRIPTION_CHECKOUT_TTL_MINUTES * 60 * 1000));
+  return Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < createdAtTime
+    ? null
+    : expiresAt;
+};
+
+const evaluateCheckoutPaymentReuse = (payment, now = new Date(), plan = null) => {
+  if (!payment) {
+    return { action: 'CREATE', reason: 'no_pending_payment' };
+  }
+
+  const status = normalizeText(payment.status).toUpperCase() || 'PENDING';
+  if (status === 'PAID') {
+    return { action: 'PAID', payment };
+  }
+  if (LOCAL_INVALID_PAYMENT_STATUSES.has(status)) {
+    return { action: 'REPLACE', payment, reason: `local_status_${status.toLowerCase()}` };
+  }
+  if (status !== 'PENDING') {
+    return { action: 'REPLACE', payment, reason: `local_status_${status.toLowerCase()}` };
+  }
+  if (!normalizeText(payment.paymentLink)) {
+    return { action: 'REPLACE', payment, reason: 'missing_payment_link' };
+  }
+  if (!normalizeText(payment.externalPaymentId)) {
+    return { action: 'REPLACE', payment, reason: 'missing_external_payment_id' };
+  }
+  if (plan && roundMoney(payment.amount) !== roundMoney(plan.amount)) {
+    return { action: 'REPLACE', payment, reason: 'amount_changed' };
+  }
+
+  const expiresAt = getCheckoutExpiresAt(payment);
+  if (expiresAt && expiresAt.getTime() <= now.getTime()) {
+    return { action: 'REPLACE', payment, reason: 'checkout_expired', expiresAt };
+  }
+
+  return { action: 'REUSE', payment, expiresAt };
+};
+
+const resolveCheckoutDecision = async ({ subscription, now, plan }) => {
+  const effectiveStatus = deriveSubscriptionStatus(subscription, now);
+  if (effectiveStatus === 'ACTIVE') {
+    return { action: 'ACTIVE', effectiveStatus };
+  }
+
+  const localDecision = evaluateCheckoutPaymentReuse(subscription?.lastPayment, now, plan);
+  if (localDecision.action === 'PAID') {
+    return { ...localDecision, effectiveStatus };
+  }
+
+  if (localDecision.action === 'REUSE') {
+    const gatewayState = await inspectAsaasCheckoutPaymentState(localDecision.payment.externalPaymentId);
+    if (gatewayState.state === 'PAID') {
+      return {
+        action: 'PAID',
+        payment: localDecision.payment,
+        effectiveStatus,
+        gatewayStatus: gatewayState.status,
+        pendingWebhookSync: true,
+      };
+    }
+    if (gatewayState.state === 'INVALID') {
+      return {
+        action: 'REPLACE',
+        payment: localDecision.payment,
+        effectiveStatus,
+        reason: `asaas_status_${normalizeText(gatewayState.status).toLowerCase() || 'invalid'}`,
+        expiresAt: localDecision.expiresAt,
+      };
+    }
+  }
+
+  return {
+    ...localDecision,
+    effectiveStatus,
+  };
+};
+
+const buildCheckoutSessionResponse = ({
+  checkoutId = '',
+  paymentLink = null,
+  paymentMethod,
+  installmentCount,
+  plan,
+  subscription,
+  effectiveStatus,
+  flags = {},
+  checkoutExpiresAt = null,
+}) => ({
+  checkoutId: normalizeText(checkoutId) || null,
+  paymentLink: normalizeText(paymentLink) || null,
+  paymentMethod,
+  installmentCount: paymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT ? installmentCount : null,
+  nextDueDate: resolveTodayIsoDate(),
+  planType: plan.planType,
+  amount: roundMoney(plan.amount),
+  customPriceEnabled: subscription?.customPriceEnabled === true,
+  billingCycle: plan.billingCycle,
+  checkoutExpiresAt: checkoutExpiresAt ? checkoutExpiresAt.toISOString() : null,
+  effectiveStatus: effectiveStatus || deriveSubscriptionStatus(subscription, new Date()),
+  reusedExistingCheckout: flags.reusedExistingCheckout === true,
+  createdNewCheckout: flags.createdNewCheckout === true,
+  replacedExpiredCheckout: flags.replacedExpiredCheckout === true,
+  alreadyActive: flags.alreadyActive === true,
+  alreadyPaid: flags.alreadyPaid === true,
+  pendingWebhookSync: flags.pendingWebhookSync === true,
+});
 
 const getPlanDefinition = (planType) => getCatalogPlanDefinition(normalizePlanType(planType));
 const getPublicPlanCatalog = () => getCatalogPublicPlanCatalog();
@@ -777,80 +966,121 @@ const subscriptionService = {
       throw new AppError(400, 'VALIDATION_ERROR', 'installmentCount must be between 2 and 12.');
     }
 
-    const subscription = await subscriptionRepository.findByClinicId({ clinicId });
-    if (!subscription) {
-      throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
-    }
+    return runWithCheckoutSessionLock(clinicId, async () => {
+      const foundSubscription = await subscriptionRepository.findByClinicId({ clinicId });
+      if (!foundSubscription) {
+        throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
+      }
 
-    const plan = resolveSubscriptionBillingPlan(subscription, normalizedPlanType);
-    const clinic = await clinicRepository.findProfileById(clinicId);
-    if (!clinic) {
-      throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
-    }
-    const customerContext = buildCheckoutCustomerContext({
-      clinic,
-    });
-    const checkoutPayload = buildCheckoutPayload({
-      paymentMethod: normalizedPaymentMethod,
-      installmentCount: normalizedInstallmentCount,
-      plan,
-      customerContext,
-    });
-    let checkout = null;
-    try {
-      checkout = await asaasService.createCheckout(checkoutPayload);
-    } catch (error) {
-      throw new AppError(
-        502,
-        'ASAAS_CHECKOUT_FAILED',
-        error instanceof AppError
-          ? error.message
-          : `Nao foi possivel gerar o checkout do Asaas: ${String(error?.message || error || 'erro desconhecido')}`
-      );
-    }
+      const now = new Date();
+      const subscription = await syncLifecycle(foundSubscription, now) || foundSubscription;
+      const plan = resolveSubscriptionBillingPlan(subscription, normalizedPlanType);
+      const decision = await resolveCheckoutDecision({ subscription, now, plan });
 
-    const checkoutId = normalizeText(checkout?.id);
-    const checkoutUrl = normalizeText(checkout?.url || checkout?.invoiceUrl || checkout?.paymentLink || checkout?.checkoutUrl)
-      || asaasService.buildCheckoutUrl(checkoutId);
-    if (!checkoutId) {
-      throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout did not return an id.');
-    }
-    if (!checkoutUrl) {
-      throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout link could not be generated.');
-    }
+      if (decision.action === 'ACTIVE') {
+        return buildCheckoutSessionResponse({
+          paymentMethod: normalizedPaymentMethod,
+          installmentCount: normalizedInstallmentCount,
+          plan,
+          subscription,
+          effectiveStatus: decision.effectiveStatus,
+          flags: { alreadyActive: true },
+        });
+      }
 
-    const lastPaymentStatus = normalizeText(subscription?.lastPayment?.status).toUpperCase();
-    if (subscription?.lastPayment?.id && lastPaymentStatus === 'PENDING') {
-      await subscriptionRepository.updatePaymentGatewayData({
-        paymentId: subscription.lastPayment.id,
-        provider: ASAAS_CHECKOUT_PROVIDER,
-        externalPaymentId: checkoutId,
-        paymentLink: checkoutUrl || null,
-        amount: roundMoney(plan.amount),
+      if (decision.action === 'PAID') {
+        return buildCheckoutSessionResponse({
+          checkoutId: decision.payment?.externalPaymentId,
+          paymentMethod: normalizedPaymentMethod,
+          installmentCount: normalizedInstallmentCount,
+          plan,
+          subscription,
+          effectiveStatus: decision.effectiveStatus,
+          checkoutExpiresAt: getCheckoutExpiresAt(decision.payment, now),
+          flags: {
+            alreadyPaid: true,
+            pendingWebhookSync: decision.pendingWebhookSync === true,
+          },
+        });
+      }
+
+      if (decision.action === 'REUSE') {
+        return buildCheckoutSessionResponse({
+          checkoutId: decision.payment.externalPaymentId,
+          paymentLink: decision.payment.paymentLink,
+          paymentMethod: normalizedPaymentMethod,
+          installmentCount: normalizedInstallmentCount,
+          plan,
+          subscription,
+          effectiveStatus: decision.effectiveStatus,
+          checkoutExpiresAt: decision.expiresAt || getCheckoutExpiresAt(decision.payment, now),
+          flags: { reusedExistingCheckout: true },
+        });
+      }
+
+      const clinic = await clinicRepository.findProfileById(clinicId);
+      if (!clinic) {
+        throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+      }
+      const customerContext = buildCheckoutCustomerContext({
+        clinic,
       });
-    } else {
-      await subscriptionRepository.createRenewalPayment({
+      const checkoutPayload = buildCheckoutPayload({
+        paymentMethod: normalizedPaymentMethod,
+        installmentCount: normalizedInstallmentCount,
+        plan,
+        customerContext,
+      });
+      let checkout = null;
+      try {
+        checkout = await asaasService.createCheckout(checkoutPayload);
+      } catch (error) {
+        throw new AppError(
+          502,
+          'ASAAS_CHECKOUT_FAILED',
+          error instanceof AppError
+            ? error.message
+            : `Nao foi possivel gerar o checkout do Asaas: ${String(error?.message || error || 'erro desconhecido')}`
+        );
+      }
+
+      const checkoutId = normalizeText(checkout?.id);
+      const checkoutUrl = normalizeText(checkout?.url || checkout?.invoiceUrl || checkout?.paymentLink || checkout?.checkoutUrl)
+        || asaasService.buildCheckoutUrl(checkoutId);
+      if (!checkoutId) {
+        throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout did not return an id.');
+      }
+      if (!checkoutUrl) {
+        throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout link could not be generated.');
+      }
+
+      const replacedPaymentId = decision.action === 'REPLACE' ? normalizeText(decision.payment?.id) : '';
+      const updatedSubscription = await subscriptionRepository.createCheckoutPaymentReplacingPending({
         clinicId,
         planType: plan.planType,
         amount: roundMoney(plan.amount),
         provider: ASAAS_CHECKOUT_PROVIDER,
         externalPaymentId: checkoutId,
         paymentLink: checkoutUrl || null,
+        replacePaymentId: replacedPaymentId || null,
         resetStatusToPending: false,
       });
-    }
 
-    return {
-      checkoutId,
-      paymentLink: checkoutUrl || null,
-      paymentMethod: normalizedPaymentMethod,
-      installmentCount: normalizedPaymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT ? normalizedInstallmentCount : null,
-      nextDueDate: resolveTodayIsoDate(),
-      planType: plan.planType,
-      amount: roundMoney(plan.amount),
-      customPriceEnabled: subscription.customPriceEnabled === true,
-      billingCycle: plan.billingCycle,
-    };
+      return buildCheckoutSessionResponse({
+        checkoutId,
+        paymentLink: checkoutUrl,
+        paymentMethod: normalizedPaymentMethod,
+        installmentCount: normalizedInstallmentCount,
+        plan,
+        subscription: updatedSubscription || subscription,
+        effectiveStatus: deriveSubscriptionStatus(updatedSubscription || subscription, now),
+        checkoutExpiresAt: new Date(now.getTime() + (SUBSCRIPTION_CHECKOUT_TTL_MINUTES * 60 * 1000)),
+        flags: {
+          createdNewCheckout: true,
+          replacedExpiredCheckout: Boolean(replacedPaymentId),
+        },
+      });
+    });
   },
 
   confirmPayment: async ({ clinicId, paymentId, provider, externalPaymentId, paidAt, source }) => {
@@ -884,6 +1114,11 @@ const subscriptionService = {
     if (normalizeText(payment.status).toUpperCase() === 'PAID') {
       const syncedExisting = await syncLifecycle(payment.subscription, new Date());
       return buildOverview(syncedExisting, new Date());
+    }
+
+    const currentLastPaymentId = normalizeText(payment?.subscription?.lastPaymentId);
+    if (currentLastPaymentId && normalizeText(payment.id) !== currentLastPaymentId) {
+      throw new AppError(409, 'STALE_SUBSCRIPTION_PAYMENT', 'Subscription payment is no longer the current checkout.');
     }
 
     const confirmedAt = normalizeOptionalDate(paidAt, 'paidAt') || new Date();
@@ -1138,7 +1373,7 @@ const subscriptionService = {
     }
 
     const paymentStatus = normalizeText(payment?.status).toUpperCase();
-    if (paymentStatus && !['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'PAID', 'RECEIVED', 'CONFIRMED'].includes(paymentStatus)) {
+    if (paymentStatus && !ASAAS_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) {
       return { handled: false };
     }
 
@@ -1159,6 +1394,13 @@ const subscriptionService = {
     const paymentRecordStatus = normalizeText(paymentRecord?.status).toUpperCase();
     if (currentStatus === 'ACTIVE' && paymentRecordStatus === 'PAID') {
       return { handled: true, alreadyActive: true };
+    }
+    const currentLastPaymentId = normalizeText(paymentRecord?.subscription?.lastPaymentId);
+    if (currentLastPaymentId && normalizeText(paymentRecord.id) !== currentLastPaymentId && paymentRecordStatus !== 'PAID') {
+      return { handled: true, stalePayment: true };
+    }
+    if (LOCAL_INVALID_PAYMENT_STATUSES.has(paymentRecordStatus)) {
+      return { handled: true, ignoredInvalidPayment: true };
     }
 
     await subscriptionService.confirmPayment({

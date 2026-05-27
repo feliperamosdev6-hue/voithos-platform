@@ -23,6 +23,7 @@ const SIGNUP_RESEND_BLOCK_MINUTES = 15;
 const PENDING_CHECKOUT_TTL_HOURS = 12;
 const TRIAL_DURATION_DAYS = 7;
 const ASAAS_CHECKOUT_PROVIDER = 'ASAAS_CHECKOUT';
+const PENDING_CHECKOUT_INVALID_STATUSES = new Set(['FAILED', 'CANCELED', 'CANCELLED', 'EXPIRED', 'OVERDUE']);
 const isProductionEnv = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
 const SUPER_ADMIN_EMAIL = String(
   process.env.VOITHOS_SUPERADMIN_EMAIL || (isProductionEnv ? '' : 'superadmin@voithos.local')
@@ -113,6 +114,13 @@ const normalizeInstallmentCount = (value) => {
 };
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const getValidTime = (value) => {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  const time = date.getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
 
 const normalizeCheckoutName = (value, fallback = 'Clinica Voithos') => {
   const raw = String(value || '').replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -232,6 +240,58 @@ const buildPendingCheckoutPayload = ({ signupData, paymentMethod, installmentCou
     installmentCount: normalizedPaymentMethod === 'INSTALLMENT' ? normalizedInstallmentCount : null,
     promotionOffer,
   };
+};
+
+const evaluatePendingSignupCheckoutReuse = ({ checkout, checkoutContext, selectedPlan, now = new Date() }) => {
+  if (!checkout || typeof checkout !== 'object') {
+    return { action: 'CREATE', reason: 'no_checkout' };
+  }
+
+  const status = String(checkout.status || 'PENDING').trim().toUpperCase();
+  if (status === 'PAID') {
+    return { action: 'PAID', checkout };
+  }
+  if (PENDING_CHECKOUT_INVALID_STATUSES.has(status)) {
+    return { action: 'REPLACE', checkout, reason: `local_status_${status.toLowerCase()}` };
+  }
+
+  const paymentLink = String(checkout.paymentLink || '').trim();
+  const externalPaymentId = String(checkout.externalPaymentId || '').trim();
+  if (!paymentLink) return { action: 'REPLACE', checkout, reason: 'missing_payment_link' };
+  if (!externalPaymentId) return { action: 'REPLACE', checkout, reason: 'missing_external_payment_id' };
+
+  const expiresAtTime = getValidTime(checkout.expiresAt);
+  if (expiresAtTime && expiresAtTime <= now.getTime()) {
+    return { action: 'REPLACE', checkout, reason: 'checkout_expired' };
+  }
+
+  const checkoutPlanType = normalizeSelectedPlan(checkout.planType || selectedPlan);
+  if (checkoutPlanType && checkoutPlanType !== selectedPlan) {
+    return { action: 'REPLACE', checkout, reason: 'plan_changed' };
+  }
+
+  const checkoutMethod = normalizePaymentMethod(checkout.paymentMethod);
+  if (checkoutMethod !== checkoutContext.paymentMethod) {
+    return { action: 'REPLACE', checkout, reason: 'payment_method_changed' };
+  }
+
+  const checkoutInstallments = checkoutMethod === 'INSTALLMENT'
+    ? normalizeInstallmentCount(checkout.installmentCount)
+    : null;
+  if (checkoutInstallments !== checkoutContext.installmentCount) {
+    return { action: 'REPLACE', checkout, reason: 'installment_count_changed' };
+  }
+
+  if (roundMoney(checkout.amount) !== roundMoney(checkoutContext.plan.amount)) {
+    return { action: 'REPLACE', checkout, reason: 'amount_changed' };
+  }
+
+  return { action: 'REUSE', checkout };
+};
+
+const isPendingSignupCheckoutExpired = (checkout) => {
+  const expiresAtTime = getValidTime(checkout?.expiresAt);
+  return Boolean(expiresAtTime && expiresAtTime <= Date.now());
 };
 
 const logPasswordReset = (stage, details = {}) => {
@@ -1287,14 +1347,6 @@ const getPendingSignupForCheckout = async ({ email, pendingSignupToken }) => {
     throw new AppError(403, 'PENDING_SIGNUP_EMAIL_NOT_VERIFIED', 'Email verification is required before payment.');
   }
 
-  const checkoutExpiresAt = signupData.paymentCheckout?.expiresAt
-    ? new Date(signupData.paymentCheckout.expiresAt).getTime()
-    : 0;
-  if (checkoutExpiresAt && checkoutExpiresAt <= Date.now()) {
-    await pendingSignupRepository.deleteByEmail(normalizedEmail);
-    throw new AppError(410, 'PENDING_CHECKOUT_EXPIRED', 'Pending checkout expired. Start signup again.');
-  }
-
   return {
     pendingSignup,
     signupData,
@@ -1323,12 +1375,13 @@ const updatePendingSignupOnboarding = async ({ email, pendingSignupToken, select
     email: pendingSignup.email,
     signupData: nextSignupData,
   });
+  const reusableCheckout = !isPendingSignupCheckoutExpired(nextSignupData.paymentCheckout);
 
   return {
     selectedPlan: normalizeSelectedPlan(nextSignupData.selectedPlan),
     operationType: nextSignupData.operationType || '',
-    paymentLink: nextSignupData.paymentCheckout?.paymentLink || null,
-    paymentExpiresAt: nextSignupData.paymentCheckout?.expiresAt || null,
+    paymentLink: reusableCheckout ? (nextSignupData.paymentCheckout?.paymentLink || null) : null,
+    paymentExpiresAt: reusableCheckout ? (nextSignupData.paymentCheckout?.expiresAt || null) : null,
     pendingCheckout: true,
     pendingSignupId: updated?.id || pendingSignup.id,
   };
@@ -1361,6 +1414,45 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
     installmentCount,
     promotionOffer,
   });
+  const checkoutDecision = evaluatePendingSignupCheckoutReuse({
+    checkout: signupData.paymentCheckout,
+    checkoutContext,
+    selectedPlan,
+    now: new Date(),
+  });
+
+  if (checkoutDecision.action === 'REUSE') {
+    return {
+      checkoutId: String(checkoutDecision.checkout.externalPaymentId || '').trim(),
+      paymentLink: String(checkoutDecision.checkout.paymentLink || '').trim(),
+      paymentMethod: checkoutContext.paymentMethod,
+      installmentCount: checkoutContext.installmentCount,
+      planType: selectedPlan,
+      amount: roundMoney(checkoutContext.plan.amount),
+      promotion: checkoutDecision.checkout.promotion || promotionOffer,
+      expiresAt: checkoutDecision.checkout.expiresAt || null,
+      pendingCheckout: true,
+      reusedExistingCheckout: true,
+      createdNewCheckout: false,
+      replacedExpiredCheckout: false,
+    };
+  }
+
+  if (checkoutDecision.action === 'PAID') {
+    return {
+      checkoutId: String(checkoutDecision.checkout.externalPaymentId || '').trim(),
+      paymentLink: null,
+      paymentMethod: checkoutContext.paymentMethod,
+      installmentCount: checkoutContext.installmentCount,
+      planType: selectedPlan,
+      amount: roundMoney(checkoutContext.plan.amount),
+      promotion: checkoutDecision.checkout.promotion || promotionOffer,
+      expiresAt: checkoutDecision.checkout.expiresAt || null,
+      pendingCheckout: true,
+      alreadyPaid: true,
+      pendingWebhookSync: true,
+    };
+  }
 
   let checkout = null;
   try {
@@ -1385,6 +1477,7 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
       paymentLink: checkoutUrl,
       paymentMethod: checkoutContext.paymentMethod,
       installmentCount: checkoutContext.installmentCount,
+      planType: selectedPlan,
       amount: roundMoney(checkoutContext.plan.amount),
       promotion: promotionOffer ? {
         promotionOfferId: promotionOffer.id,
@@ -1414,6 +1507,9 @@ const createPendingSignupCheckout = async ({ email, pendingSignupToken, planType
     promotion: promotionOffer,
     expiresAt,
     pendingCheckout: true,
+    reusedExistingCheckout: false,
+    createdNewCheckout: true,
+    replacedExpiredCheckout: checkoutDecision.action === 'REPLACE',
   };
 };
 
@@ -1427,11 +1523,13 @@ const refreshPendingSignupPaymentStatus = async ({ email, pendingSignupToken }) 
       effectiveStatus: 'PENDING_PAYMENT',
     };
   }
+  const checkoutExpired = isPendingSignupCheckoutExpired(signupData.paymentCheckout);
 
   return {
     pendingCheckout: true,
-    paymentLink: signupData.paymentCheckout?.paymentLink || null,
+    paymentLink: checkoutExpired ? null : (signupData.paymentCheckout?.paymentLink || null),
     effectiveStatus: 'PENDING_PAYMENT',
+    checkoutExpired,
   };
 };
 
@@ -1444,6 +1542,15 @@ const finalizePendingSignupPaymentByExternalPaymentId = async ({ externalPayment
   const signupData = pendingSignup.signupData && typeof pendingSignup.signupData === 'object'
     ? pendingSignup.signupData
     : {};
+  const currentCheckoutId = String(signupData.paymentCheckout?.externalPaymentId || '').trim();
+  const currentCheckoutStatus = String(signupData.paymentCheckout?.status || 'PENDING').trim().toUpperCase();
+  if (
+    currentCheckoutId !== String(externalPaymentId || '').trim()
+    || PENDING_CHECKOUT_INVALID_STATUSES.has(currentCheckoutStatus)
+    || isPendingSignupCheckoutExpired(signupData.paymentCheckout)
+  ) {
+    return { handled: true, stalePayment: true };
+  }
 
   const duplicateUser = await userRepository.findByEmail(normalizeEmail(signupData.adminEmail || pendingSignup.email || ''));
   if (duplicateUser) {

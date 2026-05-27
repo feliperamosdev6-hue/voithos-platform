@@ -672,8 +672,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       let subscription = overview?.subscription || null;
+      const currentStatus = resolveSubscriptionStatus(overview || {});
+      if (currentStatus === 'ACTIVE') {
+        renderSubscription(overview || {});
+        setSubscriptionFeedback('Sua assinatura ja esta ativa.', 'success');
+        return;
+      }
       const plan = getSubscriptionPlan(overview || {});
-      let paymentLink = resolvePaymentLink(overview?.paymentLink, subscription?.lastPayment?.paymentLink);
 
       if (!subscription && subscriptionApi.create) {
         await subscriptionApi.create({
@@ -683,20 +688,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         overview = await subscriptionApi.getMySubscription?.();
         subscription = overview?.subscription || null;
-        paymentLink = resolvePaymentLink(overview?.paymentLink, subscription?.lastPayment?.paymentLink);
       }
 
-      if (!paymentLink) {
-        const checkout = await subscriptionApi.createCheckout({
-          planType: plan.planType || subscription?.planType || 'MONTHLY',
-          paymentMethod: 'PIX',
-        });
-        paymentLink = resolvePaymentLink(checkout?.paymentLink, checkout?.invoiceUrl, checkout?.url, checkout?.checkoutUrl);
+      const checkout = await subscriptionApi.createCheckout({
+        planType: plan.planType || subscription?.planType || 'MONTHLY',
+        paymentMethod: 'PIX',
+      });
+      const paymentLink = resolvePaymentLink(checkout?.paymentLink, checkout?.invoiceUrl, checkout?.url, checkout?.checkoutUrl);
+
+      if (checkout?.alreadyActive === true || String(checkout?.effectiveStatus || '').trim().toUpperCase() === 'ACTIVE') {
+        await loadSubscription({ force: true });
+        setSubscriptionFeedback('Sua assinatura ja esta ativa.', 'success');
+        return;
+      }
+
+      if (checkout?.alreadyPaid === true || checkout?.pendingWebhookSync === true) {
+        await loadSubscription({ force: true });
+        setSubscriptionFeedback('Pagamento encontrado. A ativacao acontece automaticamente quando o webhook Asaas concluir a sincronizacao.', 'success');
+        return;
       }
 
       await loadSubscription({ force: true });
       await openCheckoutLink(paymentLink);
-      setSubscriptionFeedback('Checkout aberto. A ativacao acontece automaticamente quando o webhook Asaas confirmar o pagamento.', 'success');
+      setSubscriptionFeedback(
+        checkout?.replacedExpiredCheckout === true
+          ? 'Geramos um novo link de pagamento para voce.'
+          : 'Checkout aberto. A ativacao acontece automaticamente quando o webhook Asaas confirmar o pagamento.',
+        'success'
+      );
     } catch (error) {
       console.error('[CLINICA] Falha ao gerar checkout', error);
       setSubscriptionFeedback(error?.message || 'Nao foi possivel gerar o checkout agora.', 'error');
