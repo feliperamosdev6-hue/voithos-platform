@@ -921,11 +921,11 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const getDefaultPlanPrice = (planType) => ({
-    MONTHLY: '94.90',
+    MONTHLY: '47.70',
     QUARTERLY: '269.90',
     SEMIANNUAL: '499.90',
-    ANNUAL: '899.90',
-  }[String(planType || '').trim().toUpperCase()] || '899.90');
+    ANNUAL: '548.70',
+  }[String(planType || '').trim().toUpperCase()] || '548.70');
 
   const getSubscriptionRowByClinicId = (clinicId) => getSubscriptionRows()
     .find((row) => String(row?.clinicId || '').trim() === String(clinicId || '').trim()) || null;

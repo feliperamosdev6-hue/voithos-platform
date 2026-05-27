@@ -89,7 +89,7 @@ register('subscriptionService.refreshPaymentStatus consulta apenas estado persis
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 94.9,
+            amount: 47.7,
             status: 'PENDING_PAYMENT',
             startDate: null,
             endDate: null,
@@ -178,7 +178,7 @@ register('subscriptionService.createCheckoutSession cria checkout server-side se
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 94.9,
+            amount: 47.7,
             status: 'TRIALING',
             trialStartedAt: new Date('2026-05-25T00:00:00.000Z'),
             trialEndsAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -218,7 +218,7 @@ register('subscriptionService.createCheckoutSession cria checkout server-side se
 
     assert.equal(result?.checkoutId, 'checkout-1');
     assert.equal(result?.paymentLink, 'https://asaas.example/checkout-1');
-    assert.equal(checkoutPayload?.items?.[0]?.value, 94.9);
+    assert.equal(checkoutPayload?.items?.[0]?.value, 47.7);
     assert.equal(checkoutPayload?.callback?.successUrl, 'https://app.voithos.test/payment-return.html?payment=success');
     assert.equal(renewalPaymentPayload?.clinicId, 'clinic-auth');
     assert.equal(renewalPaymentPayload?.provider, 'ASAAS_CHECKOUT');
@@ -268,9 +268,9 @@ register('subscriptionService.createCheckoutSession usa billingAmount customizad
             id: 'sub-custom',
             clinicId: 'clinic-auth',
             planType: 'ANNUAL',
-            amount: 899.9,
-            billingAmount: 749.9,
-            discountAmount: 150,
+            amount: 548.7,
+            billingAmount: 498.7,
+            discountAmount: 50,
             customPriceEnabled: true,
             billingCycle: 'ANNUAL',
             status: 'TRIALING',
@@ -312,10 +312,10 @@ register('subscriptionService.createCheckoutSession usa billingAmount customizad
       paymentMethod: 'PIX',
     });
 
-    assert.equal(checkoutPayload?.items?.[0]?.value, 749.9);
+    assert.equal(checkoutPayload?.items?.[0]?.value, 498.7);
     assert.equal(gatewayUpdatePayload?.paymentId, 'payment-pending');
-    assert.equal(gatewayUpdatePayload?.amount, 749.9);
-    assert.equal(result?.amount, 749.9);
+    assert.equal(gatewayUpdatePayload?.amount, 498.7);
+    assert.equal(result?.amount, 498.7);
     assert.equal(result?.customPriceEnabled, true);
   } finally {
     restore();
@@ -357,7 +357,7 @@ register('subscriptionService.createCheckoutSession nao altera pagamento confirm
             id: 'sub-active',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 94.9,
+            amount: 47.7,
             status: 'ACTIVE',
             startDate: new Date('2026-05-01T00:00:00.000Z'),
             endDate: new Date('2026-06-01T00:00:00.000Z'),
@@ -401,7 +401,7 @@ register('subscriptionService.createCheckoutSession nao altera pagamento confirm
     assert.equal(gatewayUpdateCalled, false);
     assert.equal(renewalPaymentPayload?.clinicId, 'clinic-auth');
     assert.equal(renewalPaymentPayload?.provider, 'ASAAS_CHECKOUT');
-    assert.equal(renewalPaymentPayload?.amount, 94.9);
+    assert.equal(renewalPaymentPayload?.amount, 47.7);
   } finally {
     restore();
   }
@@ -488,7 +488,7 @@ register('subscriptionService.getAccessOverview retorna READ_ONLY para trial exp
             id: 'sub-trial-expired',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 94.9,
+            amount: 47.7,
             status: 'TRIALING',
             startDate: null,
             endDate: null,
@@ -539,7 +539,7 @@ register('subscriptionService.getAccessOverview mantem FULL para trial ativo e a
       id: 'sub-trial-active',
       clinicId: 'clinic-trial',
       planType: 'MONTHLY',
-      amount: 94.9,
+      amount: 47.7,
       status: 'TRIALING',
       trialStartedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
       trialEndsAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
@@ -550,7 +550,7 @@ register('subscriptionService.getAccessOverview mantem FULL para trial ativo e a
       id: 'sub-active',
       clinicId: 'clinic-active',
       planType: 'MONTHLY',
-      amount: 94.9,
+      amount: 47.7,
       status: 'ACTIVE',
       startDate: new Date('2026-05-01T00:00:00.000Z'),
       endDate: new Date('2026-06-01T00:00:00.000Z'),
@@ -558,7 +558,7 @@ register('subscriptionService.getAccessOverview mantem FULL para trial ativo e a
       lastPayment: {
         id: 'payment-paid',
         status: 'PAID',
-        amount: 94.9,
+        amount: 47.7,
         provider: 'ASAAS_CHECKOUT',
         externalPaymentId: 'checkout-paid',
         paymentLink: 'https://checkout.example/paid',

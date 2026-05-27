@@ -61,8 +61,8 @@ test('promotionOfferService bloqueia oferta expirada', async (t) => {
         code: 'EXPIRADA',
         title: 'Oferta expirada',
         planType: 'ANNUAL',
-        regularPriceCents: 89990,
-        promotionalPriceCents: 69990,
+        regularPriceCents: 54870,
+        promotionalPriceCents: 39990,
         usedCount: 0,
         maxUses: 1,
         active: true,
@@ -107,8 +107,8 @@ test('promotionOfferService bloqueia preco promocional acima do preco normal', a
       payload: {
         title: 'Preco invalido',
         planType: 'ANNUAL',
-        regularPrice: 699.9,
-        promotionalPrice: 899.9,
+        regularPrice: 548.7,
+        promotionalPrice: 599.9,
       },
     }),
     (error) => {
