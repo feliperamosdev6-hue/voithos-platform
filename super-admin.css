@@ -111,6 +111,45 @@ select:focus {
   margin-top: 16px;
 }
 
+.superadmin-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px;
+  border: 1px solid #d8e0ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+}
+
+.tab-button {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #42526e;
+  border-radius: 999px;
+  height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tab-button.is-active {
+  background: #edf7f2;
+  border-color: #bde5d5;
+  color: #1b7d5c;
+}
+
+.tab-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.tab-panel[hidden] {
+  display: none !important;
+}
+
 .btn-primary {
   background: linear-gradient(135deg, #22b07d, #1b996f);
   color: #fff;
@@ -158,6 +197,10 @@ select:focus {
   grid-template-columns: minmax(0, 2fr) minmax(240px, 1fr);
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.subscriptions-toolbar {
+  margin-top: 14px;
 }
 
 .metrics-grid {
@@ -317,6 +360,95 @@ select:focus {
   font-family: Consolas, "Courier New", monospace;
   color: #1b7d5c;
   font-weight: 800;
+}
+
+.table-shell {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #dfe7f2;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid #edf2f8;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  color: #5b6780;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  background: #f8fbff;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table td strong {
+  display: block;
+  color: #152442;
+}
+
+.data-table td span {
+  display: block;
+  margin-top: 4px;
+  color: #5b6780;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 190px;
+}
+
+.table-actions button {
+  border: 1px solid #c5d2e6;
+  background: #fff;
+  color: #1f2f52;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.table-actions button:disabled,
+.clinic-actions button:disabled,
+.btn-primary:disabled,
+.btn-outline:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.checkbox-label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+}
+
+.compact-form {
+  margin-top: 16px;
 }
 
 .clinic-actions {

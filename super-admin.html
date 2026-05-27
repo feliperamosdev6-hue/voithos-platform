@@ -19,179 +19,273 @@
       </div>
     </header>
 
-    <section class="card">
-      <div class="section-heading">
-        <div>
-          <h2>Funil de onboarding</h2>
-          <p>Visao operacional do cadastro, confirmacao e ativacao das clinicas.</p>
+    <nav class="superadmin-tabs" aria-label="Navegacao do superadmin">
+      <button class="tab-button is-active" type="button" data-tab="overview">Visao geral</button>
+      <button class="tab-button" type="button" data-tab="clinics">Clinicas</button>
+      <button class="tab-button" type="button" data-tab="subscriptions">Assinaturas</button>
+      <button class="tab-button" type="button" data-tab="payments">Pagamentos</button>
+      <button class="tab-button" type="button" data-tab="blocks">Bloqueios</button>
+      <button class="tab-button" type="button" data-tab="audit">Auditoria</button>
+    </nav>
+
+    <section id="tab-overview" class="tab-panel is-active" data-tab-panel="overview">
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Funil de onboarding</h2>
+            <p>Visao operacional do cadastro, confirmacao e ativacao das clinicas.</p>
+          </div>
+          <button id="btn-refresh-dashboard" class="btn-outline" type="button">Atualizar painel</button>
         </div>
-        <button id="btn-refresh-dashboard" class="btn-outline" type="button">Atualizar painel</button>
-      </div>
-      <div id="dashboard-metrics" class="metrics-grid"></div>
-      <div class="dashboard-columns">
-        <div class="dashboard-panel">
-          <h3>Etapas ativas</h3>
-          <div id="dashboard-stages" class="stage-list"></div>
+        <div id="dashboard-metrics" class="metrics-grid"></div>
+        <div class="dashboard-columns">
+          <div class="dashboard-panel">
+            <h3>Etapas ativas</h3>
+            <div id="dashboard-stages" class="stage-list"></div>
+          </div>
+          <div class="dashboard-panel">
+            <h3>Planos em andamento</h3>
+            <div id="dashboard-plans" class="stage-list"></div>
+          </div>
         </div>
-        <div class="dashboard-panel">
-          <h3>Planos em andamento</h3>
-          <div id="dashboard-plans" class="stage-list"></div>
+        <p id="dashboard-status" class="result" hidden></p>
+        <p id="dashboard-error" class="error"></p>
+      </section>
+    </section>
+
+    <section id="tab-clinics" class="tab-panel" data-tab-panel="clinics" hidden>
+      <section class="card">
+        <h2>Criar clinica</h2>
+        <form id="clinic-form" class="form-grid">
+          <label>
+            Nome fantasia *
+            <input id="clinic-nome" required>
+          </label>
+          <label>
+            Razao social *
+            <input id="clinic-razao" required>
+          </label>
+          <label>
+            CNPJ/CPF *
+            <input id="clinic-cnpj" required>
+          </label>
+          <label>
+            Email da clinica
+            <input id="clinic-email" type="email">
+          </label>
+          <label>
+            Telefone
+            <input id="clinic-telefone">
+          </label>
+          <label>
+            WhatsApp
+            <input id="clinic-whatsapp">
+          </label>
+
+          <label>
+            Nome do admin inicial *
+            <input id="admin-nome" required>
+          </label>
+          <label>
+            Email do admin inicial *
+            <input id="admin-email" type="email" required>
+          </label>
+        </form>
+        <div class="actions">
+          <button id="btn-create-clinic" class="btn-primary" type="button">Criar clinica</button>
         </div>
-      </div>
-      <div class="dashboard-panel">
-        <h3>Fila recente do funil</h3>
+        <p id="create-error" class="error"></p>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Clinicas cadastradas</h2>
+            <p>Lista operacional com status atual do onboarding e da assinatura.</p>
+          </div>
+        </div>
+        <div class="toolbar">
+          <label>
+            Buscar
+            <input id="clinic-search" placeholder="Nome, e-mail, CNPJ/CPF ou ID">
+          </label>
+          <label>
+            Etapa
+            <select id="clinic-stage-filter">
+              <option value="">Todas</option>
+              <option value="EMAIL_VERIFICATION_PENDING">Pendente de verificacao</option>
+              <option value="PROFILE_PENDING">Pendente de perfil</option>
+              <option value="PAYMENT_PENDING">Aguardando pagamento</option>
+              <option value="TRIALING">Trial ativo</option>
+              <option value="TRIAL_EXPIRED">Trial expirado</option>
+              <option value="ACTIVE">Ativa</option>
+              <option value="GRACE_PERIOD">Em tolerancia</option>
+              <option value="BLOCKED">Bloqueada</option>
+              <option value="CANCELED">Cancelada</option>
+            </select>
+          </label>
+        </div>
+        <div id="clinics-list" class="list-empty">Carregando...</div>
+      </section>
+    </section>
+
+    <section id="tab-subscriptions" class="tab-panel" data-tab-panel="subscriptions" hidden>
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Assinaturas</h2>
+            <p>Controle comercial individual por clinica.</p>
+          </div>
+          <button id="btn-refresh-subscriptions" class="btn-outline" type="button">Atualizar assinaturas</button>
+        </div>
+        <div id="subscription-summary" class="metrics-grid"></div>
+        <div class="toolbar subscriptions-toolbar">
+          <label>
+            Buscar
+            <input id="subscription-search" placeholder="Clinica, admin, plano ou ID">
+          </label>
+          <label>
+            Status
+            <select id="subscription-status-filter">
+              <option value="">Todos</option>
+              <option value="ACTIVE">Ativa</option>
+              <option value="TRIALING">Trial ativo</option>
+              <option value="TRIAL_EXPIRED">Trial expirado</option>
+              <option value="PENDING_PAYMENT">Aguardando pagamento</option>
+              <option value="GRACE_PERIOD">Em tolerancia</option>
+              <option value="BLOCKED">Bloqueada</option>
+              <option value="CANCELED">Cancelada</option>
+              <option value="NO_SUBSCRIPTION">Sem assinatura</option>
+            </select>
+          </label>
+        </div>
+        <p id="subscription-status" class="result" hidden></p>
+        <p id="subscription-error" class="error"></p>
+        <div id="subscription-list" class="table-shell">
+          <div class="list-empty">Carregando assinaturas...</div>
+        </div>
+      </section>
+    </section>
+
+    <section id="tab-payments" class="tab-panel" data-tab-panel="payments" hidden>
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Pagamentos recentes</h2>
+            <p>Ultimos estados de cobranca conhecidos pelo superadmin.</p>
+          </div>
+        </div>
+        <div id="payments-list" class="table-shell">
+          <div class="list-empty">Carregando pagamentos...</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Links Promocionais</h2>
+            <p>Crie ofertas com preco especial para eventos, parcerias ou negociacoes individuais.</p>
+          </div>
+          <button id="btn-refresh-promotions" class="btn-outline" type="button">Atualizar ofertas</button>
+        </div>
+        <form id="promotion-form" class="form-grid">
+          <label>
+            Nome da oferta *
+            <input id="promotion-title" required placeholder="Evento Odonto 2026">
+          </label>
+          <label>
+            Codigo
+            <input id="promotion-code" placeholder="Automatico se vazio">
+          </label>
+          <label>
+            Plano *
+            <select id="promotion-plan" required>
+              <option value="MONTHLY">Mensal</option>
+              <option value="QUARTERLY">Trimestral</option>
+              <option value="SEMIANNUAL">Semestral</option>
+              <option value="ANNUAL" selected>Anual</option>
+            </select>
+          </label>
+          <label>
+            Preco normal *
+            <input id="promotion-regular-price" type="number" min="0.01" step="0.01" value="899.90" required>
+          </label>
+          <label>
+            Preco promocional *
+            <input id="promotion-price" type="number" min="0.01" step="0.01" required placeholder="699.90">
+          </label>
+          <label>
+            Valido ate
+            <input id="promotion-valid-until" type="datetime-local">
+          </label>
+          <label>
+            Limite de usos
+            <input id="promotion-max-uses" type="number" min="1" step="1" placeholder="1">
+          </label>
+          <label>
+            Origem
+            <select id="promotion-source">
+              <option value="MANUAL">Manual</option>
+              <option value="INDIVIDUAL">Individual</option>
+              <option value="EVENT">Evento</option>
+              <option value="PARTNER">Parceria</option>
+            </select>
+          </label>
+          <label>
+            E-mail alvo
+            <input id="promotion-target-email" type="email" placeholder="Opcional">
+          </label>
+          <label>
+            Telefone alvo
+            <input id="promotion-target-phone" placeholder="Opcional">
+          </label>
+          <label class="span-2">
+            Observacoes internas
+            <textarea id="promotion-notes" rows="2" placeholder="Contexto comercial, vendedor, parceiro..."></textarea>
+          </label>
+        </form>
+        <div class="actions">
+          <button id="btn-create-promotion" class="btn-primary" type="button">Criar link promocional</button>
+        </div>
+        <p id="promotion-status" class="result" hidden></p>
+        <p id="promotion-error" class="error"></p>
+        <div id="promotion-list" class="list-empty">Carregando ofertas...</div>
+      </section>
+    </section>
+
+    <section id="tab-blocks" class="tab-panel" data-tab-panel="blocks" hidden>
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Bloqueios</h2>
+            <p>Clinicas com bloqueio manual ou restricao de assinatura.</p>
+          </div>
+        </div>
+        <div id="blocks-summary" class="metrics-grid"></div>
+        <div id="blocks-list" class="activity-list"></div>
+      </section>
+    </section>
+
+    <section id="tab-audit" class="tab-panel" data-tab-panel="audit" hidden>
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Fila recente do funil</h2>
+            <p>Eventos recentes de cadastro e onboarding.</p>
+          </div>
+        </div>
         <div id="dashboard-recent-entries" class="activity-list"></div>
-      </div>
-      <div class="dashboard-panel">
-        <h3>Cadastros pendentes</h3>
+      </section>
+
+      <section class="card">
+        <div class="section-heading">
+          <div>
+            <h2>Cadastros pendentes</h2>
+            <p>Leads e clinicas ainda sem ativacao comercial.</p>
+          </div>
+        </div>
         <div id="dashboard-pending-signups" class="activity-list"></div>
-      </div>
-      <p id="dashboard-status" class="result" hidden></p>
-      <p id="dashboard-error" class="error"></p>
-    </section>
-
-    <section class="card">
-      <div class="section-heading">
-        <div>
-          <h2>Links Promocionais</h2>
-          <p>Crie ofertas com preco especial para eventos, parcerias ou negociacoes individuais.</p>
-        </div>
-        <button id="btn-refresh-promotions" class="btn-outline" type="button">Atualizar ofertas</button>
-      </div>
-      <form id="promotion-form" class="form-grid">
-        <label>
-          Nome da oferta *
-          <input id="promotion-title" required placeholder="Evento Odonto 2026">
-        </label>
-        <label>
-          Codigo
-          <input id="promotion-code" placeholder="Automatico se vazio">
-        </label>
-        <label>
-          Plano *
-          <select id="promotion-plan" required>
-            <option value="MONTHLY">Mensal</option>
-            <option value="QUARTERLY">Trimestral</option>
-            <option value="SEMIANNUAL">Semestral</option>
-            <option value="ANNUAL" selected>Anual</option>
-          </select>
-        </label>
-        <label>
-          Preco normal *
-          <input id="promotion-regular-price" type="number" min="0.01" step="0.01" value="899.90" required>
-        </label>
-        <label>
-          Preco promocional *
-          <input id="promotion-price" type="number" min="0.01" step="0.01" required placeholder="699.90">
-        </label>
-        <label>
-          Valido ate
-          <input id="promotion-valid-until" type="datetime-local">
-        </label>
-        <label>
-          Limite de usos
-          <input id="promotion-max-uses" type="number" min="1" step="1" placeholder="1">
-        </label>
-        <label>
-          Origem
-          <select id="promotion-source">
-            <option value="MANUAL">Manual</option>
-            <option value="INDIVIDUAL">Individual</option>
-            <option value="EVENT">Evento</option>
-            <option value="PARTNER">Parceria</option>
-          </select>
-        </label>
-        <label>
-          E-mail alvo
-          <input id="promotion-target-email" type="email" placeholder="Opcional">
-        </label>
-        <label>
-          Telefone alvo
-          <input id="promotion-target-phone" placeholder="Opcional">
-        </label>
-        <label class="span-2">
-          Observacoes internas
-          <textarea id="promotion-notes" rows="2" placeholder="Contexto comercial, vendedor, parceiro..."></textarea>
-        </label>
-      </form>
-      <div class="actions">
-        <button id="btn-create-promotion" class="btn-primary" type="button">Criar link promocional</button>
-      </div>
-      <p id="promotion-status" class="result" hidden></p>
-      <p id="promotion-error" class="error"></p>
-      <div id="promotion-list" class="list-empty">Carregando ofertas...</div>
-    </section>
-
-    <section class="card">
-      <h2>Criar clinica</h2>
-      <form id="clinic-form" class="form-grid">
-        <label>
-          Nome fantasia *
-          <input id="clinic-nome" required>
-        </label>
-        <label>
-          Razao social *
-          <input id="clinic-razao" required>
-        </label>
-        <label>
-          CNPJ/CPF *
-          <input id="clinic-cnpj" required>
-        </label>
-        <label>
-          Email da clinica
-          <input id="clinic-email" type="email">
-        </label>
-        <label>
-          Telefone
-          <input id="clinic-telefone">
-        </label>
-        <label>
-          WhatsApp
-          <input id="clinic-whatsapp">
-        </label>
-
-        <label>
-          Nome do admin inicial *
-          <input id="admin-nome" required>
-        </label>
-        <label>
-          Email do admin inicial *
-          <input id="admin-email" type="email" required>
-        </label>
-      </form>
-      <div class="actions">
-        <button id="btn-create-clinic" class="btn-primary" type="button">Criar clinica</button>
-      </div>
-      <p id="create-error" class="error"></p>
-    </section>
-
-    <section class="card">
-      <div class="section-heading">
-        <div>
-          <h2>Clinicas cadastradas</h2>
-          <p>Lista operacional com status atual do onboarding e da assinatura.</p>
-        </div>
-      </div>
-      <div class="toolbar">
-        <label>
-          Buscar
-          <input id="clinic-search" placeholder="Nome, e-mail, CNPJ/CPF ou ID">
-        </label>
-        <label>
-          Etapa
-          <select id="clinic-stage-filter">
-            <option value="">Todas</option>
-            <option value="EMAIL_VERIFICATION_PENDING">Pendente de verificacao</option>
-            <option value="PROFILE_PENDING">Pendente de perfil</option>
-            <option value="PAYMENT_PENDING">Aguardando pagamento</option>
-            <option value="ACTIVE">Ativa</option>
-            <option value="GRACE_PERIOD">Em tolerancia</option>
-            <option value="BLOCKED">Bloqueada</option>
-            <option value="CANCELED">Cancelada</option>
-          </select>
-        </label>
-      </div>
-      <div id="clinics-list" class="list-empty">Carregando...</div>
+      </section>
     </section>
   </main>
 
@@ -208,6 +302,20 @@
         <button id="btn-copy-credentials" class="btn-outline" type="button">Copiar credenciais</button>
         <button id="btn-open-created-clinic" class="btn-primary" type="button">Entrar como esta clinica</button>
         <button id="btn-close-success-modal" class="btn-outline" type="button" data-close-modal="success">Voltar para lista</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="subscription-modal" class="modal" hidden>
+    <div class="modal-card">
+      <button id="btn-close-subscription-modal-x" class="modal-close" type="button" aria-label="Fechar">×</button>
+      <h3 id="subscription-modal-title">Editar assinatura</h3>
+      <p id="subscription-modal-subtitle" class="modal-clinic-name"></p>
+      <form id="subscription-modal-form" class="form-grid compact-form"></form>
+      <p id="subscription-modal-error" class="error"></p>
+      <div class="modal-actions">
+        <button id="btn-submit-subscription-modal" class="btn-primary" type="button">Salvar</button>
+        <button id="btn-close-subscription-modal" class="btn-outline" type="button">Cancelar</button>
       </div>
     </div>
   </div>
