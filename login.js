@@ -394,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return {
       planType: normalizedPlanType,
       label: fallback?.label || String(remoteMatch?.planType || '').trim() || 'Plano',
-      price: promotionalPrice || (remoteMatch?.amount ? `R$ ${Number(remoteMatch.amount).toFixed(2).replace('.', ',')}` : (fallback?.price || '--')),
+      price: promotionalPrice || fallback?.price || (remoteMatch?.amount ? `R$ ${Number(remoteMatch.amount).toFixed(2).replace('.', ',')}` : '--'),
       description: offer?.title ? `Oferta promocional: ${offer.title}` : (fallback?.description || 'Finalize a assinatura para liberar o acesso completo ao sistema.'),
     };
   };
