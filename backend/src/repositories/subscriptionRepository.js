@@ -38,12 +38,88 @@ const buildPaymentLookupWhere = ({ clinicId, paymentId, provider, externalPaymen
 const createPaymentLink = (paymentId) => `/subscription/payments/${paymentId}`;
 const shouldGenerateLegacyPaymentLink = (provider) => normalizeText(provider).toUpperCase() === 'MANUAL';
 
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
+};
+
+const toIsoStringOrNull = (value) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const buildCommercialAuditSnapshot = (subscription = {}) => ({
+  planType: normalizeText(subscription.planType).toUpperCase(),
+  status: normalizeText(subscription.status).toUpperCase(),
+  amount: toNumberOrNull(subscription.amount),
+  billingAmount: toNumberOrNull(subscription.billingAmount),
+  discountAmount: toNumberOrNull(subscription.discountAmount),
+  customPriceEnabled: subscription.customPriceEnabled === true,
+  billingCycle: normalizeText(subscription.billingCycle).toUpperCase() || null,
+  commercialNotes: normalizeText(subscription.commercialNotes) || null,
+  startDate: toIsoStringOrNull(subscription.startDate),
+  endDate: toIsoStringOrNull(subscription.endDate),
+  graceUntil: toIsoStringOrNull(subscription.graceUntil),
+  trialStartedAt: toIsoStringOrNull(subscription.trialStartedAt),
+  trialEndsAt: toIsoStringOrNull(subscription.trialEndsAt),
+  activatedAt: toIsoStringOrNull(subscription.activatedAt),
+  lastPaymentId: normalizeText(subscription.lastPaymentId) || null,
+});
+
 const subscriptionRepository = {
   findByClinicId: async ({ clinicId }) => prisma.subscription.findUnique({
     where: {
       clinicId: toRequiredString(clinicId, 'clinicId'),
     },
     include: subscriptionInclude,
+  }),
+
+  updateCommercialFieldsForClinic: async ({
+    clinicId,
+    data,
+    action,
+    actorUserId,
+    actorEmail,
+    metadata,
+  }) => prisma.$transaction(async (tx) => {
+    const subscription = await tx.subscription.findUnique({
+      where: {
+        clinicId: toRequiredString(clinicId, 'clinicId'),
+      },
+      include: subscriptionInclude,
+    });
+
+    if (!subscription) {
+      return null;
+    }
+
+    const updated = await tx.subscription.update({
+      where: {
+        id: subscription.id,
+      },
+      data: data || {},
+      include: subscriptionInclude,
+    });
+
+    const audit = await tx.subscriptionCommercialAudit.create({
+      data: {
+        subscriptionId: subscription.id,
+        clinicId: subscription.clinicId,
+        action: toRequiredString(action, 'action'),
+        actorUserId: toNullableString(actorUserId),
+        actorEmail: toNullableString(actorEmail),
+        before: buildCommercialAuditSnapshot(subscription),
+        after: buildCommercialAuditSnapshot(updated),
+        metadata: metadata || null,
+      },
+    });
+
+    return {
+      subscription: updated,
+      audit,
+    };
   }),
 
   findPaymentForConfirmation: async ({ clinicId, paymentId, provider, externalPaymentId }) => prisma.subscriptionPayment.findFirst({
@@ -181,15 +257,37 @@ const subscriptionRepository = {
     provider,
     externalPaymentId,
     paymentLink,
-  }) => prisma.subscriptionPayment.update({
-    where: {
-      id: toRequiredString(paymentId, 'paymentId'),
-    },
-    data: {
+    amount,
+  }) => prisma.$transaction(async (tx) => {
+    const payment = await tx.subscriptionPayment.findUnique({
+      where: {
+        id: toRequiredString(paymentId, 'paymentId'),
+      },
+    });
+
+    if (!payment) {
+      return null;
+    }
+
+    if (normalizeText(payment.status).toUpperCase() === 'PAID') {
+      throw new Error('Confirmed subscription payments cannot be changed.');
+    }
+
+    const data = {
       provider: toRequiredString(provider, 'provider'),
       externalPaymentId: toNullableString(externalPaymentId),
       paymentLink: toNullableString(paymentLink),
-    },
+    };
+    if (amount !== undefined) {
+      data.amount = amount;
+    }
+
+    return tx.subscriptionPayment.update({
+      where: {
+        id: payment.id,
+      },
+      data,
+    });
   }),
 
   confirmPaymentAndActivateSubscription: async ({

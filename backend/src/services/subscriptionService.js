@@ -60,6 +60,8 @@ const SUBSCRIPTION_PLANS = Object.freeze({
 const ACCESS_ALLOWED_STATUSES = new Set(['TRIALING', 'ACTIVE', 'GRACE_PERIOD', LEGACY_ACCESS_STATUS]);
 const PERSISTABLE_SUBSCRIPTION_STATUSES = new Set(['PENDING_PAYMENT', 'ACTIVE', 'GRACE_PERIOD', 'BLOCKED', 'CANCELED', 'TRIALING']);
 const VALID_CONFIRM_PAYMENT_STATUSES = new Set(['PENDING', 'PAID']);
+const VALID_BILLING_CYCLES = new Set(['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL']);
+const COMMERCIAL_NOTE_MAX_LENGTH = 2000;
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -76,6 +78,14 @@ const normalizePlanType = (value) => {
       'VALIDATION_ERROR',
       `planType must be one of: ${Object.keys(SUBSCRIPTION_PLANS).filter((planType) => SUBSCRIPTION_PLANS[planType].public).join(', ')}.`
     );
+  }
+  return normalized;
+};
+
+const normalizeBillingCycle = (value) => {
+  const normalized = normalizeText(value).toUpperCase();
+  if (!VALID_BILLING_CYCLES.has(normalized)) {
+    throw new AppError(400, 'VALIDATION_ERROR', `billingCycle must be one of: ${Array.from(VALID_BILLING_CYCLES).join(', ')}.`);
   }
   return normalized;
 };
@@ -104,9 +114,77 @@ const addDays = (date, days) => {
 
 const roundMoney = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const resolveTodayIsoDate = () => new Date().toISOString().slice(0, 10);
+const normalizeMoneyInput = (value, fieldName, options = {}) => {
+  if ((value === null || value === undefined || value === '') && options.optional === true) {
+    return null;
+  }
+  const parsed = Number(value);
+  const min = options.allowZero === true ? 0 : 0.01;
+  if (!Number.isFinite(parsed) || parsed < min) {
+    throw new AppError(400, 'VALIDATION_ERROR', `${fieldName} must be a valid amount greater than ${options.allowZero === true ? 'or equal to ' : ''}0.`);
+  }
+  if (parsed > 999999.99) {
+    throw new AppError(400, 'VALIDATION_ERROR', `${fieldName} is too high.`);
+  }
+  return roundMoney(parsed);
+};
+
+const resolveSubscriptionBillingCycle = (subscription, fallbackPlanType) => {
+  const storedCycle = normalizeText(subscription?.billingCycle).toUpperCase();
+  if (storedCycle && VALID_BILLING_CYCLES.has(storedCycle)) {
+    return storedCycle;
+  }
+
+  const storedPlanType = normalizeText(subscription?.planType).toUpperCase();
+  if (VALID_BILLING_CYCLES.has(storedPlanType)) {
+    return storedPlanType;
+  }
+
+  const fallback = normalizeText(fallbackPlanType).toUpperCase();
+  return VALID_BILLING_CYCLES.has(fallback) ? fallback : 'MONTHLY';
+};
+
 const resolveSubscriptionAmount = (subscription, fallbackAmount) => {
+  const customAmount = Number(subscription?.billingAmount || 0);
+  if (subscription?.customPriceEnabled === true && customAmount > 0) {
+    return roundMoney(customAmount);
+  }
+
+  const storedCycle = normalizeText(subscription?.billingCycle).toUpperCase();
+  const storedPlanType = normalizeText(subscription?.planType).toUpperCase();
+  if (storedCycle && storedCycle !== storedPlanType) {
+    return roundMoney(fallbackAmount);
+  }
+
   const storedAmount = Number(subscription?.amount || 0);
   return roundMoney(storedAmount > 0 ? storedAmount : fallbackAmount);
+};
+
+const resolveSubscriptionBillingPlan = (subscription, fallbackPlanType) => {
+  const billingCycle = resolveSubscriptionBillingCycle(subscription, fallbackPlanType);
+  const basePlan = SUBSCRIPTION_PLANS[billingCycle];
+  return {
+    ...basePlan,
+    amount: resolveSubscriptionAmount(subscription, basePlan.amount),
+    billingCycle,
+  };
+};
+
+const resolveCommercialBaseAmount = (subscription) => {
+  const billingCycle = resolveSubscriptionBillingCycle(subscription, subscription?.planType);
+  const plan = SUBSCRIPTION_PLANS[billingCycle];
+  const storedCycle = normalizeText(subscription?.billingCycle).toUpperCase();
+  const storedPlanType = normalizeText(subscription?.planType).toUpperCase();
+  const storedAmount = Number(subscription?.amount || 0);
+  if (storedAmount > 0 && (!storedCycle || storedCycle === storedPlanType)) {
+    return roundMoney(storedAmount);
+  }
+  return roundMoney(plan.amount);
+};
+
+const normalizeCommercialNotes = (value) => {
+  const normalized = normalizeText(value).replace(/\s+/g, ' ').slice(0, COMMERCIAL_NOTE_MAX_LENGTH);
+  return normalized || null;
 };
 
 const toIsoStringOrNull = (value) => {
@@ -135,16 +213,20 @@ const sanitizePaymentForClient = (payment) => {
   };
 };
 
-const sanitizeSubscriptionForClient = (subscription) => {
+const sanitizeSubscriptionForClient = (subscription, options = {}) => {
   if (!subscription) return null;
   const payments = Array.isArray(subscription.payments)
     ? subscription.payments.map(sanitizePaymentForClient).filter(Boolean)
     : [];
-  return {
+  const data = {
     id: normalizeText(subscription.id),
     planType: normalizeText(subscription.planType).toUpperCase(),
     status: normalizeText(subscription.status).toUpperCase(),
     amount: roundMoney(subscription.amount),
+    billingAmount: subscription.billingAmount == null ? null : roundMoney(subscription.billingAmount),
+    discountAmount: subscription.discountAmount == null ? null : roundMoney(subscription.discountAmount),
+    customPriceEnabled: subscription.customPriceEnabled === true,
+    billingCycle: normalizeText(subscription.billingCycle).toUpperCase() || null,
     startDate: toIsoStringOrNull(subscription.startDate),
     endDate: toIsoStringOrNull(subscription.endDate),
     graceUntil: toIsoStringOrNull(subscription.graceUntil),
@@ -156,6 +238,10 @@ const sanitizeSubscriptionForClient = (subscription) => {
     createdAt: toIsoStringOrNull(subscription.createdAt),
     updatedAt: toIsoStringOrNull(subscription.updatedAt),
   };
+  if (options.includeCommercialNotes === true) {
+    data.commercialNotes = normalizeText(subscription.commercialNotes) || null;
+  }
+  return data;
 };
 
 const normalizeCheckoutName = (value, fallback = 'Voithos') => {
@@ -526,6 +612,60 @@ const resolveRenewalStartDate = (subscription, paidAt) => {
   return paidAt;
 };
 
+const buildCommercialUpdateResponse = ({ subscription, audit }) => {
+  const effectivePlan = resolveSubscriptionBillingPlan(subscription, subscription?.planType);
+  return {
+    subscription: {
+      ...sanitizeSubscriptionForClient(subscription, { includeCommercialNotes: true }),
+      effectiveBillingAmount: roundMoney(effectivePlan.amount),
+      effectiveBillingCycle: effectivePlan.billingCycle,
+    },
+    audit: audit ? {
+      id: normalizeText(audit.id),
+      action: normalizeText(audit.action).toUpperCase(),
+      createdAt: toIsoStringOrNull(audit.createdAt),
+    } : null,
+  };
+};
+
+const runCommercialSubscriptionUpdate = async ({
+  clinicId,
+  action,
+  data,
+  actorId,
+  actorEmail,
+  metadata,
+}) => {
+  const normalizedClinicId = normalizeText(clinicId);
+  if (!normalizedClinicId) {
+    throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+  }
+
+  const result = await subscriptionRepository.updateCommercialFieldsForClinic({
+    clinicId: normalizedClinicId,
+    data,
+    action,
+    actorUserId: normalizeText(actorId) || null,
+    actorEmail: normalizeText(actorEmail).toLowerCase() || null,
+    metadata: metadata || null,
+  });
+
+  if (!result?.subscription) {
+    throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
+  }
+
+  console.info('[super-admin][subscription-commercial]', {
+    action,
+    actorId: normalizeText(actorId),
+    actorEmail: normalizeText(actorEmail).toLowerCase(),
+    clinicId: normalizedClinicId,
+    subscriptionId: result.subscription.id,
+    auditId: result.audit?.id || '',
+  });
+
+  return buildCommercialUpdateResponse(result);
+};
+
 const subscriptionService = {
   getPlanCatalog: () => getPublicPlanCatalog(),
 
@@ -666,11 +806,7 @@ const subscriptionService = {
       throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
     }
 
-    const basePlan = getPlanDefinition(subscription.planType || normalizedPlanType);
-    const plan = {
-      ...basePlan,
-      amount: resolveSubscriptionAmount(subscription, basePlan.amount),
-    };
+    const plan = resolveSubscriptionBillingPlan(subscription, normalizedPlanType);
     const clinic = await clinicRepository.findProfileById(clinicId);
     if (!clinic) {
       throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
@@ -707,12 +843,14 @@ const subscriptionService = {
       throw new AppError(502, 'ASAAS_CHECKOUT_FAILED', 'Asaas checkout link could not be generated.');
     }
 
-    if (subscription?.lastPayment?.id) {
+    const lastPaymentStatus = normalizeText(subscription?.lastPayment?.status).toUpperCase();
+    if (subscription?.lastPayment?.id && lastPaymentStatus === 'PENDING') {
       await subscriptionRepository.updatePaymentGatewayData({
         paymentId: subscription.lastPayment.id,
         provider: ASAAS_CHECKOUT_PROVIDER,
         externalPaymentId: checkoutId,
         paymentLink: checkoutUrl || null,
+        amount: roundMoney(plan.amount),
       });
     } else {
       await subscriptionRepository.createRenewalPayment({
@@ -733,6 +871,9 @@ const subscriptionService = {
       installmentCount: normalizedPaymentMethod === CHECKOUT_PAYMENT_METHODS.INSTALLMENT ? normalizedInstallmentCount : null,
       nextDueDate: resolveTodayIsoDate(),
       planType: plan.planType,
+      amount: roundMoney(plan.amount),
+      customPriceEnabled: subscription.customPriceEnabled === true,
+      billingCycle: plan.billingCycle,
     };
   },
 
@@ -771,7 +912,7 @@ const subscriptionService = {
 
     const confirmedAt = normalizeOptionalDate(paidAt, 'paidAt') || new Date();
     const currentSubscription = await syncLifecycle(payment.subscription, confirmedAt);
-    const plan = getPlanDefinition(currentSubscription.planType);
+    const plan = resolveSubscriptionBillingPlan(currentSubscription, currentSubscription.planType);
     const startDate = resolveRenewalStartDate(currentSubscription, confirmedAt);
     const endDate = Number(plan.durationDays) > 0 ? addDays(startDate, plan.durationDays) : null;
     const graceUntil = endDate ? addDays(endDate, GRACE_PERIOD_DAYS) : null;
@@ -809,12 +950,16 @@ const subscriptionService = {
     const synced = await syncLifecycle(existing, new Date());
     const fallbackPlanType = synced.planType === 'LEGACY' ? 'MONTHLY' : synced.planType;
     const nextPlanType = planType ? normalizePlanType(planType) : fallbackPlanType;
-    const plan = getPlanDefinition(nextPlanType);
+    const plan = resolveSubscriptionBillingPlan({
+      ...synced,
+      planType: nextPlanType,
+      billingCycle: synced.billingCycle || nextPlanType,
+    }, nextPlanType);
     const resetStatusToPending = !ACCESS_ALLOWED_STATUSES.has(normalizeText(synced.status).toUpperCase());
 
     const renewed = await subscriptionRepository.createRenewalPayment({
       clinicId,
-      planType: plan.planType,
+      planType: nextPlanType,
       amount: roundMoney(plan.amount),
       provider: normalizeProvider(provider),
       externalPaymentId: normalizeText(externalPaymentId) || null,
@@ -823,6 +968,183 @@ const subscriptionService = {
     });
 
     return buildOverview(renewed, new Date());
+  },
+
+  updateCommercialPrice: async ({ clinicId, billingAmount, amount, customPriceEnabled, actorId, actorEmail, reason }) => {
+    if (customPriceEnabled === false) {
+      return runCommercialSubscriptionUpdate({
+        clinicId,
+        action: 'PRICE_CUSTOMIZATION_DISABLED',
+        actorId,
+        actorEmail,
+        data: {
+          billingAmount: null,
+          discountAmount: null,
+          customPriceEnabled: false,
+        },
+        metadata: {
+          reason: normalizeCommercialNotes(reason),
+        },
+      });
+    }
+
+    const normalizedAmount = normalizeMoneyInput(
+      billingAmount !== undefined ? billingAmount : amount,
+      'billingAmount'
+    );
+
+    return runCommercialSubscriptionUpdate({
+      clinicId,
+      action: 'PRICE_UPDATED',
+      actorId,
+      actorEmail,
+      data: {
+        billingAmount: normalizedAmount,
+        discountAmount: null,
+        customPriceEnabled: true,
+      },
+      metadata: {
+        reason: normalizeCommercialNotes(reason),
+        billingAmount: normalizedAmount,
+      },
+    });
+  },
+
+  applyCommercialDiscount: async ({ clinicId, discountAmount, baseAmount, actorId, actorEmail, reason }) => {
+    const normalizedClinicId = normalizeText(clinicId);
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+
+    const subscription = await subscriptionRepository.findByClinicId({ clinicId: normalizedClinicId });
+    if (!subscription) {
+      throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
+    }
+
+    const normalizedDiscount = normalizeMoneyInput(discountAmount, 'discountAmount', { allowZero: true });
+    const normalizedBaseAmount = normalizeMoneyInput(baseAmount, 'baseAmount', { optional: true });
+    const commercialBaseAmount = normalizedBaseAmount || resolveCommercialBaseAmount(subscription);
+    if (normalizedDiscount >= commercialBaseAmount) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'discountAmount must be lower than the commercial base amount.');
+    }
+
+    const nextBillingAmount = roundMoney(commercialBaseAmount - normalizedDiscount);
+    return runCommercialSubscriptionUpdate({
+      clinicId: normalizedClinicId,
+      action: 'DISCOUNT_APPLIED',
+      actorId,
+      actorEmail,
+      data: {
+        billingAmount: nextBillingAmount,
+        discountAmount: normalizedDiscount,
+        customPriceEnabled: true,
+      },
+      metadata: {
+        reason: normalizeCommercialNotes(reason),
+        baseAmount: commercialBaseAmount,
+        discountAmount: normalizedDiscount,
+        billingAmount: nextBillingAmount,
+      },
+    });
+  },
+
+  extendTrial: async ({ clinicId, days, extendDays, trialEndsAt, actorId, actorEmail, reason }) => {
+    const normalizedClinicId = normalizeText(clinicId);
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+
+    const subscription = await subscriptionRepository.findByClinicId({ clinicId: normalizedClinicId });
+    if (!subscription) {
+      throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
+    }
+
+    const currentStatus = normalizeText(subscription.status).toUpperCase();
+    if (currentStatus !== 'TRIALING') {
+      throw new AppError(409, 'TRIAL_EXTENSION_NOT_ALLOWED', 'Only trialing subscriptions can have trial extended.');
+    }
+
+    const explicitTrialEndsAt = normalizeOptionalDate(trialEndsAt, 'trialEndsAt');
+    const dayCount = Number(days !== undefined ? days : extendDays);
+    let nextTrialEndsAt = explicitTrialEndsAt;
+    if (!nextTrialEndsAt) {
+      if (!Number.isInteger(dayCount) || dayCount < 1 || dayCount > 365) {
+        throw new AppError(400, 'VALIDATION_ERROR', 'days must be an integer between 1 and 365.');
+      }
+      const now = new Date();
+      const currentTrialEndTime = subscription.trialEndsAt ? new Date(subscription.trialEndsAt).getTime() : 0;
+      const baseTime = Math.max(now.getTime(), Number.isNaN(currentTrialEndTime) ? 0 : currentTrialEndTime);
+      nextTrialEndsAt = addDays(new Date(baseTime), dayCount);
+    }
+
+    if (nextTrialEndsAt.getTime() <= Date.now()) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'trialEndsAt must be in the future.');
+    }
+
+    return runCommercialSubscriptionUpdate({
+      clinicId: normalizedClinicId,
+      action: 'TRIAL_EXTENDED',
+      actorId,
+      actorEmail,
+      data: {
+        status: 'TRIALING',
+        trialStartedAt: subscription.trialStartedAt || new Date(),
+        trialEndsAt: nextTrialEndsAt,
+      },
+      metadata: {
+        reason: normalizeCommercialNotes(reason),
+        days: Number.isInteger(dayCount) ? dayCount : null,
+        trialEndsAt: nextTrialEndsAt.toISOString(),
+      },
+    });
+  },
+
+  updateBillingCycle: async ({ clinicId, billingCycle, actorId, actorEmail, reason }) => {
+    const normalizedClinicId = normalizeText(clinicId);
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+    const normalizedBillingCycle = normalizeBillingCycle(billingCycle);
+    const subscription = await subscriptionRepository.findByClinicId({ clinicId: normalizedClinicId });
+    if (!subscription) {
+      throw new AppError(404, 'SUBSCRIPTION_NOT_FOUND', 'Subscription not found for this clinic.');
+    }
+
+    const data = {
+      billingCycle: normalizedBillingCycle,
+    };
+    if (subscription.customPriceEnabled !== true) {
+      data.billingAmount = null;
+      data.discountAmount = null;
+    }
+
+    return runCommercialSubscriptionUpdate({
+      clinicId: normalizedClinicId,
+      action: 'BILLING_CYCLE_UPDATED',
+      actorId,
+      actorEmail,
+      data,
+      metadata: {
+        reason: normalizeCommercialNotes(reason),
+        billingCycle: normalizedBillingCycle,
+      },
+    });
+  },
+
+  updateCommercialNotes: async ({ clinicId, commercialNotes, notes, actorId, actorEmail }) => {
+    const normalizedNotes = normalizeCommercialNotes(commercialNotes !== undefined ? commercialNotes : notes);
+    return runCommercialSubscriptionUpdate({
+      clinicId,
+      action: 'COMMERCIAL_NOTES_UPDATED',
+      actorId,
+      actorEmail,
+      data: {
+        commercialNotes: normalizedNotes,
+      },
+      metadata: {
+        hasNotes: Boolean(normalizedNotes),
+      },
+    });
   },
 
   refreshPaymentStatus: async ({ clinicId, role }) => {

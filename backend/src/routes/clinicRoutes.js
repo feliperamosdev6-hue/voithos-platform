@@ -9,6 +9,13 @@ const {
   updatePromotionOffer,
   deactivatePromotionOffer,
 } = require('../controllers/promotionOfferController');
+const {
+  updateSuperAdminSubscriptionPrice,
+  applySuperAdminSubscriptionDiscount,
+  extendSuperAdminSubscriptionTrial,
+  updateSuperAdminSubscriptionBillingCycle,
+  updateSuperAdminSubscriptionCommercialNotes,
+} = require('../controllers/subscriptionCommercialController');
 
 const {
   listClinics,
@@ -69,6 +76,11 @@ router.get('/super-admin/onboarding-dashboard', getSuperAdminOnboardingDashboard
 router.delete('/super-admin/pending/:id', deleteSuperAdminPendingRegistration);
 router.post('/super-admin/clinics/:clinicId/block', blockSuperAdminClinicAccess);
 router.post('/super-admin/clinics/:clinicId/unblock', unblockSuperAdminClinicAccess);
+router.patch('/super-admin/clinics/:clinicId/subscription/price', updateSuperAdminSubscriptionPrice);
+router.patch('/super-admin/clinics/:clinicId/subscription/discount', applySuperAdminSubscriptionDiscount);
+router.patch('/super-admin/clinics/:clinicId/subscription/trial', extendSuperAdminSubscriptionTrial);
+router.patch('/super-admin/clinics/:clinicId/subscription/billing-cycle', updateSuperAdminSubscriptionBillingCycle);
+router.patch('/super-admin/clinics/:clinicId/subscription/commercial-notes', updateSuperAdminSubscriptionCommercialNotes);
 router.get('/super-admin/promotion-offers', listPromotionOffers);
 router.post('/super-admin/promotion-offers', createPromotionOffer);
 router.patch('/super-admin/promotion-offers/:id', updatePromotionOffer);

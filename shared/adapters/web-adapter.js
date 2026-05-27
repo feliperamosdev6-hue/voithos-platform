@@ -2301,6 +2301,36 @@
       {},
       { auth: true }
     ),
+    updateSubscriptionPrice: async (clinicId, payload = {}) => request(
+      'PATCH',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/subscription/price`,
+      payload || {},
+      { auth: true }
+    ),
+    applySubscriptionDiscount: async (clinicId, payload = {}) => request(
+      'PATCH',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/subscription/discount`,
+      payload || {},
+      { auth: true }
+    ),
+    extendSubscriptionTrial: async (clinicId, payload = {}) => request(
+      'PATCH',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/subscription/trial`,
+      payload || {},
+      { auth: true }
+    ),
+    updateSubscriptionBillingCycle: async (clinicId, payload = {}) => request(
+      'PATCH',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/subscription/billing-cycle`,
+      payload || {},
+      { auth: true }
+    ),
+    updateSubscriptionCommercialNotes: async (clinicId, payload = {}) => request(
+      'PATCH',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/subscription/commercial-notes`,
+      payload || {},
+      { auth: true }
+    ),
     deletePendingClinicRegistration: async (id) => request(
       'DELETE',
       `/clinics/super-admin/pending/${encodeURIComponent(cleanText(id))}`,

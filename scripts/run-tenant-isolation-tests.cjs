@@ -228,6 +228,246 @@ register('subscriptionService.createCheckoutSession cria checkout server-side se
   }
 });
 
+register('subscriptionService.createCheckoutSession usa billingAmount customizado em pagamento pendente', async () => {
+  let checkoutPayload = null;
+  let gatewayUpdatePayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          publicAppBaseUrl: 'https://app.voithos.test',
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {
+          findProfileById: async () => ({
+            id: 'clinic-auth',
+            nomeFantasia: 'Clinica Teste',
+            email: 'clinic@example.com',
+            telefoneComercial: '11999999999',
+            cnpjCpf: '12345678000190',
+            operationalSettings: {
+              clinicProfile: {
+                endereco: {
+                  rua: 'Rua Teste',
+                  numero: '123',
+                  bairro: 'Centro',
+                  cep: '01001000',
+                },
+              },
+            },
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findByClinicId: async () => ({
+            id: 'sub-custom',
+            clinicId: 'clinic-auth',
+            planType: 'ANNUAL',
+            amount: 899.9,
+            billingAmount: 749.9,
+            discountAmount: 150,
+            customPriceEnabled: true,
+            billingCycle: 'ANNUAL',
+            status: 'TRIALING',
+            lastPayment: {
+              id: 'payment-pending',
+              status: 'PENDING',
+              provider: 'ASAAS_CHECKOUT',
+            },
+            payments: [],
+          }),
+          updatePaymentGatewayData: async (payload) => {
+            gatewayUpdatePayload = payload;
+            return { id: payload.paymentId };
+          },
+          createRenewalPayment: async () => {
+            throw new Error('pending payment should be updated, not replaced');
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: {
+        asaasService: {
+          isConfigured: () => true,
+          createCheckout: async (payload) => {
+            checkoutPayload = payload;
+            return { id: 'checkout-custom', url: 'https://asaas.example/checkout-custom' };
+          },
+          buildCheckoutUrl: (id) => `https://asaas.example/${id}`,
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/promotionOfferService.js')]: { promotionOfferService: {} },
+    }
+  );
+
+  try {
+    const result = await serviceModule.subscriptionService.createCheckoutSession({
+      clinicId: 'clinic-auth',
+      planType: 'ANNUAL',
+      paymentMethod: 'PIX',
+    });
+
+    assert.equal(checkoutPayload?.items?.[0]?.value, 749.9);
+    assert.equal(gatewayUpdatePayload?.paymentId, 'payment-pending');
+    assert.equal(gatewayUpdatePayload?.amount, 749.9);
+    assert.equal(result?.amount, 749.9);
+    assert.equal(result?.customPriceEnabled, true);
+  } finally {
+    restore();
+  }
+});
+
+register('subscriptionService.createCheckoutSession nao altera pagamento confirmado', async () => {
+  let gatewayUpdateCalled = false;
+  let renewalPaymentPayload = null;
+  const { module: serviceModule, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/services/subscriptionService.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/config/appEnv.js')]: {
+        appEnv: {
+          publicAppBaseUrl: 'https://app.voithos.test',
+          subscriptionEnforcementEnabled: true,
+          subscriptionCommercialActivationAt: '',
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/clinicRepository.js')]: {
+        clinicRepository: {
+          findProfileById: async () => ({
+            id: 'clinic-auth',
+            nomeFantasia: 'Clinica Teste',
+            operationalSettings: {
+              clinicProfile: {
+                endereco: {
+                  rua: 'Rua Teste',
+                  numero: '123',
+                },
+              },
+            },
+          }),
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/repositories/subscriptionRepository.js')]: {
+        subscriptionRepository: {
+          findByClinicId: async () => ({
+            id: 'sub-active',
+            clinicId: 'clinic-auth',
+            planType: 'MONTHLY',
+            amount: 94.9,
+            status: 'ACTIVE',
+            startDate: new Date('2026-05-01T00:00:00.000Z'),
+            endDate: new Date('2026-06-01T00:00:00.000Z'),
+            graceUntil: new Date('2026-06-04T00:00:00.000Z'),
+            lastPayment: {
+              id: 'payment-paid',
+              status: 'PAID',
+              provider: 'ASAAS_CHECKOUT',
+            },
+            payments: [],
+          }),
+          updatePaymentGatewayData: async () => {
+            gatewayUpdateCalled = true;
+            throw new Error('paid payment should not be updated');
+          },
+          createRenewalPayment: async (payload) => {
+            renewalPaymentPayload = payload;
+            return { id: 'sub-active' };
+          },
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/authService.js')]: { authService: {} },
+      [path.resolve(__dirname, '../backend/src/services/payment/asaasService.js')]: {
+        asaasService: {
+          isConfigured: () => true,
+          createCheckout: async () => ({ id: 'checkout-renewal', url: 'https://asaas.example/checkout-renewal' }),
+          buildCheckoutUrl: (id) => `https://asaas.example/${id}`,
+        },
+      },
+      [path.resolve(__dirname, '../backend/src/services/promotionOfferService.js')]: { promotionOfferService: {} },
+    }
+  );
+
+  try {
+    await serviceModule.subscriptionService.createCheckoutSession({
+      clinicId: 'clinic-auth',
+      planType: 'MONTHLY',
+      paymentMethod: 'PIX',
+    });
+
+    assert.equal(gatewayUpdateCalled, false);
+    assert.equal(renewalPaymentPayload?.clinicId, 'clinic-auth');
+    assert.equal(renewalPaymentPayload?.provider, 'ASAAS_CHECKOUT');
+    assert.equal(renewalPaymentPayload?.amount, 94.9);
+  } finally {
+    restore();
+  }
+});
+
+register('subscriptionCommercialController usa clinicId da rota e exige superadmin', async () => {
+  const calls = [];
+  const { module: controller, restore } = loadModuleWithMocks(
+    path.resolve(__dirname, '../backend/src/controllers/subscriptionCommercialController.js'),
+    {
+      [path.resolve(__dirname, '../backend/src/services/subscriptionService.js')]: {
+        subscriptionService: {
+          updateCommercialPrice: async (input) => {
+            calls.push(input);
+            return { subscription: { id: 'sub-1' } };
+          },
+        },
+      },
+    }
+  );
+
+  try {
+    const req = {
+      auth: {
+        role: 'SUPER_ADMIN',
+        userId: 'super-1',
+        email: 'super@example.com',
+        clinicId: 'platform-clinic',
+      },
+      params: {
+        clinicId: 'clinic-target',
+      },
+      body: {
+        clinicId: 'clinic-evil',
+        billingAmount: 199.9,
+      },
+    };
+    const res = createResponseDouble();
+    let forwardedError = null;
+
+    await controller.updateSuperAdminSubscriptionPrice(req, res, (error) => {
+      forwardedError = error || null;
+    });
+
+    assert.equal(forwardedError, null);
+    assert.equal(res.statusCode, 200);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].clinicId, 'clinic-target');
+    assert.equal(calls[0].actorId, 'super-1');
+
+    forwardedError = null;
+    await controller.updateSuperAdminSubscriptionPrice({
+      auth: { role: 'ADMIN', email: 'clinic@example.com' },
+      params: { clinicId: 'clinic-target' },
+      body: { billingAmount: 199.9 },
+    }, createResponseDouble(), (error) => {
+      forwardedError = error || null;
+    });
+
+    assert.equal(forwardedError?.statusCode, 403);
+    assert.equal(calls.length, 1);
+  } finally {
+    restore();
+  }
+});
+
 register('subscriptionService.getAccessOverview retorna READ_ONLY para trial expirado sem persistir status', async () => {
   let updateStatusCalled = false;
   const { module: serviceModule, restore } = loadModuleWithMocks(
