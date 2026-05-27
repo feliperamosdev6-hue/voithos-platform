@@ -2012,6 +2012,7 @@
     },
     updatePendingSignupOnboarding: async (payload = {}) => request('POST', '/auth/pending-signup/onboarding', payload || {}, { auth: false }),
     createPendingSignupCheckout: async (payload = {}) => request('POST', '/auth/pending-signup/checkout', payload || {}, { auth: false }),
+    getPlanCatalog: async () => request('GET', '/auth/plan-catalog', null, { auth: false }),
     validatePromotionOffer: async (code, email = '') => {
       const query = cleanText(email) ? `?email=${encodeURIComponent(cleanText(email))}` : '';
       return request('GET', `/auth/promotion-offers/${encodeURIComponent(cleanText(code))}${query}`, null, { auth: false });

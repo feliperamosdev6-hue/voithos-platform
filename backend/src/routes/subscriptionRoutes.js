@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middlewares/authenticate');
 const { validate } = require('../middlewares/validate');
+const { getValidPublicPlanTypes } = require('../../../shared/billing/plan-catalog');
 const {
   getMySubscription,
   createSubscription,
@@ -12,7 +13,7 @@ const {
 
 const router = express.Router();
 
-const VALID_PLAN_TYPES = ['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL'];
+const VALID_PLAN_TYPES = getValidPublicPlanTypes();
 
 const validateCreateSubscription = validate((req) => {
   const issues = [];

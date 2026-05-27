@@ -9,6 +9,11 @@ const { userRepository } = require('../repositories/userRepository');
 const { emailService } = require('./emailService');
 const { asaasService } = require('./payment/asaasService');
 const { promotionOfferService } = require('./promotionOfferService');
+const {
+  getPlanDefinition: getCatalogPlanDefinition,
+  getPublicPlanCatalog: getCatalogPublicPlanCatalog,
+  normalizePlanType: normalizeCatalogPlanType,
+} = require('../../../shared/billing/plan-catalog');
 
 const SESSION_TTL_DAYS = 7;
 const PASSWORD_RESET_CODE_TTL_MINUTES = 10;
@@ -77,26 +82,23 @@ const maskEmail = (email) => {
 };
 
 const normalizeSelectedPlan = (value) => {
-  const raw = String(value || '').trim().toUpperCase();
-  const aliases = {
-    MENSAL: 'MONTHLY',
-    MONTHLY: 'MONTHLY',
-    TRIMESTRAL: 'QUARTERLY',
-    QUARTERLY: 'QUARTERLY',
-    SEMESTRAL: 'SEMIANNUAL',
-    SEMIANNUAL: 'SEMIANNUAL',
-    ANUAL: 'ANNUAL',
-    ANNUAL: 'ANNUAL',
-  };
-  return aliases[raw] || '';
+  const planType = normalizeCatalogPlanType(value);
+  const plan = getCatalogPlanDefinition(planType);
+  return plan?.public === true ? plan.planType : '';
 };
 
-const PUBLIC_SUBSCRIPTION_PLANS = Object.freeze({
-  MONTHLY: Object.freeze({ planType: 'MONTHLY', amount: 47.7, durationDays: 30 }),
-  QUARTERLY: Object.freeze({ planType: 'QUARTERLY', amount: 269.9, durationDays: 90 }),
-  SEMIANNUAL: Object.freeze({ planType: 'SEMIANNUAL', amount: 499.9, durationDays: 180 }),
-  ANNUAL: Object.freeze({ planType: 'ANNUAL', amount: 548.7, durationDays: 365 }),
-});
+const PUBLIC_SUBSCRIPTION_PLANS = Object.freeze(
+  getCatalogPublicPlanCatalog().reduce((acc, plan) => {
+    acc[plan.planType] = Object.freeze({
+      planType: plan.planType,
+      amount: plan.amount,
+      durationDays: plan.durationDays,
+      billingCycle: plan.billingCycle,
+      trialDays: plan.trialDays,
+    });
+    return acc;
+  }, {})
+);
 
 const normalizePaymentMethod = (value) => {
   const normalized = String(value || '').trim().toUpperCase();
@@ -1535,6 +1537,8 @@ const impersonateClinicAdmin = async (clinicId) => {
   };
 };
 
+const getPublicPlanCatalog = () => getCatalogPublicPlanCatalog();
+
 module.exports = {
   SESSION_TTL_DAYS,
   authService: {
@@ -1556,5 +1560,6 @@ module.exports = {
     validatePasswordResetCode,
     saveNewPassword,
     impersonateClinicAdmin,
+    getPublicPlanCatalog,
   },
 };

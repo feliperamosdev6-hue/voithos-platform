@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('path');
 const { loadModuleWithMocks } = require('../tests/backend/helpers/load-module-with-mocks.cjs');
+const planCatalog = require('../shared/billing/plan-catalog');
 
 const createResponseDouble = () => ({
   statusCode: 200,
@@ -20,6 +22,28 @@ const tests = [];
 const register = (name, fn) => {
   tests.push({ name, fn });
 };
+
+register('pricing catalog centraliza monthly e annual para signup e checkout', async () => {
+  const monthly = planCatalog.getPlanDefinition('monthly');
+  const annual = planCatalog.getPlanDefinition('annual');
+
+  assert.equal(monthly.planType, 'MONTHLY');
+  assert.equal(monthly.amount, 47.7);
+  assert.equal(monthly.amountCents, 4770);
+  assert.equal(monthly.trialDays, 7);
+  assert.equal(annual.planType, 'ANNUAL');
+  assert.equal(annual.amount, 548.7);
+  assert.equal(annual.amountCents, 54870);
+  assert.equal(planCatalog.normalizePlanType('mensal'), 'MONTHLY');
+  assert.equal(planCatalog.normalizePlanType('anual'), 'ANNUAL');
+});
+
+register('landing usa links de signup monthly/annual e nao planos legados', async () => {
+  const html = fs.readFileSync(path.resolve(__dirname, '../services/voithos-landing/index.html'), 'utf8');
+  assert.match(html, /mode=signup&amp;plan=monthly|mode=signup&plan=monthly/);
+  assert.match(html, /mode=signup&amp;plan=annual|mode=signup&plan=annual/);
+  assert.doesNotMatch(html, /plan=mensal|plan=anual|plan=trimestral|plan=semestral/);
+});
 
 register('subscriptionController.confirmSubscriptionPayment desativa confirmacao client-driven', async () => {
   let confirmCalled = false;

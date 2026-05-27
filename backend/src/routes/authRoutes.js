@@ -11,6 +11,7 @@ const {
   createPendingSignupCheckout,
   refreshPendingSignupPaymentStatus,
   validatePromotionOffer,
+  getPlanCatalog,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,
@@ -28,6 +29,7 @@ router.post('/email-verification/resend', authRateLimits.emailVerification, rese
 router.post('/pending-signup/onboarding', updatePendingSignupOnboarding);
 router.post('/pending-signup/checkout', createPendingSignupCheckout);
 router.post('/pending-signup/refresh-payment-status', refreshPendingSignupPaymentStatus);
+router.get('/plan-catalog', getPlanCatalog);
 router.get('/promotion-offers/:code', validatePromotionOffer);
 router.post('/password-reset/request', authRateLimits.passwordReset, requestPasswordResetFlow);
 router.post('/password-reset/validate', authRateLimits.passwordReset, validatePasswordResetFlow);

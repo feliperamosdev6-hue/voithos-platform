@@ -2,13 +2,21 @@ const crypto = require('crypto');
 const { AppError } = require('../errors/AppError');
 const { prisma } = require('../db/prisma');
 const { promotionOfferRepository } = require('../repositories/promotionOfferRepository');
+const {
+  getPublicPlanCatalog,
+  normalizePlanType: normalizeCatalogPlanType,
+} = require('../../../shared/billing/plan-catalog');
 
-const PLAN_DEFINITIONS = Object.freeze({
-  MONTHLY: Object.freeze({ planType: 'MONTHLY', amountCents: 4770, billingCycle: 'MONTHLY' }),
-  QUARTERLY: Object.freeze({ planType: 'QUARTERLY', amountCents: 26990, billingCycle: 'QUARTERLY' }),
-  SEMIANNUAL: Object.freeze({ planType: 'SEMIANNUAL', amountCents: 49990, billingCycle: 'SEMIANNUAL' }),
-  ANNUAL: Object.freeze({ planType: 'ANNUAL', amountCents: 54870, billingCycle: 'ANNUAL' }),
-});
+const PLAN_DEFINITIONS = Object.freeze(
+  getPublicPlanCatalog().reduce((acc, plan) => {
+    acc[plan.planType] = Object.freeze({
+      planType: plan.planType,
+      amountCents: plan.amountCents,
+      billingCycle: plan.billingCycle,
+    });
+    return acc;
+  }, {})
+);
 
 const VALID_SOURCES = new Set(['EVENT', 'PARTNER', 'INDIVIDUAL', 'MANUAL']);
 
@@ -17,7 +25,7 @@ const normalizeEmail = (value) => cleanText(value, 160).toLowerCase();
 const normalizePhone = (value) => cleanText(value, 40).replace(/\D/g, '').slice(0, 20);
 
 const normalizePlanType = (value) => {
-  const normalized = cleanText(value, 40).toUpperCase();
+  const normalized = normalizeCatalogPlanType(cleanText(value, 40));
   if (!PLAN_DEFINITIONS[normalized]) {
     throw new AppError(400, 'VALIDATION_ERROR', 'planType is invalid.');
   }

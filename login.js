@@ -71,22 +71,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const SIGNUP_DRAFT_STORAGE_KEY = 'voithos.signup.draft';
   const RESEND_WAIT_SECONDS = 5 * 60;
   const VERIFICATION_WAIT_SECONDS = 2 * 60;
-  const PLAN_DEFINITIONS = {
-    MONTHLY: { slug: 'mensal', label: 'Mensal', price: 'R$ 47,70', description: '7 dias gratis para comecar com flexibilidade.' },
-    QUARTERLY: { slug: 'trimestral', label: 'Trimestral', price: 'R$ 269,90', description: 'Ciclo ideal para validar a operacao sem perder continuidade.' },
-    SEMIANNUAL: { slug: 'semestral', label: 'Semestral', price: 'R$ 499,90', description: 'Plano mais escolhido por clinicas em crescimento.' },
-    ANNUAL: { slug: 'anual', label: 'Anual', price: 'R$ 548,70', description: '7 dias gratis e economia em relacao ao mensal.' },
-  };
-  const PLAN_ALIASES = {
-    mensal: 'MONTHLY',
-    monthly: 'MONTHLY',
-    trimestral: 'QUARTERLY',
-    quarterly: 'QUARTERLY',
-    semestral: 'SEMIANNUAL',
-    semiannual: 'SEMIANNUAL',
-    anual: 'ANNUAL',
-    annual: 'ANNUAL',
-  };
+  const planCatalogApi = window.VoithosPlanCatalog || {};
+  const formatPlanMoney = (value) => (
+    planCatalogApi.formatMoneyBR
+      ? planCatalogApi.formatMoneyBR(value)
+      : `R$ ${Number(value || 0).toFixed(2).replace('.', ',')}`
+  );
+  const mapCatalogPlan = (plan = {}) => ({
+    planType: String(plan.planType || '').trim().toUpperCase(),
+    slug: String(plan.slug || '').trim(),
+    label: String(plan.label || '').trim(),
+    price: String(plan.price || '').trim() || formatPlanMoney(plan.amount),
+    amount: Number(plan.amount || 0),
+    amountCents: Number(plan.amountCents || 0),
+    billingCycle: String(plan.billingCycle || plan.planType || '').trim().toUpperCase(),
+    intervalLabel: String(plan.intervalLabel || '').trim(),
+    trialDays: Number(plan.trialDays || 7),
+    description: String(plan.description || '').trim() || 'Finalize a assinatura para liberar o acesso completo ao sistema.',
+  });
+  const buildPlanDefinitions = (catalog = []) => (Array.isArray(catalog) ? catalog : [])
+    .map(mapCatalogPlan)
+    .filter((plan) => plan.planType)
+    .reduce((acc, plan) => {
+      acc[plan.planType] = plan;
+      return acc;
+    }, {});
+  let PLAN_DEFINITIONS = buildPlanDefinitions(planCatalogApi.getPublicPlanCatalog?.() || []);
+  let planCatalogLoadPromise = null;
   const OPERATION_TYPE_LABELS = {
     AUTONOMOUS_DENTIST: 'Dentista autonomo',
     CLINIC: 'Clinica',
@@ -369,8 +380,31 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const normalizePlanType = (value) => {
-    const normalized = String(value || '').trim().toLowerCase();
-    return PLAN_ALIASES[normalized] || PLAN_ALIASES[normalized.replace(/[\s_-]+/g, '')] || (PLAN_DEFINITIONS[String(value || '').trim().toUpperCase()] ? String(value || '').trim().toUpperCase() : '');
+    const normalized = planCatalogApi.normalizePlanType?.(value) || String(value || '').trim().toUpperCase();
+    return PLAN_DEFINITIONS[normalized] ? normalized : '';
+  };
+
+  const mergePlanCatalog = (catalog = []) => {
+    PLAN_DEFINITIONS = {
+      ...PLAN_DEFINITIONS,
+      ...buildPlanDefinitions(catalog),
+    };
+    return PLAN_DEFINITIONS;
+  };
+
+  const loadPlanCatalog = async () => {
+    if (planCatalogLoadPromise) return planCatalogLoadPromise;
+    planCatalogLoadPromise = (async () => {
+      if (!authApi?.getPlanCatalog) return PLAN_DEFINITIONS;
+      try {
+        const catalog = await authApi.getPlanCatalog();
+        mergePlanCatalog(catalog);
+      } catch (error) {
+        console.warn('[pricing][catalog] usando catalogo local', error?.message || String(error || ''));
+      }
+      return PLAN_DEFINITIONS;
+    })();
+    return planCatalogLoadPromise;
   };
 
   const normalizeOperationType = (value) => {
@@ -394,8 +428,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return {
       planType: normalizedPlanType,
       label: fallback?.label || String(remoteMatch?.planType || '').trim() || 'Plano',
-      price: promotionalPrice || fallback?.price || (remoteMatch?.amount ? `R$ ${Number(remoteMatch.amount).toFixed(2).replace('.', ',')}` : '--'),
+      price: promotionalPrice || (remoteMatch?.amount ? formatPlanMoney(remoteMatch.amount) : (fallback?.price || '--')),
       description: offer?.title ? `Oferta promocional: ${offer.title}` : (fallback?.description || 'Finalize a assinatura para liberar o acesso completo ao sistema.'),
+      trialDays: Number(fallback?.trialDays || remoteMatch?.trialDays || 7),
+      intervalLabel: String(fallback?.intervalLabel || remoteMatch?.intervalLabel || '').trim(),
     };
   };
 
@@ -410,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     signupPlanBanner.classList.remove('hidden');
     if (signupPlanName) signupPlanName.textContent = `${planView.label} | ${planView.price}`;
-    if (signupPlanCopy) signupPlanCopy.textContent = 'Seu cadastro seguira para confirmacao de e-mail, definicao do perfil operacional e liberacao do pagamento.';
+    if (signupPlanCopy) signupPlanCopy.textContent = `${planView.trialDays} dias gratis. Depois, ${planView.price}${planView.intervalLabel || ''}.`;
     if (signupEntryHint) signupEntryHint.textContent = `${planView.label} selecionado na landing.`;
   };
 
@@ -575,10 +611,14 @@ document.addEventListener('DOMContentLoaded', () => {
       overview?.subscription?.lastPayment?.paymentLink,
       onboardingFlowState.paymentLink
     );
+    const subscriptionAmount = overview?.subscription?.customPriceEnabled === true && Number(overview?.subscription?.billingAmount || 0) > 0
+      ? Number(overview.subscription.billingAmount)
+      : Number(overview?.subscription?.amount || 0);
+    const displayPrice = subscriptionAmount > 0 ? formatPlanMoney(subscriptionAmount) : planView.price;
 
     if (paymentPlanName) paymentPlanName.textContent = planView.label || 'Plano nao definido';
     if (paymentPlanDescription) paymentPlanDescription.textContent = planView.description;
-    if (paymentPlanPrice) paymentPlanPrice.textContent = planView.price || '--';
+    if (paymentPlanPrice) paymentPlanPrice.textContent = displayPrice || '--';
 
     applyPaymentMethodAvailability();
 
@@ -1724,6 +1764,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const initializeAuthScreen = async () => {
     const clinicEmailGroup = signupClinicEmailInput?.closest('.input-group');
     if (clinicEmailGroup) clinicEmailGroup.classList.add('hidden');
+    await loadPlanCatalog();
     await applyInitialFlowRequest();
     await checkActiveSession();
   };

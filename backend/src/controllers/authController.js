@@ -231,6 +231,14 @@ const validatePromotionOffer = async (req, res, next) => {
   }
 };
 
+const getPlanCatalog = async (_req, res, next) => {
+  try {
+    return res.status(200).json({ ok: true, data: authService.getPublicPlanCatalog() });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const requestPasswordResetFlow = async (req, res, next) => {
   try {
     logPasswordReset('request_received', req, { status: 'received' });
@@ -301,6 +309,7 @@ module.exports = {
   createPendingSignupCheckout,
   refreshPendingSignupPaymentStatus,
   validatePromotionOffer,
+  getPlanCatalog,
   requestPasswordResetFlow,
   validatePasswordResetFlow,
   confirmPasswordResetFlow,

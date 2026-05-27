@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let dashboardCache = null;
   let lastCreatedClinicId = '';
   let subscriptionModalState = null;
+  const planCatalog = window.VoithosPlanCatalog || {};
 
   const setError = (message) => {
     if (createError) createError.textContent = message || '';
@@ -194,6 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const formatPlanLabel = (plan) => {
+    const catalogPlan = planCatalog.getPlanDefinition?.(plan);
+    if (catalogPlan?.label) return catalogPlan.label;
     const labels = {
       MONTHLY: 'Mensal',
       QUARTERLY: 'Trimestral',
@@ -920,12 +923,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return dashboard;
   };
 
-  const getDefaultPlanPrice = (planType) => ({
-    MONTHLY: '47.70',
-    QUARTERLY: '269.90',
-    SEMIANNUAL: '499.90',
-    ANNUAL: '548.70',
-  }[String(planType || '').trim().toUpperCase()] || '548.70');
+  const getDefaultPlanPrice = (planType) => {
+    const plan = planCatalog.getPlanDefinition?.(planType);
+    return plan?.amount ? Number(plan.amount).toFixed(2) : '0.00';
+  };
 
   const getSubscriptionRowByClinicId = (clinicId) => getSubscriptionRows()
     .find((row) => String(row?.clinicId || '').trim() === String(clinicId || '').trim()) || null;

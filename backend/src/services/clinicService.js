@@ -12,6 +12,10 @@ const { authService } = require('./authService');
 const { emailService } = require('./emailService');
 const { promotionOfferService } = require('./promotionOfferService');
 const { AppError } = require('../errors/AppError');
+const {
+  getValidPublicPlanTypes,
+  normalizePlanType: normalizeCatalogPlanType,
+} = require('../../../shared/billing/plan-catalog');
 const XLSX = require('xlsx');
 const JSZip = require('jszip');
 const { createExtractorFromData } = require('node-unrar-js');
@@ -128,7 +132,7 @@ const DEFAULT_PAYMENT_SETTINGS = {
   updatedAt: '',
 };
 
-const VALID_ONBOARDING_PLAN_TYPES = ['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL'];
+const VALID_ONBOARDING_PLAN_TYPES = getValidPublicPlanTypes();
 const VALID_ONBOARDING_OPERATION_TYPES = ['AUTONOMOUS_DENTIST', 'CLINIC', 'OTHER'];
 
 const PATIENT_IMPORT_ALIASES = {
@@ -483,18 +487,8 @@ const normalizePaymentSettings = (value = {}) => {
 };
 
 const normalizeOnboardingPlan = (value) => {
-  const raw = String(value || '').trim().toUpperCase();
-  const aliases = {
-    MENSAL: 'MONTHLY',
-    MONTHLY: 'MONTHLY',
-    TRIMESTRAL: 'QUARTERLY',
-    QUARTERLY: 'QUARTERLY',
-    SEMESTRAL: 'SEMIANNUAL',
-    SEMIANNUAL: 'SEMIANNUAL',
-    ANUAL: 'ANNUAL',
-    ANNUAL: 'ANNUAL',
-  };
-  return aliases[raw] || '';
+  const normalized = normalizeCatalogPlanType(value);
+  return VALID_ONBOARDING_PLAN_TYPES.includes(normalized) ? normalized : '';
 };
 
 const normalizeOnboardingOperationType = (value) => {

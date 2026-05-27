@@ -128,6 +128,10 @@
       if (window.__webAdapter?.auth?.createPendingSignupCheckout) return window.__webAdapter.auth.createPendingSignupCheckout(payload);
       return unavailable('auth.createPendingSignupCheckout');
     },
+    getPlanCatalog: async () => {
+      if (window.__webAdapter?.auth?.getPlanCatalog) return window.__webAdapter.auth.getPlanCatalog();
+      return unavailable('auth.getPlanCatalog');
+    },
     refreshPendingSignupPaymentStatus: async (payload) => {
       if (window.__webAdapter?.auth?.refreshPendingSignupPaymentStatus) return window.__webAdapter.auth.refreshPendingSignupPaymentStatus(payload);
       return unavailable('auth.refreshPendingSignupPaymentStatus');

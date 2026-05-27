@@ -5,6 +5,13 @@ const { subscriptionRepository } = require('../repositories/subscriptionReposito
 const { authService } = require('./authService');
 const { asaasService } = require('./payment/asaasService');
 const { promotionOfferService } = require('./promotionOfferService');
+const {
+  PLAN_CATALOG,
+  getPlanDefinition: getCatalogPlanDefinition,
+  getPublicPlanCatalog: getCatalogPublicPlanCatalog,
+  getValidPublicPlanTypes,
+  normalizePlanType: normalizeCatalogPlanType,
+} = require('../../../shared/billing/plan-catalog');
 
 const GRACE_PERIOD_DAYS = 3;
 const LEGACY_ACCESS_STATUS = 'LEGACY_ACCESS';
@@ -24,43 +31,12 @@ const CHECKOUT_PAYMENT_METHODS = Object.freeze({
   INSTALLMENT: 'INSTALLMENT',
 });
 
-const SUBSCRIPTION_PLANS = Object.freeze({
-  LEGACY: Object.freeze({
-    planType: 'LEGACY',
-    amount: 0,
-    durationDays: null,
-    public: false,
-  }),
-  MONTHLY: Object.freeze({
-    planType: 'MONTHLY',
-    amount: 47.7,
-    durationDays: 30,
-    public: true,
-  }),
-  QUARTERLY: Object.freeze({
-    planType: 'QUARTERLY',
-    amount: 269.9,
-    durationDays: 90,
-    public: true,
-  }),
-  SEMIANNUAL: Object.freeze({
-    planType: 'SEMIANNUAL',
-    amount: 499.9,
-    durationDays: 180,
-    public: true,
-  }),
-  ANNUAL: Object.freeze({
-    planType: 'ANNUAL',
-    amount: 548.7,
-    durationDays: 365,
-    public: true,
-  }),
-});
+const SUBSCRIPTION_PLANS = PLAN_CATALOG;
 
 const ACCESS_ALLOWED_STATUSES = new Set(['TRIALING', 'ACTIVE', 'GRACE_PERIOD', LEGACY_ACCESS_STATUS]);
 const PERSISTABLE_SUBSCRIPTION_STATUSES = new Set(['PENDING_PAYMENT', 'ACTIVE', 'GRACE_PERIOD', 'BLOCKED', 'CANCELED', 'TRIALING']);
 const VALID_CONFIRM_PAYMENT_STATUSES = new Set(['PENDING', 'PAID']);
-const VALID_BILLING_CYCLES = new Set(['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL']);
+const VALID_BILLING_CYCLES = new Set(getValidPublicPlanTypes());
 const COMMERCIAL_NOTE_MAX_LENGTH = 2000;
 
 const normalizeText = (value) => String(value || '').trim();
@@ -71,12 +47,12 @@ const normalizeProvider = (value) => {
 };
 
 const normalizePlanType = (value) => {
-  const normalized = normalizeText(value).toUpperCase();
+  const normalized = normalizeCatalogPlanType(value);
   if (!normalized || !SUBSCRIPTION_PLANS[normalized]) {
     throw new AppError(
       400,
       'VALIDATION_ERROR',
-      `planType must be one of: ${Object.keys(SUBSCRIPTION_PLANS).filter((planType) => SUBSCRIPTION_PLANS[planType].public).join(', ')}.`
+      `planType must be one of: ${getValidPublicPlanTypes().join(', ')}.`
     );
   }
   return normalized;
@@ -382,8 +358,8 @@ const isWebhookPaymentConfirmationEvent = (eventType) => {
   return ['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED', 'CHECKOUT_PAID'].includes(normalized);
 };
 
-const getPlanDefinition = (planType) => SUBSCRIPTION_PLANS[normalizePlanType(planType)];
-const getPublicPlanCatalog = () => Object.values(SUBSCRIPTION_PLANS).filter((plan) => plan.public === true);
+const getPlanDefinition = (planType) => getCatalogPlanDefinition(normalizePlanType(planType));
+const getPublicPlanCatalog = () => getCatalogPublicPlanCatalog();
 
 const getValidDateTime = (value) => {
   if (!value) return 0;
