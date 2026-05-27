@@ -72,10 +72,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const RESEND_WAIT_SECONDS = 5 * 60;
   const VERIFICATION_WAIT_SECONDS = 2 * 60;
   const PLAN_DEFINITIONS = {
-    MONTHLY: { slug: 'mensal', label: 'Mensal', price: 'R$ 94,90', description: 'Cobranca mensal para comecar com flexibilidade.' },
+    MONTHLY: { slug: 'mensal', label: 'Mensal', price: 'R$ 47,70', description: '7 dias gratis para comecar com flexibilidade.' },
     QUARTERLY: { slug: 'trimestral', label: 'Trimestral', price: 'R$ 269,90', description: 'Ciclo ideal para validar a operacao sem perder continuidade.' },
     SEMIANNUAL: { slug: 'semestral', label: 'Semestral', price: 'R$ 499,90', description: 'Plano mais escolhido por clinicas em crescimento.' },
-    ANNUAL: { slug: 'anual', label: 'Anual', price: 'R$ 899,90', description: 'Maior economia para uso continuo da plataforma.' },
+    ANNUAL: { slug: 'anual', label: 'Anual', price: 'R$ 548,70', description: '7 dias gratis e economia em relacao ao mensal.' },
   };
   const PLAN_ALIASES = {
     mensal: 'MONTHLY',

@@ -33,7 +33,7 @@ const SUBSCRIPTION_PLANS = Object.freeze({
   }),
   MONTHLY: Object.freeze({
     planType: 'MONTHLY',
-    amount: 94.9,
+    amount: 47.7,
     durationDays: 30,
     public: true,
   }),
@@ -51,7 +51,7 @@ const SUBSCRIPTION_PLANS = Object.freeze({
   }),
   ANNUAL: Object.freeze({
     planType: 'ANNUAL',
-    amount: 899.9,
+    amount: 548.7,
     durationDays: 365,
     public: true,
   }),

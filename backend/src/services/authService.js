@@ -92,10 +92,10 @@ const normalizeSelectedPlan = (value) => {
 };
 
 const PUBLIC_SUBSCRIPTION_PLANS = Object.freeze({
-  MONTHLY: Object.freeze({ planType: 'MONTHLY', amount: 94.9, durationDays: 30 }),
+  MONTHLY: Object.freeze({ planType: 'MONTHLY', amount: 47.7, durationDays: 30 }),
   QUARTERLY: Object.freeze({ planType: 'QUARTERLY', amount: 269.9, durationDays: 90 }),
   SEMIANNUAL: Object.freeze({ planType: 'SEMIANNUAL', amount: 499.9, durationDays: 180 }),
-  ANNUAL: Object.freeze({ planType: 'ANNUAL', amount: 899.9, durationDays: 365 }),
+  ANNUAL: Object.freeze({ planType: 'ANNUAL', amount: 548.7, durationDays: 365 }),
 });
 
 const normalizePaymentMethod = (value) => {

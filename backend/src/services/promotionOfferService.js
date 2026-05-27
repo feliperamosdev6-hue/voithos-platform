@@ -4,10 +4,10 @@ const { prisma } = require('../db/prisma');
 const { promotionOfferRepository } = require('../repositories/promotionOfferRepository');
 
 const PLAN_DEFINITIONS = Object.freeze({
-  MONTHLY: Object.freeze({ planType: 'MONTHLY', amountCents: 9490, billingCycle: 'MONTHLY' }),
+  MONTHLY: Object.freeze({ planType: 'MONTHLY', amountCents: 4770, billingCycle: 'MONTHLY' }),
   QUARTERLY: Object.freeze({ planType: 'QUARTERLY', amountCents: 26990, billingCycle: 'QUARTERLY' }),
   SEMIANNUAL: Object.freeze({ planType: 'SEMIANNUAL', amountCents: 49990, billingCycle: 'SEMIANNUAL' }),
-  ANNUAL: Object.freeze({ planType: 'ANNUAL', amountCents: 89990, billingCycle: 'ANNUAL' }),
+  ANNUAL: Object.freeze({ planType: 'ANNUAL', amountCents: 54870, billingCycle: 'ANNUAL' }),
 });
 
 const VALID_SOURCES = new Set(['EVENT', 'PARTNER', 'INDIVIDUAL', 'MANUAL']);
