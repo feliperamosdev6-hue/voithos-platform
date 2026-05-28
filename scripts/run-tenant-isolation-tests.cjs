@@ -28,12 +28,14 @@ register('pricing catalog centraliza monthly e annual para signup e checkout', a
   const annual = planCatalog.getPlanDefinition('annual');
 
   assert.equal(monthly.planType, 'MONTHLY');
-  assert.equal(monthly.amount, 47.7);
-  assert.equal(monthly.amountCents, 4770);
+  assert.equal(monthly.amount, 79.9);
+  assert.equal(monthly.amountCents, 7990);
   assert.equal(monthly.trialDays, 7);
   assert.equal(annual.planType, 'ANNUAL');
-  assert.equal(annual.amount, 548.7);
-  assert.equal(annual.amountCents, 54870);
+  assert.equal(annual.amount, 859.9);
+  assert.equal(annual.amountCents, 85990);
+  assert.equal(annual.annualSavingsPercent, 10);
+  assert.deepEqual(planCatalog.getValidPublicPlanTypes(), ['MONTHLY', 'ANNUAL']);
   assert.equal(planCatalog.normalizePlanType('mensal'), 'MONTHLY');
   assert.equal(planCatalog.normalizePlanType('anual'), 'ANNUAL');
 });
@@ -42,7 +44,11 @@ register('landing usa links de signup monthly/annual e nao planos legados', asyn
   const html = fs.readFileSync(path.resolve(__dirname, '../services/voithos-landing/index.html'), 'utf8');
   assert.match(html, /mode=signup&amp;plan=monthly|mode=signup&plan=monthly/);
   assert.match(html, /mode=signup&amp;plan=annual|mode=signup&plan=annual/);
+  assert.match(html, /R\$ 79,90/);
+  assert.match(html, /R\$ 859,90/);
   assert.doesNotMatch(html, /plan=mensal|plan=anual|plan=trimestral|plan=semestral/);
+  assert.doesNotMatch(html, new RegExp(`R\\$ ${['47', '70'].join(',')}`));
+  assert.doesNotMatch(html, new RegExp(`R\\$ ${['548', '70'].join(',')}`));
 });
 
 register('subscriptionController.confirmSubscriptionPayment desativa confirmacao client-driven', async () => {
@@ -113,7 +119,7 @@ register('subscriptionService.refreshPaymentStatus consulta apenas estado persis
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'PENDING_PAYMENT',
             startDate: null,
             endDate: null,
@@ -202,7 +208,7 @@ register('subscriptionService.createCheckoutSession cria checkout server-side se
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'TRIALING',
             trialStartedAt: new Date('2026-05-25T00:00:00.000Z'),
             trialEndsAt: new Date('2026-06-01T00:00:00.000Z'),
@@ -243,7 +249,7 @@ register('subscriptionService.createCheckoutSession cria checkout server-side se
     assert.equal(result?.checkoutId, 'checkout-1');
     assert.equal(result?.paymentLink, 'https://asaas.example/checkout-1');
     assert.equal(result?.createdNewCheckout, true);
-    assert.equal(checkoutPayload?.items?.[0]?.value, 47.7);
+    assert.equal(checkoutPayload?.items?.[0]?.value, 79.9);
     assert.equal(checkoutPayload?.callback?.successUrl, 'https://app.voithos.test/payment-return.html?payment=success');
     assert.equal(checkoutPaymentPayload?.clinicId, 'clinic-auth');
     assert.equal(checkoutPaymentPayload?.provider, 'ASAAS_CHECKOUT');
@@ -280,13 +286,13 @@ register('subscriptionService.createCheckoutSession reutiliza checkout pendente 
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'TRIALING',
             trialEndsAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
             lastPayment: {
               id: 'payment-pending',
               status: 'PENDING',
-              amount: 47.7,
+              amount: 79.9,
               provider: 'ASAAS_CHECKOUT',
               externalPaymentId: 'checkout-valid',
               paymentLink: 'https://asaas.example/checkout-valid',
@@ -372,13 +378,13 @@ register('subscriptionService.createCheckoutSession cria novo checkout quando li
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'TRIALING',
             trialEndsAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
             lastPayment: {
               id: 'payment-expired',
               status: 'PENDING',
-              amount: 47.7,
+              amount: 79.9,
               provider: 'ASAAS_CHECKOUT',
               externalPaymentId: 'checkout-expired',
               paymentLink: 'https://asaas.example/checkout-expired',
@@ -392,12 +398,12 @@ register('subscriptionService.createCheckoutSession cria novo checkout quando li
               id: 'sub-1',
               clinicId: 'clinic-auth',
               planType: 'MONTHLY',
-              amount: 47.7,
+              amount: 79.9,
               status: 'TRIALING',
               lastPayment: {
                 id: 'payment-new',
                 status: 'PENDING',
-                amount: 47.7,
+                amount: 79.9,
                 provider: 'ASAAS_CHECKOUT',
                 externalPaymentId: payload.externalPaymentId,
                 paymentLink: payload.paymentLink,
@@ -474,7 +480,7 @@ register('subscriptionService.createCheckoutSession evita duplicidade em chamada
             id: 'sub-1',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'TRIALING',
             trialEndsAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
             lastPayment: currentLastPayment,
@@ -582,7 +588,7 @@ register('subscriptionService.createCheckoutSession recria checkout invalido com
             id: 'sub-custom',
             clinicId: 'clinic-auth',
             planType: 'ANNUAL',
-            amount: 548.7,
+            amount: 859.9,
             billingAmount: 498.7,
             discountAmount: 50,
             customPriceEnabled: true,
@@ -692,7 +698,7 @@ register('subscriptionService.createCheckoutSession nao cria checkout se assinat
             id: 'sub-active',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'ACTIVE',
             startDate: new Date('2026-05-01T00:00:00.000Z'),
             endDate: new Date('2026-06-01T00:00:00.000Z'),
@@ -828,7 +834,7 @@ register('subscriptionService.getAccessOverview retorna READ_ONLY para trial exp
             id: 'sub-trial-expired',
             clinicId: 'clinic-auth',
             planType: 'MONTHLY',
-            amount: 47.7,
+            amount: 79.9,
             status: 'TRIALING',
             startDate: null,
             endDate: null,
@@ -879,7 +885,7 @@ register('subscriptionService.getAccessOverview mantem FULL para trial ativo e a
       id: 'sub-trial-active',
       clinicId: 'clinic-trial',
       planType: 'MONTHLY',
-      amount: 47.7,
+      amount: 79.9,
       status: 'TRIALING',
       trialStartedAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
       trialEndsAt: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000),
@@ -890,7 +896,7 @@ register('subscriptionService.getAccessOverview mantem FULL para trial ativo e a
       id: 'sub-active',
       clinicId: 'clinic-active',
       planType: 'MONTHLY',
-      amount: 47.7,
+      amount: 79.9,
       status: 'ACTIVE',
       startDate: new Date('2026-05-01T00:00:00.000Z'),
       endDate: new Date('2026-06-01T00:00:00.000Z'),
@@ -898,7 +904,7 @@ register('subscriptionService.getAccessOverview mantem FULL para trial ativo e a
       lastPayment: {
         id: 'payment-paid',
         status: 'PAID',
-        amount: 47.7,
+        amount: 79.9,
         provider: 'ASAAS_CHECKOUT',
         externalPaymentId: 'checkout-paid',
         paymentLink: 'https://checkout.example/paid',
@@ -1167,7 +1173,7 @@ register('authService.createPendingSignupCheckout gera novo link quando checkout
                 externalPaymentId: 'checkout-old',
                 paymentLink: 'https://asaas.example/checkout-old',
                 paymentMethod: 'PIX',
-                amount: 47.7,
+                amount: 79.9,
                 expiresAt: '2026-01-01T00:00:00.000Z',
                 status: 'PENDING',
               },
@@ -1207,7 +1213,7 @@ register('authService.createPendingSignupCheckout gera novo link quando checkout
       paymentMethod: 'PIX',
     });
 
-    assert.equal(checkoutCreatePayload?.items?.[0]?.value, 47.7);
+    assert.equal(checkoutCreatePayload?.items?.[0]?.value, 79.9);
     assert.equal(result?.paymentLink, 'https://asaas.example/checkout-new');
     assert.equal(result?.createdNewCheckout, true);
     assert.equal(result?.replacedExpiredCheckout, true);
@@ -1395,7 +1401,7 @@ register('subscriptionService.handleAsaasWebhookEvent ativa assinatura pelo chec
       id: 'sub-1',
       clinicId: 'clinic-auth',
       planType: 'MONTHLY',
-      amount: 47.7,
+      amount: 79.9,
       status: 'TRIALING',
       lastPaymentId: 'payment-new',
       trialStartedAt: new Date('2026-05-25T00:00:00.000Z'),
@@ -1431,7 +1437,7 @@ register('subscriptionService.handleAsaasWebhookEvent ativa assinatura pelo chec
               lastPayment: {
                 id: 'payment-new',
                 status: 'PAID',
-                amount: 47.7,
+                amount: 79.9,
                 paidAt: payload.paidAt,
               },
               payments: [],

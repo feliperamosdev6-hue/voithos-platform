@@ -36,9 +36,9 @@ test('promotionOfferService cria oferta ativa com preco promocional valido', asy
     payload: {
       title: 'Evento Odonto 2026',
       code: 'odonto-2026',
-      planType: 'SEMIANNUAL',
-      regularPrice: 499.9,
-      promotionalPrice: 399.9,
+      planType: 'ANNUAL',
+      regularPrice: 859.9,
+      promotionalPrice: 699.9,
       maxUses: 50,
       source: 'EVENT',
     },
@@ -46,11 +46,11 @@ test('promotionOfferService cria oferta ativa com preco promocional valido', asy
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].code, 'ODONTO-2026');
-  assert.equal(calls[0].regularPriceCents, 49990);
-  assert.equal(calls[0].promotionalPriceCents, 39990);
+  assert.equal(calls[0].regularPriceCents, 85990);
+  assert.equal(calls[0].promotionalPriceCents, 69990);
   assert.equal(calls[0].createdByUserId, 'super-1');
   assert.equal(result.code, 'ODONTO-2026');
-  assert.equal(result.promotionalPrice, 399.9);
+  assert.equal(result.promotionalPrice, 699.9);
 });
 
 test('promotionOfferService bloqueia oferta expirada', async (t) => {
@@ -61,7 +61,7 @@ test('promotionOfferService bloqueia oferta expirada', async (t) => {
         code: 'EXPIRADA',
         title: 'Oferta expirada',
         planType: 'ANNUAL',
-        regularPriceCents: 54870,
+        regularPriceCents: 85990,
         promotionalPriceCents: 39990,
         usedCount: 0,
         maxUses: 1,
@@ -107,8 +107,8 @@ test('promotionOfferService bloqueia preco promocional acima do preco normal', a
       payload: {
         title: 'Preco invalido',
         planType: 'ANNUAL',
-        regularPrice: 548.7,
-        promotionalPrice: 599.9,
+        regularPrice: 859.9,
+        promotionalPrice: 899.9,
       },
     }),
     (error) => {

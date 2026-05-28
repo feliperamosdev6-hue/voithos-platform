@@ -8,6 +8,7 @@
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function buildPlanCatalog() {
   const TRIAL_DAYS = 7;
+  const ANNUAL_SAVINGS_PERCENT = 10;
 
   const freezePlan = (plan) => Object.freeze({
     ...plan,
@@ -31,12 +32,12 @@
       planType: 'MONTHLY',
       slug: 'monthly',
       label: 'Mensal',
-      amount: 47.7,
+      amount: 79.9,
       durationDays: 30,
       billingCycle: 'MONTHLY',
       intervalLabel: '/mes',
       public: true,
-      description: '7 dias gratis. Depois, R$ 47,70/mes.',
+      description: '7 dias gratis. Depois, R$ 79,90/mes.',
     }),
     QUARTERLY: freezePlan({
       planType: 'QUARTERLY',
@@ -46,7 +47,7 @@
       durationDays: 90,
       billingCycle: 'QUARTERLY',
       intervalLabel: '/trimestre',
-      public: true,
+      public: false,
       description: 'Ciclo trimestral para continuidade operacional.',
     }),
     SEMIANNUAL: freezePlan({
@@ -57,19 +58,20 @@
       durationDays: 180,
       billingCycle: 'SEMIANNUAL',
       intervalLabel: '/semestre',
-      public: true,
+      public: false,
       description: 'Plano semestral para clinicas em crescimento.',
     }),
     ANNUAL: freezePlan({
       planType: 'ANNUAL',
       slug: 'annual',
       label: 'Anual',
-      amount: 548.7,
+      amount: 859.9,
       durationDays: 365,
       billingCycle: 'ANNUAL',
       intervalLabel: '/ano',
       public: true,
-      description: '7 dias gratis e economia em relacao ao mensal.',
+      annualSavingsPercent: ANNUAL_SAVINGS_PERCENT,
+      description: '7 dias gratis. Depois, R$ 859,90/ano.',
     }),
   });
 
@@ -106,6 +108,7 @@
     intervalLabel: plan.intervalLabel,
     public: plan.public === true,
     trialDays: plan.trialDays,
+    annualSavingsPercent: plan.annualSavingsPercent || 0,
     price: formatMoneyBR(plan.amount),
     description: plan.description,
   });
@@ -133,6 +136,7 @@
 
   return Object.freeze({
     TRIAL_DAYS,
+    ANNUAL_SAVINGS_PERCENT,
     PLAN_CATALOG,
     PLAN_ALIASES,
     formatMoneyBR,

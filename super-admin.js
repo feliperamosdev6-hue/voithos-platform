@@ -990,13 +990,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (action === 'subscription-cycle') {
+      const legacyBillingCycleOption = !['MONTHLY', 'ANNUAL'].includes(billingCycle)
+        ? `<option value="${escapeHtml(billingCycle)}" selected disabled>${escapeHtml(formatPlanLabel(billingCycle))} (legado)</option>`
+        : '';
       return `
         <label>
           Ciclo de cobranca
           <select name="billingCycle" required>
+            ${legacyBillingCycleOption}
             <option value="MONTHLY" ${billingCycle === 'MONTHLY' ? 'selected' : ''}>Mensal</option>
-            <option value="QUARTERLY" ${billingCycle === 'QUARTERLY' ? 'selected' : ''}>Trimestral</option>
-            <option value="SEMIANNUAL" ${billingCycle === 'SEMIANNUAL' ? 'selected' : ''}>Semestral</option>
             <option value="ANNUAL" ${billingCycle === 'ANNUAL' ? 'selected' : ''}>Anual</option>
           </select>
         </label>
@@ -1127,6 +1129,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const regularPriceInput = document.getElementById('promotion-regular-price');
     if (regularPriceInput) regularPriceInput.value = getDefaultPlanPrice(event.target?.value);
   });
+  {
+    const regularPriceInput = document.getElementById('promotion-regular-price');
+    const selectedPlan = document.getElementById('promotion-plan')?.value || 'ANNUAL';
+    if (regularPriceInput && !regularPriceInput.value) regularPriceInput.value = getDefaultPlanPrice(selectedPlan);
+  }
 
   btnCreatePromotion?.addEventListener('click', async () => {
     if (!authApi?.createPromotionOffer) {
