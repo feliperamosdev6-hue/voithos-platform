@@ -1648,6 +1648,24 @@ body {
   border-top: 1px solid rgba(226, 232, 240, 0.8);
 }
 
+.service-drawer-submit-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.service-budget-btn {
+  font-size: 0.86rem;
+  white-space: nowrap;
+}
+
+.service-budget-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .service-drawer-actions .btn {
   border-radius: 12px;
   min-height: 40px;
@@ -1674,6 +1692,10 @@ body {
 
   .service-drawer-actions {
     flex-wrap: wrap;
+  }
+
+  .service-drawer-submit-actions {
+    flex: 1 1 100%;
   }
 
   .service-drawer-actions .btn {

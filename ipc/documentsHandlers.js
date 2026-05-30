@@ -613,21 +613,50 @@ const registerDocumentsHandlers = ({
       if (!prontuario) throw new Error('Prontuario obrigatorio.');
       const patient = await ensurePatientAccess(prontuario);
       const pacienteId = validatePatientBinding({ patientId: payload.pacienteId, patient, prontuario });
+      const requestedType = sanitizeDocumentValue(payload.type, 40).toUpperCase();
+      const finalType = requestedType === 'ORCAMENTO' ? 'ORCAMENTO' : 'CUSTOMIZAVEL';
 
       const conteudo = sanitizeDocumentValue(payload.conteudo, 10000);
-      if (!conteudo) throw new Error('Conteudo do documento obrigatorio.');
+      const procedimentos = Array.isArray(payload.procedimentos)
+        ? payload.procedimentos
+          .map((item) => ({
+            nome: sanitizeDocumentValue(item?.nome || item?.procedimento || item?.tipo, 200),
+            codigo: sanitizeDocumentValue(item?.codigo || item?.code, 80),
+            dentes: sanitizeDocumentValue(item?.dentes || item?.dente, 120),
+            faces: Array.isArray(item?.faces)
+              ? item.faces.map((face) => sanitizeDocumentValue(face, 12)).filter(Boolean)
+              : [],
+            status: sanitizeDocumentValue(item?.status, 40),
+            valorUnitario: Number(item?.valorUnitario ?? item?.valor ?? item?.valorTotal ?? 0) || 0,
+            valorTotal: Number(item?.valorTotal ?? item?.valorUnitario ?? item?.valor ?? 0) || 0,
+            observacoes: sanitizeDocumentValue(item?.observacoes || item?.obs || item?.notes, 700),
+          }))
+          .filter((item) => item.nome)
+        : [];
+      if (finalType === 'ORCAMENTO') {
+        if (!procedimentos.length) throw new Error('Informe ao menos um procedimento para gerar o orcamento.');
+      } else if (!conteudo) {
+        throw new Error('Conteudo do documento obrigatorio.');
+      }
       const now = new Date();
+      const defaultCategory = finalType === 'ORCAMENTO' ? 'orcamentos' : 'clinicos';
       const category = sanitizeDocumentValue(payload.category, 80)
         || sanitizeDocumentValue(payload.categoria, 80)
-        || 'clinicos';
+        || defaultCategory;
       const title = sanitizeDocumentValue(payload.title, 120)
         || sanitizeDocumentValue(payload.titulo, 120)
-        || `Documento ${now.toLocaleDateString('pt-BR')}`;
+        || `${finalType === 'ORCAMENTO' ? 'Orcamento' : 'Documento'} ${now.toLocaleDateString('pt-BR')}`;
+      const folder = sanitizeDocumentValue(payload.folder, 120)
+        || sanitizeDocumentValue(payload.pasta, 120)
+        || (finalType === 'ORCAMENTO' ? 'Orcamentos' : '');
 
       const { filesDir } = await ensurePatientDocumentsDir(prontuario);
       const documents = await readMutableDocuments({ prontuario, patient, includeArchived: true });
       const stamp = now.toISOString().replace(/[:.]/g, '-');
-      const fileName = `custom-${stamp}.json`;
+      const safePatientRef = (sanitizeDocumentValue(pacienteId || prontuario, 80).replace(/[^a-z0-9_-]/gi, '-') || 'paciente');
+      const fileName = finalType === 'ORCAMENTO'
+        ? `orcamento-${safePatientRef}-${stamp}.json`
+        : `custom-${stamp}.json`;
       const targetPath = path.join(filesDir, fileName);
 
       const payloadToSave = {
@@ -647,7 +676,10 @@ const registerDocumentsHandlers = ({
           data: normalizeDocumentDate(payload.data) || now.toISOString().split('T')[0],
           titulo: title,
           conteudo,
-          pasta: sanitizeDocumentValue(payload.folder, 120),
+          pasta: folder,
+          procedimentos,
+          observacoes: sanitizeDocumentValue(payload.observacoes, 1500),
+          valorTotal: Number(payload.valorTotal) || procedimentos.reduce((sum, item) => sum + (Number(item.valorTotal) || 0), 0),
         },
       };
 
@@ -658,7 +690,7 @@ const registerDocumentsHandlers = ({
       let extension = '.json';
       let size = stat.size;
       if (finalType === 'ORCAMENTO') {
-        const pdfName = `orcamento-${stamp}.pdf`;
+        const pdfName = `orcamento-${safePatientRef}-${stamp}.pdf`;
         const pdfPath = path.join(filesDir, pdfName);
         await generateOrcamentoPdf({
           jsonPath: targetPath,
@@ -704,15 +736,16 @@ const registerDocumentsHandlers = ({
       documents.push(record);
       await writePatientDocumentsIndex(prontuario, documents);
       try {
+        const syncAction = finalType === 'ORCAMENTO' ? 'save-patient-orcamento' : 'save-patient-custom-document';
         await syncDocumentMetadataToCentral({
           patient,
           prontuario,
           record,
-          action: 'save-patient-contrato',
+          action: syncAction,
           uploadFiles: true,
         });
       } catch (error) {
-        logDocumentFallback('save-patient-contrato', error, { prontuario, documentId: record.id });
+        logDocumentFallback(finalType === 'ORCAMENTO' ? 'save-patient-orcamento' : 'save-patient-custom-document', error, { prontuario, documentId: record.id });
       }
       return record;
     } catch (err) {

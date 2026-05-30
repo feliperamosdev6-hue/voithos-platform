@@ -692,9 +692,55 @@ const createPdfService = ({
 </html>`;
   };
 
-  const renderOrcamentoHtml = ({ patient, data, doc }) => {
+  const renderOrcamentoHtml = ({ patient, data, doc, clinic }) => {
     const title = doc?.title || 'Orcamento';
-    const generatedAt = new Date().toLocaleString('pt-BR');
+    const issueDate = toDisplayDate(data.data || data.documentDate);
+    const issueDateLong = new Intl.DateTimeFormat('pt-BR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(issueDate);
+    const localidadeCidade = String(clinic?.cidade || clinic?.endereco?.cidade || '').trim();
+    const localidadeUf = String(clinic?.uf || clinic?.endereco?.uf || '').trim();
+    const localidade = [localidadeCidade, localidadeUf].filter(Boolean).join(' - ') || 'Cidade';
+    const pacienteNome = data.pacienteNome || patient?.fullName || patient?.nome || '-';
+    const receituario = (clinic && typeof clinic.receituario === 'object') ? clinic.receituario : {};
+    const assinaturaNome = receituario.assinaturaNome || data.profissionalNome || clinic?.responsavelTecnico || 'Assinatura do profissional';
+    const assinaturaRegistro = receituario.assinaturaRegistro || '';
+    const procedimentos = (Array.isArray(data.procedimentos) ? data.procedimentos : [])
+      .map((item) => {
+        const valorUnitario = Number(item?.valorUnitario ?? item?.valor ?? item?.valorTotal ?? 0) || 0;
+        const valorTotal = Number(item?.valorTotal ?? item?.valorUnitario ?? item?.valor ?? 0) || 0;
+        return {
+          nome: formatFieldValue(item?.nome || item?.procedimento || item?.tipo),
+          codigo: formatFieldValue(item?.codigo || item?.code || ''),
+          dentes: formatFieldValue(item?.dentes || item?.dente || ''),
+          valorUnitario,
+          valorTotal,
+          observacoes: formatFieldValue(item?.observacoes || item?.obs || item?.notes || ''),
+        };
+      })
+      .filter((item) => item.nome && item.nome !== '-');
+    const formatMoney = (value) => Number(value || 0).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    const valorTotal = Number(data.valorTotal) || procedimentos.reduce((sum, item) => sum + item.valorTotal, 0);
+    const rowsHtml = procedimentos.length
+      ? procedimentos.map((item) => `
+        <tr>
+          <td>
+            <strong>${escapeHtml(item.nome)}</strong>
+            ${item.codigo && item.codigo !== '-' ? `<br><span>Codigo: ${escapeHtml(item.codigo)}</span>` : ''}
+            ${item.dentes && item.dentes !== '-' ? `<br><span>Dentes: ${escapeHtml(item.dentes)}</span>` : ''}
+            ${item.observacoes && item.observacoes !== '-' ? `<br><span>${escapeHtml(item.observacoes)}</span>` : ''}
+          </td>
+          <td>${escapeHtml(formatMoney(item.valorUnitario))}</td>
+          <td>${escapeHtml(formatMoney(item.valorTotal))}</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="3">Nenhum procedimento informado.</td></tr>';
+    const observacoes = String(data.observacoes || '').trim();
     return `<!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -702,29 +748,65 @@ const createPdfService = ({
   <title>${escapeHtml(title)}</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; color: #0f172a; margin: 24px; }
-    h1 { font-size: 20px; margin: 0 0 6px; }
-    .meta { font-size: 12px; color: #475569; margin-bottom: 16px; }
-    .bloco { margin-bottom: 12px; }
-    .label { font-size: 12px; color: #475569; margin-bottom: 4px; }
-    .value { white-space: pre-wrap; line-height: 1.45; }
+    body { font-family: Arial, sans-serif; color: #0f172a; margin: 12px 34px 10px; }
+    h1 { font-size: 24px; margin: 0; text-align: center; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; }
+    .doc-head { margin: 10px 0 34px; }
+    .doc-date { margin-top: 0; font-size: 15px; color: #1e293b; }
+    .doc-text { margin-top: 20px; font-size: 15px; line-height: 1.7; color: #0f172a; }
+    .doc-text p { margin: 0 0 10px; }
+    .bloco { margin-bottom: 14px; page-break-inside: avoid; }
+    .label { font-size: 13px; color: #334155; margin-bottom: 4px; font-weight: 700; }
+    .value { white-space: pre-wrap; font-size: 14px; line-height: 1.45; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; font-size: 14px; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    th { background: #f8fafc; font-weight: 700; }
+    td span { color: #475569; font-size: 12px; }
+    td:nth-child(2), td:nth-child(3), th:nth-child(2), th:nth-child(3) { text-align: right; white-space: nowrap; }
+    .total-row { display: flex; justify-content: flex-end; gap: 14px; margin-top: 14px; font-size: 16px; font-weight: 700; }
+    .signature { margin-top: 72px; text-align: center; page-break-inside: avoid; }
+    .signature-image { margin: 0 auto 8px; max-height: 76px; max-width: 320px; object-fit: contain; display: block; }
+    .signature-line { margin: 0 auto 14px; border-top: 1px solid #334155; width: 300px; max-width: 90%; }
+    .signature-name { font-size: 16px; font-weight: 500; color: #0f172a; }
+    .signature-reg { margin-top: 4px; font-size: 14px; color: #334155; }
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(title)}</h1>
-  <div class="meta">Gerado em: ${escapeHtml(generatedAt)}</div>
-  <div class="bloco">
-    <div class="label">Paciente</div>
-    <div class="value">${escapeHtml(formatFieldValue(data.pacienteNome || patient?.fullName || patient?.nome || '-'))}</div>
+  ${receituario.cabecalho ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.cabecalho))}</div></div>` : ''}
+  <div class="doc-head">
+    <h1>${escapeHtml(title)}</h1>
+  </div>
+  <div class="doc-date">${escapeHtml(`${localidade}, ${issueDateLong}`)}</div>
+  <div class="doc-text">
+    <p>Paciente: <strong>${escapeHtml(formatFieldValue(pacienteNome))}</strong></p>
+    <p>Profissional: ${escapeHtml(formatFieldValue(data.profissionalNome || '-'))}</p>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Procedimento</th>
+        <th>Valor individual</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+  <div class="total-row">
+    <span>Total do orcamento</span>
+    <span>${escapeHtml(formatMoney(valorTotal))}</span>
   </div>
   <div class="bloco">
-    <div class="label">Data</div>
-    <div class="value">${escapeHtml(formatFieldValue(data.data || '-'))}</div>
+    <div class="label">Observacoes</div>
+    <div class="value">${escapeHtml(formatFieldValue(observacoes || '-'))}</div>
   </div>
-  <div class="bloco">
-    <div class="label">Conteudo</div>
-    <div class="value">${escapeHtml(formatFieldValue(data.conteudo || data.conteudoContrato || '-'))}</div>
+  <div class="signature">
+    ${receituario.assinaturaImagemData ? `<img class="signature-image" src="${escapeHtml(receituario.assinaturaImagemData)}" alt="Assinatura digital">` : ''}
+    <div class="signature-line"></div>
+    <div class="signature-name">${escapeHtml(assinaturaNome)}</div>
+    ${assinaturaRegistro ? `<div class="signature-reg">${escapeHtml(assinaturaRegistro)}</div>` : ''}
   </div>
+  ${receituario.rodape ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.rodape))}</div></div>` : ''}
 </body>
 </html>`;
   };
@@ -762,12 +844,39 @@ const createPdfService = ({
     const data = payload?.data || {};
     const clinicId = getCurrentClinicId();
     const clinic = await readClinicContext(clinicId);
+    const clinicReceita = (clinic && typeof clinic.receituario === 'object') ? clinic.receituario : {};
+    const profissionalReceita = await readProfessionalReceituario(data.profissionalId);
+    const pick = (preferred, fallback) => {
+      const value = String(preferred || '').trim();
+      if (value) return value;
+      return String(fallback || '').trim();
+    };
+    const effectiveReceituario = {
+      ...clinicReceita,
+      ...profissionalReceita,
+      assinaturaNome: pick(profissionalReceita.assinaturaNome, clinicReceita.assinaturaNome),
+      assinaturaRegistro: pick(profissionalReceita.assinaturaRegistro, clinicReceita.assinaturaRegistro),
+      assinaturaImagemData: pick(profissionalReceita.assinaturaImagemData, clinicReceita.assinaturaImagemData),
+    };
+    const clinicForOrcamento = {
+      ...(clinic || {}),
+      receituario: effectiveReceituario,
+    };
     const context = {
       paciente: {
         nome: data.pacienteNome || patient?.fullName || patient?.nome || '',
         prontuario: data.prontuario || patient?.prontuario || '',
       },
-      clinica: clinic,
+      profissional: {
+        nome: data.profissionalNome || '',
+        id: data.profissionalId || '',
+        receituario: {
+          assinaturaNome: effectiveReceituario.assinaturaNome || '',
+          assinaturaRegistro: effectiveReceituario.assinaturaRegistro || '',
+          assinaturaImagemData: effectiveReceituario.assinaturaImagemData || '',
+        },
+      },
+      clinica: clinicForOrcamento,
       documento: data,
       metadata: {
         title: doc?.title || 'Orcamento',
@@ -775,13 +884,19 @@ const createPdfService = ({
       },
     };
     const modelHtml = await renderDocumentModelOrNull({ type: 'orcamento', context, clinicId });
-    const html = modelHtml || renderOrcamentoHtml({ patient, data, doc });
+    const html = modelHtml || renderOrcamentoHtml({ patient, data, doc, clinic: clinicForOrcamento });
+    const orcamentoDate = /^\d{4}-\d{2}-\d{2}$/.test(String(data.data || '').trim())
+      ? new Date(`${String(data.data).trim()}T12:00:00`)
+      : new Date();
+    const emitidoEm = new Intl.DateTimeFormat('pt-BR').format(orcamentoDate);
     await pdfRenderer.renderPdf({
       clinicId,
       docType: 'orcamento',
       payload: data,
       outputPath: pdfPath,
       contentHTML: html,
+      headerOptions: { emitidoEm },
+      footerOptions: { emitidoEm },
     });
   };
 

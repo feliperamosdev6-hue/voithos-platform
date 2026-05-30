@@ -111,6 +111,20 @@ const downloadPatientDocumentFile = async (req, res, next) => {
   }
 };
 
+const generatePatientOrcamentoPdf = async (req, res, next) => {
+  try {
+    const data = await patientClinicalService.generateOrcamentoPdfDocument({
+      clinicId: getAuthenticatedClinicId(req),
+      patientId: req.params.patientId,
+      payload: req.body || {},
+      actor: req.auth || {},
+    });
+    return res.status(201).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const createPatientAnamnesis = async (req, res, next) => {
   try {
     const data = await patientClinicalService.createAnamnesis({
@@ -176,6 +190,7 @@ module.exports = {
   upsertPatientDocument,
   uploadPatientDocumentFile,
   downloadPatientDocumentFile,
+  generatePatientOrcamentoPdf,
   createPatientAnamnesis,
   listPatientAnamneses,
   createPatientClinicalNote,

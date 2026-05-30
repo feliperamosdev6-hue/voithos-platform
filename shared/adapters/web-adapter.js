@@ -1000,6 +1000,99 @@
       `,
     });
   };
+  const buildOrcamentoPreviewMarkup = (document = {}, context = {}) => {
+    const data = document?.data && typeof document.data === 'object' ? document.data : {};
+    const clinic = normalizeClinicSessionData(context?.clinic || getStoredClinic?.() || {});
+    const receituario = normalizeClinicReceituario(data?.receituario || clinic?.receituario, clinic);
+    const localidadeCidade = cleanText(clinic?.cidade || clinic?.endereco?.cidade);
+    const localidadeUf = cleanText(clinic?.uf || clinic?.endereco?.uf);
+    const localidade = [localidadeCidade, localidadeUf].filter(Boolean).join(' - ') || 'Cidade';
+    const issueDate = cleanText(data.data || document?.documentDate || document?.createdAt);
+    const pacienteNome = cleanText(data.pacienteNome) || '-';
+    const profissionalNome = cleanText(data.profissionalNome || document?.createdBy?.nome) || '-';
+    const assinaturaNome = cleanText(data.profissionalNome || receituario.assinaturaNome) || 'Assinatura do profissional';
+    const assinaturaRegistro = cleanText(receituario.assinaturaRegistro);
+    const formatMoney = (value) => Number(value || 0).toLocaleString('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+    const procedimentos = (Array.isArray(data.procedimentos) ? data.procedimentos : [])
+      .map((item) => {
+        const valorUnitario = Number(item?.valorUnitario ?? item?.valor ?? item?.valorTotal ?? 0) || 0;
+        const valorTotal = Number(item?.valorTotal ?? item?.valorUnitario ?? item?.valor ?? 0) || 0;
+        return {
+          nome: cleanText(item?.nome || item?.procedimento || item?.tipo) || 'Procedimento',
+          codigo: cleanText(item?.codigo || item?.code),
+          dentes: cleanText(item?.dentes || item?.dente),
+          observacoes: cleanText(item?.observacoes || item?.obs || item?.notes),
+          valorUnitario,
+          valorTotal,
+        };
+      })
+      .filter((item) => item.nome);
+    const valorTotal = Number(data.valorTotal) || procedimentos.reduce((sum, item) => sum + item.valorTotal, 0);
+    const rowsHtml = procedimentos.length
+      ? procedimentos.map((item) => `
+        <tr>
+          <td>
+            <strong>${escapeHtml(item.nome)}</strong>
+            ${item.codigo ? `<br><span>Codigo: ${escapeHtml(item.codigo)}</span>` : ''}
+            ${item.dentes && item.dentes !== '-' ? `<br><span>Dentes: ${escapeHtml(item.dentes)}</span>` : ''}
+            ${item.observacoes ? `<br><span>${escapeHtml(item.observacoes)}</span>` : ''}
+          </td>
+          <td style="text-align:right;white-space:nowrap;">${escapeHtml(formatMoney(item.valorUnitario))}</td>
+          <td style="text-align:right;white-space:nowrap;">${escapeHtml(formatMoney(item.valorTotal))}</td>
+        </tr>
+      `).join('')
+      : '<tr><td colspan="3">Nenhum procedimento informado.</td></tr>';
+    return buildPrintablePreviewShell({
+      title: document?.title || document?.titulo || 'Orcamento',
+      body: `
+        <article class="vx-medical-doc vx-medical-doc--orcamento">
+          ${buildClinicDocumentHeaderMarkup({
+            ...clinic,
+            professionalName: profissionalNome,
+            professionalCro: receituario.assinaturaRegistro,
+          })}
+          ${receituario.cabecalho ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.cabecalho))}</div></div>` : ''}
+          <div class="doc-head">
+            <h1>Orcamento</h1>
+          </div>
+          <div class="doc-date">${escapeHtml(`${localidade}, ${formatLongDatePtBr(issueDate)}`)}</div>
+          <div class="doc-text">
+            <p>Paciente: <strong>${escapeHtml(pacienteNome)}</strong></p>
+            <p>Profissional: ${escapeHtml(profissionalNome)}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Procedimento</th>
+                <th style="text-align:right;">Valor individual</th>
+                <th style="text-align:right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <div class="bloco" style="margin-top:14px;text-align:right;font-size:16px;font-weight:700;">
+            Total do orcamento: ${escapeHtml(formatMoney(valorTotal))}
+          </div>
+          <div class="bloco">
+            <div class="label">Observacoes</div>
+            <div class="value">${escapeHtml(formatFieldValue(data.observacoes || '-'))}</div>
+          </div>
+          <div class="signature">
+            ${receituario.assinaturaImagemData ? `<img class="signature-image" src="${escapeHtml(receituario.assinaturaImagemData)}" alt="Assinatura digital">` : ''}
+            <div class="signature-line"></div>
+            <div class="signature-name">${escapeHtml(assinaturaNome)}</div>
+            ${assinaturaRegistro ? `<div class="signature-reg">${escapeHtml(assinaturaRegistro)}</div>` : ''}
+          </div>
+          ${receituario.rodape ? `<div class="bloco"><div class="value">${escapeHtml(formatFieldValue(receituario.rodape))}</div></div>` : ''}
+        </article>
+      `,
+    });
+  };
   const buildDocumentPreviewMarkup = (document = {}, context = {}) => {
     const data = document?.data && typeof document.data === 'object' ? document.data : {};
     const documentType = normalizeDocumentType(document?.type || document?.tipo);
@@ -1008,6 +1101,9 @@
     }
     if (documentType === 'ATESTADO') {
       return buildAtestadoPreviewMarkup(document, context);
+    }
+    if (documentType === 'ORCAMENTO') {
+      return buildOrcamentoPreviewMarkup(document, context);
     }
     if (cleanText(data.previewHtml)) return String(data.previewHtml);
     const content = cleanText(
@@ -1785,6 +1881,23 @@
       'POST',
       `/clinical/patients/${encodeURIComponent(patientId)}/documents`,
       { document: record },
+      { auth: true }
+    );
+  };
+  const saveOrcamentoDocument = async (payload = {}) => {
+    const patientId = resolvePatientId(payload);
+    if (!patientId) throw new Error('patientId/prontuario is required.');
+    return request(
+      'POST',
+      `/clinical/patients/${encodeURIComponent(patientId)}/documents/orcamento-pdf`,
+      {
+        ...payload,
+        prontuario: patientId,
+        patientId,
+        type: 'ORCAMENTO',
+        category: payload?.category || 'Orcamentos',
+        folder: payload?.folder || 'Orcamentos',
+      },
       { auth: true }
     );
   };
@@ -2700,11 +2813,16 @@
         { auth: true }
       );
     },
-    saveCustom: async (payload = {}) => saveGenericDocument(payload, {
-      type: 'CUSTOMIZAVEL',
-      category: payload?.category || 'CLINICOS',
-      titleFallback: 'Documento customizavel',
-    }),
+    saveCustom: async (payload = {}) => {
+      const requestedType = normalizeDocumentType(payload?.type || payload?.tipo);
+      const finalType = requestedType === 'ORCAMENTO' ? 'ORCAMENTO' : 'CUSTOMIZAVEL';
+      if (finalType === 'ORCAMENTO') return saveOrcamentoDocument(payload);
+      return saveGenericDocument(payload, {
+        type: finalType,
+        category: payload?.category || (finalType === 'ORCAMENTO' ? 'ORCAMENTOS' : 'CLINICOS'),
+        titleFallback: finalType === 'ORCAMENTO' ? 'Orcamento' : 'Documento customizavel',
+      });
+    },
     saveEvolucao: async (payload = {}) => {
       const patientId = resolvePatientId(payload);
       const title = cleanText(payload?.title || `Anotacao ${formatDatePtBr(payload?.data || new Date())}`);
@@ -2887,6 +3005,7 @@
       category: payload?.category || 'CLINICOS',
       titleFallback: 'Contrato',
     }),
+    saveOrcamento: async (payload = {}) => saveOrcamentoDocument(payload),
   };
 
   const finance = {

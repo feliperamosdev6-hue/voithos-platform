@@ -10,6 +10,7 @@ const {
   upsertPatientDocument,
   uploadPatientDocumentFile,
   downloadPatientDocumentFile,
+  generatePatientOrcamentoPdf,
   createPatientAnamnesis,
   listPatientAnamneses,
   createPatientClinicalNote,
@@ -26,6 +27,7 @@ router.post('/patients/:patientId/procedures', requireWriteAccess, upsertPatient
 router.delete('/patients/:patientId/procedures/:externalId', requireWriteAccess, deletePatientProcedure);
 router.get('/patients/:patientId/documents', listPatientDocuments);
 router.post('/patients/:patientId/documents', requireWriteAccess, upsertPatientDocument);
+router.post('/patients/:patientId/documents/orcamento-pdf', requireWriteAccess, generatePatientOrcamentoPdf);
 router.put(
   '/patients/:patientId/documents/:externalDocumentId/file',
   requireWriteAccess,

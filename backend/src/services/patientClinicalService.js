@@ -2,8 +2,14 @@ const { AppError } = require('../errors/AppError');
 const { patientRepository } = require('../repositories/patientRepository');
 const { patientClinicalRepository } = require('../repositories/patientClinicalRepository');
 const { financialRepository } = require('../repositories/financialRepository');
+const { clinicRepository } = require('../repositories/clinicRepository');
 const { patientDocumentStorageService } = require('./patientDocumentStorageService');
 const { financialService, mapAccountToLegacy } = require('./financialService');
+const {
+  createOrcamentoPdfBuffer,
+  normalizeClinicAddress,
+  sanitizeText: sanitizePdfText,
+} = require('./orcamentoPdfService');
 
 const assertPatientBelongsToClinic = async ({ clinicId, patientId }) => {
   const patient = await patientRepository.findByIdAndClinic(patientId, clinicId);
@@ -692,6 +698,84 @@ const sanitizeDocumentPayload = (document = {}) => {
   });
 };
 
+const sanitizeOrcamentoProcedure = (item = {}) => {
+  const valorUnitario = roundMoney(item?.valorUnitario ?? item?.valor ?? item?.valorTotal ?? 0);
+  const valorTotal = roundMoney(item?.valorTotal ?? item?.valorUnitario ?? item?.valor ?? 0);
+  return {
+    nome: sanitizePdfText(item?.nome || item?.procedimento || item?.tipo, 180),
+    codigo: sanitizePdfText(item?.codigo || item?.code, 80),
+    dentes: sanitizePdfText(item?.dentes || item?.dente, 120),
+    faces: Array.isArray(item?.faces)
+      ? item.faces.map((face) => sanitizePdfText(face, 12)).filter(Boolean)
+      : [],
+    status: sanitizePdfText(item?.status, 40),
+    valorUnitario,
+    valorTotal,
+    observacoes: sanitizePdfText(item?.observacoes || item?.obs || item?.notes, 700),
+  };
+};
+
+const normalizeOrcamentoProcedures = (items = []) => (Array.isArray(items) ? items : [])
+  .slice(0, 200)
+  .map(sanitizeOrcamentoProcedure)
+  .filter((item) => item.nome);
+
+const sanitizeFileSegment = (value, fallback = 'paciente') => {
+  const raw = sanitizePdfText(value, 80) || fallback;
+  return raw.replace(/[^a-zA-Z0-9._-]/g, '_') || fallback;
+};
+
+const buildOrcamentoConteudo = ({ procedimentos = [], valorTotal = 0, observacoes = '' } = {}) => [
+  'Orcamento gerado a partir dos procedimentos salvos no prontuario.',
+  ...procedimentos.map((item, index) => {
+    const dentes = item.dentes && item.dentes !== '-' ? ` - Dentes: ${item.dentes}` : '';
+    return `${index + 1}. ${item.nome}${dentes} - ${formatCurrencyForMetadata(item.valorTotal)}`;
+  }),
+  `Total: ${formatCurrencyForMetadata(valorTotal)}`,
+  observacoes ? `Observacoes: ${observacoes}` : '',
+].filter(Boolean).join('\n');
+
+const formatCurrencyForMetadata = (value) => Number(value || 0).toLocaleString('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+});
+
+const normalizeClinicForOrcamentoPdf = async (clinicId) => {
+  const [profile, operationalSettings] = await Promise.all([
+    clinicRepository.findProfileById(clinicId).catch(() => ({})),
+    clinicRepository.getOperationalSettings(clinicId).catch(() => ({})),
+  ]);
+  const clinicProfile = operationalSettings?.clinicProfile && typeof operationalSettings.clinicProfile === 'object'
+    ? operationalSettings.clinicProfile
+    : {};
+  const receituario = operationalSettings?.receituario && typeof operationalSettings.receituario === 'object'
+    ? operationalSettings.receituario
+    : {};
+  const nome = sanitizePdfText(
+    profile?.razaoSocial
+    || profile?.nomeFantasia
+    || profile?.nomeClinica
+    || clinicProfile?.nomeFantasia
+    || 'Clinica',
+    140,
+  );
+  const contato = [
+    sanitizePdfText(profile?.cnpjCpf || profile?.cnpjOuCpf || profile?.cnpj, 40),
+    sanitizePdfText(profile?.telefone || profile?.telefoneComercial || clinicProfile?.telefone, 40),
+    sanitizePdfText(profile?.email || profile?.emailClinica || clinicProfile?.email, 100),
+  ].filter(Boolean).join(' | ');
+  return {
+    nome,
+    logoLabel: nome.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('') || 'VO',
+    contato,
+    endereco: normalizeClinicAddress({ ...(profile || {}), endereco: clinicProfile?.endereco || profile?.endereco }),
+    cabecalho: sanitizePdfText(receituario.cabecalho, 800),
+    rodape: sanitizePdfText(receituario.rodape, 800),
+    assinaturaNome: sanitizePdfText(receituario.assinaturaNome || profile?.responsavelTecnico || clinicProfile?.responsavelTecnico, 160),
+    assinaturaRegistro: sanitizePdfText(receituario.assinaturaRegistro || profile?.cro || clinicProfile?.cro, 80),
+  };
+};
+
 const patientClinicalService = {
   getClinicalRecord: async ({ clinicId, patientId }) => {
     const normalizedClinicId = String(clinicId || '').trim();
@@ -1013,6 +1097,112 @@ const patientClinicalService = {
       externalDocumentId,
       role,
     });
+  },
+
+  generateOrcamentoPdfDocument: async ({ clinicId, patientId, payload = {}, actor = {} } = {}) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    const normalizedPatientId = String(patientId || '').trim();
+    if (!normalizedClinicId || !normalizedPatientId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId and patientId are required.');
+    }
+    const record = await patientClinicalService.getClinicalRecord({
+      clinicId: normalizedClinicId,
+      patientId: normalizedPatientId,
+    });
+    const patient = await patientRepository.findByIdAndClinic(normalizedPatientId, normalizedClinicId);
+    if (!patient) throw new AppError(404, 'PATIENT_NOT_FOUND', 'Patient not found for this clinic.');
+
+    const procedimentos = normalizeOrcamentoProcedures(payload?.procedimentos);
+    if (!procedimentos.length) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'At least one procedure is required.');
+    }
+
+    const now = new Date();
+    const dateOnly = (normalizeIsoDate(payload?.data || payload?.documentDate) || now).toISOString().split('T')[0];
+    const stamp = now.toISOString().replace(/[:.]/g, '-');
+    const safePatientId = sanitizeFileSegment(normalizedPatientId);
+    const fileName = `orcamento-${safePatientId}-${stamp}.pdf`;
+    const externalDocumentId = sanitizePdfText(payload?.documentId || payload?.id, 80)
+      || `orcamento_${safePatientId}_${Date.now().toString(36)}`;
+    const title = sanitizePdfText(payload?.title || payload?.titulo, 120)
+      || `Orcamento ${now.toLocaleDateString('pt-BR')}`;
+    const observacoes = sanitizePdfText(payload?.observacoes, 1500);
+    const valorTotal = roundMoney(payload?.valorTotal)
+      || procedimentos.reduce((sum, item) => sum + roundMoney(item.valorTotal), 0);
+    const profissionalNome = sanitizePdfText(payload?.profissionalNome || actor?.email || '', 160);
+    const documentData = {
+      prontuario: normalizedPatientId,
+      patientId: normalizedPatientId,
+      pacienteId: normalizedPatientId,
+      pacienteNome: sanitizePdfText(payload?.pacienteNome || patient.fullName || patient.nome, 160),
+      profissionalId: sanitizePdfText(payload?.profissionalId || actor?.userId, 120),
+      profissionalNome,
+      data: dateOnly,
+      titulo: title,
+      procedimentos,
+      observacoes,
+      valorTotal,
+      conteudo: sanitizePdfText(payload?.conteudo, 10000) || buildOrcamentoConteudo({ procedimentos, valorTotal, observacoes }),
+      pasta: 'Orcamentos',
+    };
+    const clinic = await normalizeClinicForOrcamentoPdf(normalizedClinicId);
+    const pdfBuffer = createOrcamentoPdfBuffer({
+      clinic,
+      patient,
+      document: {
+        ...documentData,
+        assinaturaNome: clinic.assinaturaNome || profissionalNome,
+        assinaturaRegistro: clinic.assinaturaRegistro || '',
+      },
+    });
+
+    const sourceDocument = await patientClinicalService.upsertDocumentMetadata({
+      clinicId: normalizedClinicId,
+      patientId: normalizedPatientId,
+      document: {
+        id: externalDocumentId,
+        prontuario: normalizedPatientId,
+        patientId: normalizedPatientId,
+        title,
+        titulo: title,
+        category: 'Orcamentos',
+        categoria: 'Orcamentos',
+        type: 'ORCAMENTO',
+        folder: 'Orcamentos',
+        originalName: fileName,
+        storedName: fileName,
+        extension: '.pdf',
+        size: pdfBuffer.length,
+        documentDate: dateOnly,
+        createdBy: {
+          id: sanitizePdfText(actor?.userId || payload?.profissionalId, 120),
+          nome: profissionalNome,
+        },
+        dentistaId: sanitizePdfText(payload?.profissionalId, 120),
+        versionOf: externalDocumentId,
+        version: 1,
+        isLatest: true,
+        archived: false,
+        data: documentData,
+      },
+    });
+
+    await patientDocumentStorageService.storeDocumentAsset({
+      clinicId: normalizedClinicId,
+      patientId: normalizedPatientId,
+      externalDocumentId: sourceDocument.id || externalDocumentId,
+      role: 'primary',
+      buffer: pdfBuffer,
+      fileName,
+      contentType: 'application/pdf',
+    });
+
+    const updated = await patientClinicalRepository.findDocumentByExternalId({
+      clinicId: normalizedClinicId,
+      patientId: normalizedPatientId,
+      externalDocumentId: sourceDocument.id || externalDocumentId,
+    });
+    return mapDocumentToLegacy(updated);
   },
 
   listAnamneses: async ({ clinicId, patientId }) => {

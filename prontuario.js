@@ -168,6 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const serviceDrawerDentesSelect = document.getElementById('drawer-dentes-select');
   const serviceDrawerObs = document.getElementById('drawer-obs');
   const serviceDrawerHelp = document.getElementById('drawer-dentes-help');
+  const serviceBudgetButton = document.getElementById('drawer-budget-pdf');
   const serviceDrawerFaceChips = Array.from(document.querySelectorAll('.drawer-face-chip[data-face]'));
   const btnsNovaEvolucao = Array.from(document.querySelectorAll('[data-action="nova-evolucao"]'));
   const anotacoesList = document.getElementById('anotacoes-list');
@@ -221,6 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let proceduresCatalogLoadedAt = 0;
   let proceduresCatalogLoading = null;
   let procedimentosDataLoading = false;
+  let serviceBudgetGenerating = false;
   let patientFinanceDataLoading = false;
   let lastProcedimentosPatientKey = '';
   let lastPatientFinanceKey = '';
@@ -740,6 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
     serviceDrawer.classList.add('open');
     serviceDrawer.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
+    updateServiceBudgetButtonState();
     updateDrawerDentesUI();
     updateResumoFacesUI();
     if (serviceDrawerName && !allProcedures.length) {
@@ -872,6 +875,134 @@ document.addEventListener('DOMContentLoaded', () => {
       alert(err?.message || 'Nao foi possivel salvar o procedimento.');
     }
   });
+
+  const sanitizeBudgetText = (value, maxLen = 500) => String(value ?? '')
+    .replace(/[<>]/g, ' ')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+
+  const getBudgetSourceProcedures = () => (Array.isArray(currentPatient?.servicos) ? currentPatient.servicos : [])
+    .filter((service) => service && service.archived !== true && service.deleted !== true);
+
+  const normalizeBudgetProcedures = () => getBudgetSourceProcedures()
+    .map((service) => {
+      const valor = getServiceAmount(service);
+      const observacoes = sanitizeBudgetText(
+        service.observacoes || service.obs || service.notes || service.anotacoes || '',
+        700
+      );
+      return {
+        nome: sanitizeBudgetText(resolveServiceDisplayName(service) || 'Procedimento', 180),
+        codigo: sanitizeBudgetText(service.codigo || service.code || '', 80),
+        dentes: sanitizeBudgetText(formatDentes(service.dentes || service.dente), 120),
+        faces: Array.isArray(service.faces)
+          ? service.faces.map((face) => sanitizeBudgetText(face, 12)).filter(Boolean)
+          : [],
+        status: sanitizeBudgetText(normalizeEstado(service.status || service.estado || service.situacao), 40),
+        valorUnitario: valor,
+        valorTotal: valor,
+        observacoes,
+      };
+    })
+    .filter((item) => item.nome);
+
+  const buildBudgetNotes = (items = []) => {
+    const uniqueNotes = Array.from(new Set(
+      items
+        .map((item) => sanitizeBudgetText(item.observacoes, 700))
+        .filter(Boolean)
+    ));
+    return uniqueNotes.join('\n');
+  };
+
+  const buildBudgetContentText = (items = [], total = 0, notes = '') => {
+    const lines = items.map((item, index) => {
+      const teeth = item.dentes && item.dentes !== '-' ? ` - Dentes: ${item.dentes}` : '';
+      return `${index + 1}. ${item.nome}${teeth} - ${formatCurrency(item.valorTotal)}`;
+    });
+    return [
+      'Orcamento gerado a partir dos procedimentos salvos no prontuario.',
+      ...lines,
+      `Total: ${formatCurrency(total)}`,
+      notes ? `Observacoes: ${notes}` : '',
+    ].filter(Boolean).join('\n');
+  };
+
+  const updateServiceBudgetButtonState = () => {
+    if (!serviceBudgetButton) return;
+    const hasProcedures = getBudgetSourceProcedures().length > 0;
+    const available = Boolean(documentsApi.saveCustom || documentsApi.saveOrcamento);
+    serviceBudgetButton.disabled = serviceBudgetGenerating || procedimentosDataLoading || !hasProcedures || !available;
+    serviceBudgetButton.textContent = serviceBudgetGenerating ? 'Gerando orcamento...' : 'Gerar orcamento';
+    if (!available) {
+      serviceBudgetButton.title = 'Modulo de documentos indisponivel neste ambiente.';
+    } else if (!hasProcedures) {
+      serviceBudgetButton.title = 'Salve ao menos um procedimento antes de gerar o orcamento.';
+    } else {
+      serviceBudgetButton.title = 'Salvar orcamento em PDF no prontuario.';
+    }
+  };
+
+  const setServiceBudgetGenerating = (isGenerating) => {
+    serviceBudgetGenerating = Boolean(isGenerating);
+    updateServiceBudgetButtonState();
+  };
+
+  const generateServiceBudgetPdf = async () => {
+    if (serviceBudgetGenerating) return;
+    if (!currentPatient?.prontuario) {
+      alert('Paciente nao encontrado.');
+      return;
+    }
+    const saveOrcamento = documentsApi.saveOrcamento || documentsApi.saveCustom;
+    if (!saveOrcamento) {
+      buildProcedureToast('Modulo de documentos indisponivel neste ambiente.', true);
+      return;
+    }
+    const procedimentos = normalizeBudgetProcedures();
+    if (!procedimentos.length) {
+      alert('Salve ao menos um procedimento antes de gerar o orcamento.');
+      updateServiceBudgetButtonState();
+      return;
+    }
+    const total = procedimentos.reduce((sum, item) => sum + (Number(item.valorTotal) || 0), 0);
+    const observacoes = buildBudgetNotes(procedimentos);
+    const today = new Date().toISOString().slice(0, 10);
+    const title = `Orcamento ${new Date().toLocaleDateString('pt-BR')}`;
+
+    try {
+      setServiceBudgetGenerating(true);
+      await saveOrcamento({
+        prontuario: currentPatient.prontuario,
+        pacienteId: currentPatient.id || currentPatient.prontuario || currentPatient._id || '',
+        pacienteNome: sanitizeBudgetText(currentPatient.fullName || currentPatient.nome || '', 160),
+        profissionalId: currentUser?.id || '',
+        profissionalNome: sanitizeBudgetText(currentUser?.nome || '', 160),
+        data: today,
+        documentDate: today,
+        title,
+        titulo: title,
+        category: 'orcamentos',
+        folder: 'Orcamentos',
+        type: 'ORCAMENTO',
+        procedimentos,
+        observacoes,
+        valorTotal: total,
+        conteudo: buildBudgetContentText(procedimentos, total, observacoes),
+      });
+      await loadDocuments({ force: true });
+      buildProcedureToast('Orcamento salvo no prontuario do paciente.');
+    } catch (err) {
+      console.warn('[PRONTUARIO] falha ao gerar orcamento', {
+        message: err?.message || String(err || ''),
+      });
+      buildProcedureToast('Nao foi possivel gerar o orcamento. Tente novamente.', true);
+    } finally {
+      setServiceBudgetGenerating(false);
+    }
+  };
 
   serviceDrawerName?.addEventListener('change', updateServiceDrawerProcedureMeta);
   serviceDrawerName?.addEventListener('input', updateServiceDrawerProcedureMeta);
@@ -2211,6 +2342,7 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([], { loading: true });
+      updateServiceBudgetButtonState();
       syncTrackedTimers();
       return;
     }
@@ -2225,6 +2357,7 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([], { loading: false });
+      updateServiceBudgetButtonState();
       syncTrackedTimers();
       return;
     }
@@ -2249,12 +2382,14 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([]);
+      updateServiceBudgetButtonState();
       syncTrackedTimers();
       return;
     }
 
     procedimentosEmpty.classList.remove('show');
     updateFinanceMetrics(list);
+    updateServiceBudgetButtonState();
     procedimentosBody.innerHTML = list.map((svc) => {
       const nome = resolveServiceDisplayName(svc) || 'Procedimento';
       const dentes = formatDentes(svc.dentes || svc.dente);
@@ -3533,6 +3668,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const handlePanelAction = (action) => {
     if (action === 'novo-servico') return openServiceDrawer();
     if (action === 'novo-orcamento') return openServicePage();
+    if (action === 'generate-service-budget') return generateServiceBudgetPdf();
     if (action === 'close-service-drawer') return closeServiceDrawer();
     if (action === 'nova-anamnese') return openAnamnesePage();
     if (action === 'nova-receita') return openReceitaPage();
