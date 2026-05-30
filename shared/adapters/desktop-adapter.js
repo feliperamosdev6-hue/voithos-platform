@@ -180,6 +180,11 @@
       if (window.__webAdapter?.auth?.getOnboardingDashboard) return window.__webAdapter.auth.getOnboardingDashboard();
       return unavailable('auth.getOnboardingDashboard');
     },
+    getSubscriptionCommercialTimeline: async (clinicId) => {
+      if (window.auth?.getSubscriptionCommercialTimeline) return window.auth.getSubscriptionCommercialTimeline(clinicId);
+      if (window.__webAdapter?.auth?.getSubscriptionCommercialTimeline) return window.__webAdapter.auth.getSubscriptionCommercialTimeline(clinicId);
+      return unavailable('auth.getSubscriptionCommercialTimeline');
+    },
     deletePendingClinicRegistration: async (id) => {
       if (window.auth?.deletePendingClinicRegistration) return window.auth.deletePendingClinicRegistration(id);
       if (window.__webAdapter?.auth?.deletePendingClinicRegistration) return window.__webAdapter.auth.deletePendingClinicRegistration(id);

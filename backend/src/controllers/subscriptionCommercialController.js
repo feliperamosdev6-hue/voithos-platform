@@ -86,10 +86,23 @@ const updateSuperAdminSubscriptionCommercialNotes = async (req, res, next) => {
   }
 };
 
+const getSuperAdminSubscriptionTimeline = async (req, res, next) => {
+  try {
+    requireSuperAdmin(req);
+    const data = await subscriptionService.getCommercialTimeline({
+      clinicId: req?.params?.clinicId || '',
+    });
+    return res.status(200).json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   updateSuperAdminSubscriptionPrice,
   applySuperAdminSubscriptionDiscount,
   extendSuperAdminSubscriptionTrial,
   updateSuperAdminSubscriptionBillingCycle,
   updateSuperAdminSubscriptionCommercialNotes,
+  getSuperAdminSubscriptionTimeline,
 };

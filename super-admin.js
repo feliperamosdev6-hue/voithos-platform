@@ -52,6 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSubmitSubscriptionModal = document.getElementById('btn-submit-subscription-modal');
   const btnCloseSubscriptionModal = document.getElementById('btn-close-subscription-modal');
   const btnCloseSubscriptionModalX = document.getElementById('btn-close-subscription-modal-x');
+  const commercialTimelineModal = document.getElementById('commercial-timeline-modal');
+  const commercialTimelineTitle = document.getElementById('commercial-timeline-title');
+  const commercialTimelineSubtitle = document.getElementById('commercial-timeline-subtitle');
+  const commercialTimelineStatus = document.getElementById('commercial-timeline-status');
+  const commercialTimelineError = document.getElementById('commercial-timeline-error');
+  const commercialTimelineList = document.getElementById('commercial-timeline-list');
+  const btnCloseCommercialTimelineModal = document.getElementById('btn-close-commercial-timeline-modal');
+  const btnCloseCommercialTimelineModalX = document.getElementById('btn-close-commercial-timeline-modal-x');
 
   const clinicCredentialsCache = new Map();
   const dashboardClinicMap = new Map();
@@ -59,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const promotionActionIds = new Set();
   const clinicAccessActionIds = new Set();
   const subscriptionActionIds = new Set();
+  const timelineLoadingIds = new Set();
   let clinicsCache = [];
   let promotionOffersCache = [];
   let dashboardCache = null;
@@ -105,6 +114,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const setSubscriptionModalError = (message) => {
     if (subscriptionModalError) subscriptionModalError.textContent = message || '';
+  };
+
+  const setCommercialTimelineError = (message) => {
+    if (commercialTimelineError) commercialTimelineError.textContent = message || '';
+  };
+
+  const setCommercialTimelineStatus = (message) => {
+    if (!commercialTimelineStatus) return;
+    const text = String(message || '').trim();
+    commercialTimelineStatus.textContent = text;
+    commercialTimelineStatus.hidden = !text;
   };
 
   const setActiveTab = (tabName) => {
@@ -230,6 +250,34 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const normalized = String(stage || '').trim().toUpperCase();
     return labels[normalized] || fallback || normalized || 'Etapa';
+  };
+
+  const formatTimelineTypeLabel = (type) => {
+    const labels = {
+      TRIAL_STARTED: 'Trial',
+      CHECKOUT_CREATED: 'Checkout',
+      CHECKOUT_REPLACED_OR_EXPIRED: 'Checkout',
+      PAYMENT_APPROVED: 'Pagamento',
+      SUBSCRIPTION_ACTIVATED: 'Ativacao',
+      PRICE_UPDATED: 'Preco',
+      DISCOUNT_APPLIED: 'Desconto',
+      TRIAL_EXTENDED: 'Trial',
+      BILLING_CYCLE_UPDATED: 'Ciclo',
+      COMMERCIAL_NOTES_UPDATED: 'Nota',
+      MANUAL_ACCESS_BLOCKED: 'Bloqueio',
+      MANUAL_ACCESS_UNLOCKED: 'Desbloqueio',
+      MANUAL_ACCESS_UNBLOCKED: 'Desbloqueio',
+    };
+    const normalized = String(type || '').trim().toUpperCase();
+    return labels[normalized] || normalized || 'Evento';
+  };
+
+  const getTimelineBadgeClass = (type) => {
+    const normalized = String(type || '').trim().toUpperCase();
+    if (['PAYMENT_APPROVED', 'SUBSCRIPTION_ACTIVATED', 'TRIAL_STARTED'].includes(normalized)) return 'badge';
+    if (['MANUAL_ACCESS_BLOCKED'].includes(normalized)) return 'badge is-danger';
+    if (['CHECKOUT_REPLACED_OR_EXPIRED'].includes(normalized)) return 'badge is-warn';
+    return 'badge is-neutral';
   };
 
   const getBadgeClass = (stage) => {
@@ -564,6 +612,121 @@ document.addEventListener('DOMContentLoaded', () => {
     `).join('');
   };
 
+  const closeCommercialTimelineModal = () => {
+    setCommercialTimelineError('');
+    setCommercialTimelineStatus('');
+    if (commercialTimelineList) {
+      commercialTimelineList.innerHTML = '<div class="list-empty">Carregando timeline...</div>';
+    }
+    if (!commercialTimelineModal) return;
+    commercialTimelineModal.classList.remove('is-open');
+    commercialTimelineModal.hidden = true;
+  };
+
+  const formatTimelineMetadata = (metadata = {}) => {
+    const parts = [];
+    if (metadata.amount != null) parts.push(`Valor ${formatCurrency(metadata.amount)}`);
+    if (metadata.provider) parts.push(`Provider ${metadata.provider}`);
+    if (metadata.status) parts.push(`Status ${metadata.status}`);
+    if (metadata.billingCycle) parts.push(`Ciclo ${formatPlanLabel(metadata.billingCycle)}`);
+    if (metadata.discountAmount != null) parts.push(`Desconto ${formatCurrency(metadata.discountAmount)}`);
+    if (metadata.billingAmount != null) parts.push(`Cobranca ${formatCurrency(metadata.billingAmount)}`);
+    if (metadata.trialEndsAt) parts.push(`Trial ate ${formatDate(metadata.trialEndsAt)}`);
+    if (metadata.expiresAt) parts.push(`Expira em ${formatDateTime(metadata.expiresAt)}`);
+    if (metadata.paymentRef) parts.push(`Ref ${metadata.paymentRef}`);
+    if (metadata.reason) parts.push(`Motivo: ${metadata.reason}`);
+    return parts.filter(Boolean).join(' | ');
+  };
+
+  const renderTimelineChanges = (changes = []) => {
+    if (!Array.isArray(changes) || !changes.length) return '';
+    return `
+      <div class="timeline-change-list">
+        ${changes.map((change) => `
+          <div>${escapeHtml(change.label || change.field || 'Campo')}: ${escapeHtml(change.before || '-')} -> ${escapeHtml(change.after || '-')}</div>
+        `).join('')}
+      </div>
+    `;
+  };
+
+  const renderCommercialTimeline = (timeline = {}) => {
+    const events = Array.isArray(timeline?.events) ? timeline.events : [];
+    const clinic = timeline?.clinic || {};
+    if (commercialTimelineTitle) commercialTimelineTitle.textContent = 'Timeline comercial';
+    if (commercialTimelineSubtitle) {
+      const email = clinic.emailMasked ? ` | ${clinic.emailMasked}` : '';
+      commercialTimelineSubtitle.textContent = `${clinic.name || clinic.clinicId || 'Clinica'}${email}`;
+    }
+    if (!commercialTimelineList) return;
+    if (!events.length) {
+      commercialTimelineList.innerHTML = '<div class="list-empty">Nenhum evento comercial encontrado para esta clinica.</div>';
+      return;
+    }
+    commercialTimelineList.innerHTML = events.map((event) => {
+      const metadata = event.metadata || {};
+      const metaText = formatTimelineMetadata(metadata);
+      const actorText = event.actor?.email || event.actor?.userId
+        ? `Operador: ${event.actor.email || event.actor.userId}`
+        : '';
+      return `
+        <article class="timeline-item">
+          <div class="timeline-date">${escapeHtml(formatDateTime(event.occurredAt))}</div>
+          <div class="timeline-content">
+            <div class="timeline-title-row">
+              <div class="timeline-title">${escapeHtml(event.title || 'Evento')}</div>
+              <span class="${getTimelineBadgeClass(event.type)}">${escapeHtml(formatTimelineTypeLabel(event.type))}</span>
+            </div>
+            ${event.description ? `<div class="timeline-description">${escapeHtml(event.description)}</div>` : ''}
+            ${metaText ? `<div class="timeline-meta">${escapeHtml(metaText)}</div>` : ''}
+            ${actorText ? `<div class="timeline-meta">${escapeHtml(actorText)}</div>` : ''}
+            ${renderTimelineChanges(metadata.changes)}
+          </div>
+        </article>
+      `;
+    }).join('');
+  };
+
+  const openCommercialTimelineModal = async (clinicId) => {
+    const normalizedClinicId = String(clinicId || '').trim();
+    if (!normalizedClinicId) {
+      setSubscriptionError('Clinica invalida para timeline.');
+      return;
+    }
+    const row = getSubscriptionRowByClinicId(normalizedClinicId) || {};
+    if (commercialTimelineTitle) commercialTimelineTitle.textContent = 'Timeline comercial';
+    if (commercialTimelineSubtitle) commercialTimelineSubtitle.textContent = row.clinicName || normalizedClinicId;
+    setCommercialTimelineError('');
+    setCommercialTimelineStatus('Carregando timeline...');
+    if (commercialTimelineList) commercialTimelineList.innerHTML = '<div class="list-empty">Carregando timeline...</div>';
+    if (commercialTimelineModal) {
+      commercialTimelineModal.hidden = false;
+      commercialTimelineModal.classList.add('is-open');
+    }
+
+    if (typeof authApi?.getSubscriptionCommercialTimeline !== 'function') {
+      setCommercialTimelineStatus('');
+      setCommercialTimelineError('Timeline comercial indisponivel neste ambiente.');
+      return;
+    }
+
+    timelineLoadingIds.add(normalizedClinicId);
+    renderSubscriptions();
+    try {
+      const timeline = await authApi.getSubscriptionCommercialTimeline(normalizedClinicId);
+      setCommercialTimelineStatus('');
+      renderCommercialTimeline(timeline || {});
+    } catch (err) {
+      setCommercialTimelineStatus('');
+      setCommercialTimelineError(err?.message || 'Falha ao carregar timeline comercial.');
+      if (commercialTimelineList) {
+        commercialTimelineList.innerHTML = '<div class="list-empty">Nao foi possivel carregar os eventos agora.</div>';
+      }
+    } finally {
+      timelineLoadingIds.delete(normalizedClinicId);
+      renderSubscriptions();
+    }
+  };
+
   const renderSubscriptions = () => {
     if (!subscriptionList) return;
     const rows = getSubscriptionRows();
@@ -607,6 +770,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const hasSubscription = Boolean(row.subscriptionId || row.subscriptionStatus || row.subscriptionAmount != null || row.subscriptionTrialEndsAt);
             const canExtendTrial = hasSubscription && status === 'TRIALING';
             const actionDisabled = isBusy || !hasSubscription;
+            const isTimelineLoading = timelineLoadingIds.has(clinicId);
             return `
               <tr data-clinic-id="${escapeHtml(clinicId)}">
                 <td>
@@ -629,6 +793,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" data-action="subscription-trial" data-clinic-id="${escapeHtml(clinicId)}" ${actionDisabled || !canExtendTrial ? 'disabled' : ''} title="${canExtendTrial ? '' : 'Disponivel apenas em trial ativo'}">Trial</button>
                     <button type="button" data-action="subscription-cycle" data-clinic-id="${escapeHtml(clinicId)}" ${actionDisabled ? 'disabled' : ''}>Ciclo</button>
                     <button type="button" data-action="subscription-notes" data-clinic-id="${escapeHtml(clinicId)}" ${actionDisabled ? 'disabled' : ''}>Nota</button>
+                    <button type="button" data-action="view-subscription-timeline" data-clinic-id="${escapeHtml(clinicId)}" ${isTimelineLoading ? 'disabled' : ''}>${isTimelineLoading ? 'Carregando...' : 'Ver timeline'}</button>
                   </div>
                 </td>
               </tr>
@@ -1355,6 +1520,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = String(target.dataset.action || '').trim();
     const clinicId = String(target.dataset.clinicId || '').trim();
     if (!action || !clinicId) return;
+    if (action === 'view-subscription-timeline') {
+      openCommercialTimelineModal(clinicId);
+      return;
+    }
     if (!action.startsWith('subscription-')) return;
     openSubscriptionModal(action, clinicId);
   });
@@ -1510,8 +1679,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  commercialTimelineModal?.addEventListener('click', (event) => {
+    if (event.target === commercialTimelineModal) {
+      closeCommercialTimelineModal();
+    }
+  });
+
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
+    if (commercialTimelineModal && !commercialTimelineModal.hidden) {
+      closeCommercialTimelineModal();
+      return;
+    }
     if (subscriptionModal && !subscriptionModal.hidden) {
       closeSubscriptionModal();
       return;
@@ -1577,6 +1756,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   btnCloseSubscriptionModalX?.addEventListener('click', () => {
     closeSubscriptionModal();
+  });
+  btnCloseCommercialTimelineModal?.addEventListener('click', () => {
+    closeCommercialTimelineModal();
+  });
+  btnCloseCommercialTimelineModalX?.addEventListener('click', () => {
+    closeCommercialTimelineModal();
   });
   btnSubmitSubscriptionModal?.addEventListener('click', async () => {
     await executeSubscriptionModalAction();

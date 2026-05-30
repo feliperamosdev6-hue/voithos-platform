@@ -515,6 +515,13 @@ select:focus {
   position: relative;
 }
 
+.timeline-modal-card {
+  max-width: 720px;
+  max-height: min(760px, calc(100vh - 32px));
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+}
+
 .modal-close {
   position: absolute;
   top: 10px;
@@ -557,6 +564,61 @@ select:focus {
   flex-wrap: wrap;
 }
 
+.timeline-list {
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid #dfe7f2;
+  border-radius: 12px;
+  padding: 12px;
+  background: #fff;
+}
+
+.timeline-date {
+  color: #5b6780;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.timeline-content {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.timeline-title-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timeline-title {
+  font-weight: 800;
+  color: #152442;
+}
+
+.timeline-description,
+.timeline-meta,
+.timeline-change-list {
+  color: #5b6780;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.timeline-change-list {
+  display: grid;
+  gap: 4px;
+}
+
 @media (max-width: 880px) {
   .form-grid {
     grid-template-columns: 1fr;
@@ -579,5 +641,14 @@ select:focus {
   .topbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .timeline-item {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-title-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

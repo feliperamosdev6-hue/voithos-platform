@@ -793,6 +793,311 @@ const buildCommercialUpdateResponse = ({ subscription, audit }) => {
   };
 };
 
+const maskEmailForClient = (value) => {
+  const normalized = normalizeText(value).toLowerCase();
+  const [localPart = '', domain = ''] = normalized.split('@');
+  if (!localPart || !domain) return '';
+  const visible = localPart.length <= 2 ? localPart.slice(0, 1) : localPart.slice(0, 2);
+  return `${visible}${'*'.repeat(Math.max(1, Math.min(4, localPart.length - visible.length)))}@${domain}`;
+};
+
+const maskReferenceForClient = (value) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return '';
+  if (normalized.length <= 8) return `${normalized.slice(0, 2)}***`;
+  return `${normalized.slice(0, 6)}...${normalized.slice(-2)}`;
+};
+
+const sanitizeTimelineText = (value, maxLength = 500) => normalizeText(value)
+  .replace(/\s+/g, ' ')
+  .slice(0, maxLength);
+
+const getProviderLabel = (value) => {
+  const provider = normalizeProvider(value);
+  if (provider.includes('ASAAS')) return 'ASAAS';
+  if (provider === 'MANUAL') return 'MANUAL';
+  return 'OUTRO';
+};
+
+const getTimelineActor = (audit = {}) => {
+  const email = maskEmailForClient(audit.actorEmail);
+  const userId = maskReferenceForClient(audit.actorUserId);
+  if (!email && !userId) return null;
+  return {
+    email: email || null,
+    userId: userId || null,
+  };
+};
+
+const createTimelineEvent = ({
+  id,
+  type,
+  title,
+  occurredAt,
+  source,
+  actor = null,
+  description = '',
+  metadata = {},
+}) => {
+  const iso = toIsoStringOrNull(occurredAt);
+  if (!iso) return null;
+  return {
+    id: normalizeText(id) || `${type}-${iso}`,
+    type: normalizeText(type).toUpperCase(),
+    title: sanitizeTimelineText(title, 120),
+    occurredAt: iso,
+    source: normalizeText(source).toUpperCase() || 'SYSTEM',
+    actor,
+    description: sanitizeTimelineText(description, 500),
+    metadata: Object.fromEntries(
+      Object.entries(metadata || {})
+        .filter(([, value]) => value !== null && value !== undefined && value !== '')
+        .map(([key, value]) => [key, value])
+    ),
+  };
+};
+
+const resolveAuditChangeLabel = (field) => ({
+  amount: 'Valor base',
+  billingAmount: 'Valor de cobranca',
+  discountAmount: 'Desconto',
+  customPriceEnabled: 'Preco customizado',
+  billingCycle: 'Ciclo',
+  commercialNotes: 'Nota comercial',
+  status: 'Status',
+  trialEndsAt: 'Fim do trial',
+  trialStartedAt: 'Inicio do trial',
+}[field] || field);
+
+const formatAuditValueForTimeline = (value) => {
+  if (value === null || value === undefined || value === '') return 'vazio';
+  if (typeof value === 'boolean') return value ? 'sim' : 'nao';
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'string') {
+    if (value.length > 80) return `${value.slice(0, 77)}...`;
+    return value;
+  }
+  return '[valor estruturado]';
+};
+
+const buildAuditChanges = (audit = {}) => {
+  const before = audit.before && typeof audit.before === 'object' ? audit.before : {};
+  const after = audit.after && typeof audit.after === 'object' ? audit.after : {};
+  const allowedFields = [
+    'amount',
+    'billingAmount',
+    'discountAmount',
+    'customPriceEnabled',
+    'billingCycle',
+    'commercialNotes',
+    'status',
+    'trialStartedAt',
+    'trialEndsAt',
+  ];
+  return allowedFields
+    .filter((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null))
+    .map((field) => ({
+      field,
+      label: resolveAuditChangeLabel(field),
+      before: field === 'commercialNotes'
+        ? (normalizeText(before[field]) ? 'preenchida' : 'vazia')
+        : formatAuditValueForTimeline(before[field]),
+      after: field === 'commercialNotes'
+        ? (normalizeText(after[field]) ? 'preenchida' : 'vazia')
+        : formatAuditValueForTimeline(after[field]),
+    }));
+};
+
+const buildCommercialAuditEvent = (audit = {}) => {
+  const action = normalizeText(audit.action).toUpperCase();
+  const metadata = audit.metadata && typeof audit.metadata === 'object' ? audit.metadata : {};
+  const changes = buildAuditChanges(audit);
+  const safeMetadata = {
+    reason: sanitizeTimelineText(metadata.reason || '', 300),
+    billingAmount: metadata.billingAmount ?? null,
+    baseAmount: metadata.baseAmount ?? null,
+    discountAmount: metadata.discountAmount ?? null,
+    billingCycle: normalizeText(metadata.billingCycle).toUpperCase() || null,
+    days: metadata.days ?? null,
+    trialEndsAt: metadata.trialEndsAt || null,
+    hasNotes: typeof metadata.hasNotes === 'boolean' ? metadata.hasNotes : null,
+    changes,
+  };
+  const actionConfig = {
+    PRICE_UPDATED: {
+      type: 'PRICE_UPDATED',
+      title: 'Preco alterado',
+      description: 'Condicao comercial de preco atualizada.',
+    },
+    PRICE_CUSTOMIZATION_DISABLED: {
+      type: 'PRICE_UPDATED',
+      title: 'Preco customizado desativado',
+      description: 'Assinatura voltou para a regra comercial padrao.',
+    },
+    DISCOUNT_APPLIED: {
+      type: 'DISCOUNT_APPLIED',
+      title: 'Desconto aplicado',
+      description: 'Desconto comercial aplicado na assinatura.',
+    },
+    TRIAL_EXTENDED: {
+      type: 'TRIAL_EXTENDED',
+      title: 'Trial extendido',
+      description: 'Periodo de trial foi prorrogado.',
+    },
+    BILLING_CYCLE_UPDATED: {
+      type: 'BILLING_CYCLE_UPDATED',
+      title: 'Ciclo alterado',
+      description: 'Ciclo de cobranca foi atualizado.',
+    },
+    COMMERCIAL_NOTES_UPDATED: {
+      type: 'COMMERCIAL_NOTES_UPDATED',
+      title: 'Nota comercial alterada',
+      description: 'Nota comercial interna foi atualizada.',
+    },
+  };
+  const config = actionConfig[action];
+  if (!config) return null;
+  return createTimelineEvent({
+    id: `audit-${audit.id}`,
+    type: config.type,
+    title: config.title,
+    occurredAt: audit.createdAt,
+    source: 'commercial_audit',
+    actor: getTimelineActor(audit),
+    description: config.description,
+    metadata: safeMetadata,
+  });
+};
+
+const buildPaymentTimelineEvents = (payment = {}) => {
+  const status = normalizeText(payment.status).toUpperCase();
+  const baseMetadata = {
+    amount: roundMoney(payment.amount),
+    provider: getProviderLabel(payment.provider),
+    paymentRef: maskReferenceForClient(payment.externalPaymentId),
+  };
+  const events = [
+    createTimelineEvent({
+      id: `checkout-created-${payment.id}`,
+      type: 'CHECKOUT_CREATED',
+      title: 'Checkout criado',
+      occurredAt: payment.createdAt,
+      source: 'subscription_payment',
+      description: 'Checkout de cobranca criado para a assinatura.',
+      metadata: {
+        ...baseMetadata,
+        status,
+        expiresAt: toIsoStringOrNull(getCheckoutExpiresAt(payment)),
+      },
+    }),
+  ];
+
+  if (status === 'CANCELED') {
+    events.push(createTimelineEvent({
+      id: `checkout-replaced-${payment.id}`,
+      type: 'CHECKOUT_REPLACED_OR_EXPIRED',
+      title: 'Checkout expirado/substituido',
+      occurredAt: payment.updatedAt || payment.createdAt,
+      source: 'subscription_payment',
+      description: 'Checkout pendente foi cancelado, expirado ou substituido por outro checkout.',
+      metadata: baseMetadata,
+    }));
+  }
+
+  if (status === 'PAID') {
+    events.push(createTimelineEvent({
+      id: `payment-approved-${payment.id}`,
+      type: 'PAYMENT_APPROVED',
+      title: 'Pagamento aprovado',
+      occurredAt: payment.paidAt || payment.updatedAt,
+      source: 'subscription_payment',
+      description: 'Pagamento da assinatura confirmado pelo fluxo de cobranca.',
+      metadata: baseMetadata,
+    }));
+  }
+
+  return events.filter(Boolean);
+};
+
+const buildSubscriptionTimeline = (clinic = {}) => {
+  const subscription = clinic.subscription || null;
+  const events = [];
+
+  if (subscription?.trialStartedAt) {
+    events.push(createTimelineEvent({
+      id: `trial-started-${subscription.id}`,
+      type: 'TRIAL_STARTED',
+      title: 'Trial iniciado',
+      occurredAt: subscription.trialStartedAt,
+      source: 'subscription',
+      description: 'Periodo de teste iniciado para a clinica.',
+      metadata: {
+        planType: normalizeText(subscription.planType).toUpperCase(),
+        trialEndsAt: toIsoStringOrNull(subscription.trialEndsAt),
+      },
+    }));
+  }
+
+  (subscription?.payments || []).forEach((payment) => {
+    events.push(...buildPaymentTimelineEvents(payment));
+  });
+
+  if (subscription?.activatedAt) {
+    events.push(createTimelineEvent({
+      id: `subscription-activated-${subscription.id}`,
+      type: 'SUBSCRIPTION_ACTIVATED',
+      title: 'Assinatura ativada',
+      occurredAt: subscription.activatedAt,
+      source: 'subscription',
+      description: 'Assinatura passou para status ativo apos confirmacao comercial.',
+      metadata: {
+        planType: normalizeText(subscription.planType).toUpperCase(),
+        endDate: toIsoStringOrNull(subscription.endDate),
+        graceUntil: toIsoStringOrNull(subscription.graceUntil),
+      },
+    }));
+  }
+
+  (subscription?.commercialAudits || []).forEach((audit) => {
+    const event = buildCommercialAuditEvent(audit);
+    if (event) events.push(event);
+  });
+
+  if (clinic.accessBlockedAt) {
+    events.push(createTimelineEvent({
+      id: `manual-block-${clinic.id}-${toIsoStringOrNull(clinic.accessBlockedAt)}`,
+      type: 'MANUAL_ACCESS_BLOCKED',
+      title: 'Bloqueio manual',
+      occurredAt: clinic.accessBlockedAt,
+      source: 'clinic_access',
+      actor: {
+        userId: maskReferenceForClient(clinic.accessBlockedByUserId),
+      },
+      description: sanitizeTimelineText(clinic.accessBlockedReason || 'Acesso da clinica bloqueado manualmente.', 500),
+      metadata: {},
+    }));
+  }
+
+  if (clinic.accessUnblockedAt) {
+    events.push(createTimelineEvent({
+      id: `manual-unblock-${clinic.id}-${toIsoStringOrNull(clinic.accessUnblockedAt)}`,
+      type: 'MANUAL_ACCESS_UNBLOCKED',
+      title: 'Desbloqueio manual',
+      occurredAt: clinic.accessUnblockedAt,
+      source: 'clinic_access',
+      actor: {
+        userId: maskReferenceForClient(clinic.accessUnblockedByUserId),
+      },
+      description: 'Acesso da clinica desbloqueado manualmente.',
+      metadata: {},
+    }));
+  }
+
+  return events
+    .filter(Boolean)
+    .sort((left, right) => String(left.occurredAt).localeCompare(String(right.occurredAt)));
+};
+
 const runCommercialSubscriptionUpdate = async ({
   clinicId,
   action,
@@ -1356,6 +1661,49 @@ const subscriptionService = {
         hasNotes: Boolean(normalizedNotes),
       },
     });
+  },
+
+  getCommercialTimeline: async ({ clinicId } = {}) => {
+    const normalizedClinicId = normalizeText(clinicId);
+    if (!normalizedClinicId) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'clinicId is required.');
+    }
+
+    const clinic = await subscriptionRepository.findCommercialTimelineByClinicId({
+      clinicId: normalizedClinicId,
+    });
+    if (!clinic) {
+      throw new AppError(404, 'CLINIC_NOT_FOUND', 'Clinic not found.');
+    }
+
+    const subscription = clinic.subscription || null;
+    const primaryAdmin = (clinic.users || []).find((user) => user.isClinicAdmin === true)
+      || (clinic.users || [])[0]
+      || null;
+
+    return {
+      clinic: {
+        clinicId: clinic.id,
+        name: normalizeText(clinic.nomeFantasia || clinic.razaoSocial) || clinic.id,
+        emailMasked: maskEmailForClient(clinic.email || primaryAdmin?.email || ''),
+      },
+      subscription: subscription ? {
+        id: subscription.id,
+        planType: normalizeText(subscription.planType).toUpperCase(),
+        status: normalizeText(subscription.status).toUpperCase(),
+        billingCycle: normalizeText(subscription.billingCycle).toUpperCase() || null,
+        amount: roundMoney(subscription.amount),
+        billingAmount: subscription.billingAmount == null ? null : roundMoney(subscription.billingAmount),
+        discountAmount: subscription.discountAmount == null ? null : roundMoney(subscription.discountAmount),
+        customPriceEnabled: subscription.customPriceEnabled === true,
+        trialStartedAt: toIsoStringOrNull(subscription.trialStartedAt),
+        trialEndsAt: toIsoStringOrNull(subscription.trialEndsAt),
+        activatedAt: toIsoStringOrNull(subscription.activatedAt),
+        startDate: toIsoStringOrNull(subscription.startDate),
+        endDate: toIsoStringOrNull(subscription.endDate),
+      } : null,
+      events: buildSubscriptionTimeline(clinic),
+    };
   },
 
   refreshPaymentStatus: async ({ clinicId, role }) => {

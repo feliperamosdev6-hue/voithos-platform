@@ -2332,6 +2332,12 @@
       payload || {},
       { auth: true }
     ),
+    getSubscriptionCommercialTimeline: async (clinicId) => request(
+      'GET',
+      `/clinics/super-admin/clinics/${encodeURIComponent(cleanText(clinicId))}/subscription/timeline`,
+      null,
+      { auth: true }
+    ),
     deletePendingClinicRegistration: async (id) => request(
       'DELETE',
       `/clinics/super-admin/pending/${encodeURIComponent(cleanText(id))}`,

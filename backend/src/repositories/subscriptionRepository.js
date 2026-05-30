@@ -76,6 +76,92 @@ const subscriptionRepository = {
     include: subscriptionInclude,
   }),
 
+  findCommercialTimelineByClinicId: async ({ clinicId }) => prisma.clinic.findUnique({
+    where: {
+      id: toRequiredString(clinicId, 'clinicId'),
+    },
+    select: {
+      id: true,
+      nomeFantasia: true,
+      razaoSocial: true,
+      email: true,
+      accessBlocked: true,
+      accessBlockedAt: true,
+      accessBlockedReason: true,
+      accessBlockedByUserId: true,
+      accessUnblockedAt: true,
+      accessUnblockedByUserId: true,
+      createdAt: true,
+      updatedAt: true,
+      users: {
+        select: {
+          id: true,
+          email: true,
+          nome: true,
+          isClinicAdmin: true,
+          role: true,
+          createdAt: true,
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      },
+      subscription: {
+        select: {
+          id: true,
+          clinicId: true,
+          planType: true,
+          status: true,
+          amount: true,
+          billingAmount: true,
+          discountAmount: true,
+          customPriceEnabled: true,
+          billingCycle: true,
+          commercialNotes: true,
+          startDate: true,
+          endDate: true,
+          graceUntil: true,
+          trialStartedAt: true,
+          trialEndsAt: true,
+          activatedAt: true,
+          lastPaymentId: true,
+          createdAt: true,
+          updatedAt: true,
+          payments: {
+            select: {
+              id: true,
+              amount: true,
+              status: true,
+              provider: true,
+              externalPaymentId: true,
+              paidAt: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+          commercialAudits: {
+            select: {
+              id: true,
+              action: true,
+              actorUserId: true,
+              actorEmail: true,
+              before: true,
+              after: true,
+              metadata: true,
+              createdAt: true,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+        },
+      },
+    },
+  }),
+
   updateCommercialFieldsForClinic: async ({
     clinicId,
     data,

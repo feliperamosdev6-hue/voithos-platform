@@ -15,6 +15,7 @@ const {
   extendSuperAdminSubscriptionTrial,
   updateSuperAdminSubscriptionBillingCycle,
   updateSuperAdminSubscriptionCommercialNotes,
+  getSuperAdminSubscriptionTimeline,
 } = require('../controllers/subscriptionCommercialController');
 
 const {
@@ -81,6 +82,7 @@ router.patch('/super-admin/clinics/:clinicId/subscription/discount', applySuperA
 router.patch('/super-admin/clinics/:clinicId/subscription/trial', extendSuperAdminSubscriptionTrial);
 router.patch('/super-admin/clinics/:clinicId/subscription/billing-cycle', updateSuperAdminSubscriptionBillingCycle);
 router.patch('/super-admin/clinics/:clinicId/subscription/commercial-notes', updateSuperAdminSubscriptionCommercialNotes);
+router.get('/super-admin/clinics/:clinicId/subscription/timeline', getSuperAdminSubscriptionTimeline);
 router.get('/super-admin/promotion-offers', listPromotionOffers);
 router.post('/super-admin/promotion-offers', createPromotionOffer);
 router.patch('/super-admin/promotion-offers/:id', updatePromotionOffer);
