@@ -1656,16 +1656,6 @@ body {
   flex-wrap: wrap;
 }
 
-.service-budget-btn {
-  font-size: 0.86rem;
-  white-space: nowrap;
-}
-
-.service-budget-btn:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 .service-drawer-actions .btn {
   border-radius: 12px;
   min-height: 40px;

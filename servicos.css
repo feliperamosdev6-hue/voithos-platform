@@ -415,6 +415,28 @@ border: 1px solid #e6ebf2;
   align-self: flex-start;
 }
 
+.service-form-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.service-form-actions .submit-button {
+  width: auto;
+  min-width: 160px;
+}
+
+.budget-download-button {
+  min-width: 150px;
+}
+
+.budget-download-button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 
 .face-legend {
   align-items: center;
@@ -490,6 +512,15 @@ border: 1px solid #e6ebf2;
   }
 
   .odontograma-view-btn {
+    width: 100%;
+  }
+
+  .service-form-actions {
+    justify-content: stretch;
+  }
+
+  .service-form-actions .submit-button {
+    flex: 1 1 100%;
     width: 100%;
   }
 
