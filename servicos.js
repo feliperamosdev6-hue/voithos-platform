@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const serviceSuggestionsContainer = getElem('serviceSuggestions');
   const selectDentistaServico = getElem('selectDentistaServico');
   const dentistaNomeFixo = getElem('dentistaNomeFixo');
-  const btnBaixarOrcamento = getElem('btn-baixar-orcamento');
   const btnSalvarServico = getElem('btn-salvar-servico');
   const btnSalvarServicoAgendar = getElem('btn-salvar-servico-agendar');
   const faceChips = Array.from(document.querySelectorAll('.face-chip[data-face]'));
@@ -53,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let allProcedures = [];
   let selectedServices = [];
   let currentUser = null;
-  let budgetDownloadRunning = false;
 
   const getClinicStorageKey = (baseKey) => {
     const clinicId = String(currentUser?.clinicId || '').trim();
@@ -509,7 +507,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       selectDentistaServico.disabled = false;
     }
-    updateBudgetDownloadButtonState();
   };
 
   const loadPatientFromStorage = () => {
@@ -542,7 +539,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (viewAnamneseBtn) viewAnamneseBtn.style.display = 'none';
     setCurrentOdontoMode('permanente');
-    updateBudgetDownloadButtonState();
   };
 
   const loadPatients = async () => {
@@ -566,7 +562,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!selectedServicesList) return;
     if (selectedServices.length === 0) {
       selectedServicesList.innerHTML = '<li>Nenhum servico adicionado.</li>';
-      updateBudgetDownloadButtonState();
       return;
     }
 
@@ -592,158 +587,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <strong>TOTAL:</strong>
         <span>${totalFormatted}</span>
       </li>`;
-    updateBudgetDownloadButtonState();
-  };
-
-  const sanitizeBudgetText = (value, maxLen = 500) => String(value ?? '')
-    .replace(/[<>]/g, ' ')
-    .replace(/[\u0000-\u001F\u007F]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, maxLen);
-
-  const normalizeBudgetProcedures = () => selectedServices
-    .map((service) => {
-      const valor = parseMoney(service?.value || 0);
-      return {
-        nome: sanitizeBudgetText(service?.name || 'Procedimento', 180),
-        codigo: sanitizeBudgetText(service?.codigo || '', 80),
-        dentes: sanitizeBudgetText(Array.isArray(service?.dentes) ? service.dentes.join(', ') : '', 120),
-        faces: Array.isArray(service?.faces)
-          ? service.faces.map((face) => sanitizeBudgetText(face, 12)).filter(Boolean)
-          : [],
-        valorUnitario: valor,
-        valorTotal: valor,
-      };
-    })
-    .filter((item) => item.nome);
-
-  const buildBudgetContentText = (items = [], total = 0, notes = '') => {
-    const moneyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-    const lines = items.map((item, index) => {
-      const teeth = item.dentes ? ` - Dentes: ${item.dentes}` : '';
-      return `${index + 1}. ${item.nome}${teeth} - ${moneyFormatter.format(Number(item.valorTotal) || 0)}`;
-    });
-    return [
-      'Orcamento gerado a partir dos procedimentos adicionados no card Servicos.',
-      ...lines,
-      `Total: ${moneyFormatter.format(Number(total) || 0)}`,
-      notes ? `Observacoes: ${notes}` : '',
-    ].filter(Boolean).join('\n');
-  };
-
-  const updateBudgetDownloadButtonState = () => {
-    if (!btnBaixarOrcamento) return;
-    const hasPatient = Boolean(hiddenProntuarioField?.value && currentPatient);
-    const hasProcedures = selectedServices.length > 0;
-    const hasApi = Boolean(documentsApi.saveOrcamento || documentsApi.saveCustom);
-    btnBaixarOrcamento.disabled = budgetDownloadRunning || !hasPatient || !hasProcedures || !hasApi;
-    btnBaixarOrcamento.textContent = budgetDownloadRunning ? 'Gerando orcamento...' : 'Baixar orcamento';
-    if (!hasApi) {
-      btnBaixarOrcamento.title = 'Modulo de documentos indisponivel neste ambiente.';
-    } else if (!hasPatient) {
-      btnBaixarOrcamento.title = 'Selecione um paciente antes de baixar o orcamento.';
-    } else if (!hasProcedures) {
-      btnBaixarOrcamento.title = 'Adicione ao menos um procedimento ao card antes de baixar o orcamento.';
-    } else {
-      btnBaixarOrcamento.title = 'Gerar PDF e salvar em Orcamentos no prontuario.';
-    }
-  };
-
-  const setBudgetDownloadRunning = (running) => {
-    budgetDownloadRunning = Boolean(running);
-    updateBudgetDownloadButtonState();
-  };
-
-  const baixarOrcamento = async () => {
-    if (budgetDownloadRunning) return;
-    const prontuario = String(hiddenProntuarioField?.value || '').trim();
-    if (!prontuario || !currentPatient) {
-      showToast('Selecione um paciente antes de baixar o orcamento.', 'error');
-      updateBudgetDownloadButtonState();
-      return;
-    }
-    const saveBudgetDocument = documentsApi.saveOrcamento || documentsApi.saveCustom;
-    if (!saveBudgetDocument) {
-      showToast('Modulo de documentos indisponivel neste ambiente.', 'error');
-      updateBudgetDownloadButtonState();
-      return;
-    }
-    const procedimentos = normalizeBudgetProcedures();
-    if (!procedimentos.length) {
-      showToast('Adicione ao menos um procedimento ao card antes de baixar o orcamento.', 'error');
-      updateBudgetDownloadButtonState();
-      return;
-    }
-
-    const dentInfo = obterDentistaResponsavel();
-    const observacoes = sanitizeBudgetText(getElem('painelObs')?.value || '', 1500);
-    const valorTotal = procedimentos.reduce((sum, item) => sum + (Number(item.valorTotal) || 0), 0);
-    const today = new Date().toISOString().slice(0, 10);
-    const title = `Orcamento ${new Date().toLocaleDateString('pt-BR')}`;
-
-    try {
-      setBudgetDownloadRunning(true);
-      const savedDocument = await saveBudgetDocument({
-        prontuario,
-        patientId: currentPatient.id || currentPatient.prontuario || currentPatient._id || prontuario,
-        pacienteId: currentPatient.id || currentPatient.prontuario || currentPatient._id || prontuario,
-        pacienteNome: sanitizeBudgetText(currentPatient.fullName || currentPatient.nome || currentPatientNome || '', 160),
-        profissionalId: sanitizeBudgetText(dentInfo?.id || currentUser?.id || '', 120),
-        profissionalNome: sanitizeBudgetText(dentInfo?.nome || currentUser?.nome || '', 160),
-        data: today,
-        documentDate: today,
-        title,
-        titulo: title,
-        category: 'orcamentos',
-        folder: 'Orcamentos',
-        type: 'ORCAMENTO',
-        procedimentos,
-        observacoes,
-        valorTotal,
-        conteudo: buildBudgetContentText(procedimentos, valorTotal, observacoes),
-      });
-
-      const savedDocumentId = savedDocument?.id
-        || savedDocument?.record?.id
-        || savedDocument?.document?.id
-        || savedDocument?.externalDocumentId
-        || '';
-      let openedDocument = false;
-      if (savedDocumentId && documentsApi.open) {
-        try {
-          await documentsApi.open({
-            prontuario,
-            patientId: currentPatient.id || currentPatient.prontuario || currentPatient._id || prontuario,
-            documentId: savedDocumentId,
-          });
-          openedDocument = true;
-        } catch (openError) {
-          console.warn('[SERVICOS] orcamento salvo, mas abertura automatica falhou', {
-            message: openError?.message || String(openError || ''),
-          });
-          showToast('Orcamento salvo no prontuario. Abra pela pasta Orcamentos.', 'info');
-        }
-      }
-
-      if (!savedDocumentId || !documentsApi.open) {
-        showToast('Orcamento salvo no prontuario. Abra pela pasta Orcamentos.', 'success');
-      } else if (openedDocument) {
-        showToast('Orcamento salvo no prontuario do paciente.', 'success');
-      }
-      try {
-        window.dispatchEvent(new CustomEvent('patient-clinical-updated', {
-          detail: { source: 'servicos-orcamento', prontuario, patientId: currentPatient?.id || prontuario },
-        }));
-      } catch (_) {}
-    } catch (error) {
-      console.warn('[SERVICOS] nao foi possivel gerar orcamento', {
-        message: error?.message || String(error || ''),
-      });
-      showToast('Nao foi possivel gerar o orcamento. Tente novamente.', 'error');
-    } finally {
-      setBudgetDownloadRunning(false);
-    }
   };
 
   const addServiceToList = () => {
@@ -1135,8 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSalvarServico?.addEventListener('click', async () => {
       await saveServices();
     });
-
-    btnBaixarOrcamento?.addEventListener('click', baixarOrcamento);
 
     if (btnSalvarServicoAgendar) {
       btnSalvarServicoAgendar.style.display = '';
