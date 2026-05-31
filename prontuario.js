@@ -740,7 +740,6 @@ document.addEventListener('DOMContentLoaded', () => {
     serviceDrawer.classList.add('open');
     serviceDrawer.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
-    updateServiceBudgetButtonState();
     updateDrawerDentesUI();
     updateResumoFacesUI();
     if (serviceDrawerName && !allProcedures.length) {
@@ -2212,7 +2211,6 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([], { loading: true });
-      updateServiceBudgetButtonState();
       syncTrackedTimers();
       return;
     }
@@ -2227,7 +2225,6 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([], { loading: false });
-      updateServiceBudgetButtonState();
       syncTrackedTimers();
       return;
     }
@@ -2252,14 +2249,12 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       procedimentosEmpty.classList.add('show');
       updateFinanceMetrics([]);
-      updateServiceBudgetButtonState();
       syncTrackedTimers();
       return;
     }
 
     procedimentosEmpty.classList.remove('show');
     updateFinanceMetrics(list);
-    updateServiceBudgetButtonState();
     procedimentosBody.innerHTML = list.map((svc) => {
       const nome = resolveServiceDisplayName(svc) || 'Procedimento';
       const dentes = formatDentes(svc.dentes || svc.dente);

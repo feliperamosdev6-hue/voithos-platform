@@ -704,17 +704,33 @@ document.addEventListener('DOMContentLoaded', () => {
         conteudo: buildBudgetContentText(procedimentos, valorTotal, observacoes),
       });
 
-      if (savedDocument?.id && documentsApi.open) {
+      const savedDocumentId = savedDocument?.id
+        || savedDocument?.record?.id
+        || savedDocument?.document?.id
+        || savedDocument?.externalDocumentId
+        || '';
+      let openedDocument = false;
+      if (savedDocumentId && documentsApi.open) {
         try {
-          await documentsApi.open({ prontuario, patientId: prontuario, documentId: savedDocument.id });
+          await documentsApi.open({
+            prontuario,
+            patientId: currentPatient.id || currentPatient.prontuario || currentPatient._id || prontuario,
+            documentId: savedDocumentId,
+          });
+          openedDocument = true;
         } catch (openError) {
           console.warn('[SERVICOS] orcamento salvo, mas abertura automatica falhou', {
             message: openError?.message || String(openError || ''),
           });
+          showToast('Orcamento salvo no prontuario. Abra pela pasta Orcamentos.', 'info');
         }
       }
 
-      showToast('Orcamento salvo no prontuario do paciente.', 'success');
+      if (!savedDocumentId || !documentsApi.open) {
+        showToast('Orcamento salvo no prontuario. Abra pela pasta Orcamentos.', 'success');
+      } else if (openedDocument) {
+        showToast('Orcamento salvo no prontuario do paciente.', 'success');
+      }
       try {
         window.dispatchEvent(new CustomEvent('patient-clinical-updated', {
           detail: { source: 'servicos-orcamento', prontuario, patientId: currentPatient?.id || prontuario },
