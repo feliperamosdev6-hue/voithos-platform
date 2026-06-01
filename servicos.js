@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let allProcedures = [];
   let selectedServices = [];
   let currentUser = null;
+  let servicesSaveRunning = false;
 
   const getClinicStorageKey = (baseKey) => {
     const clinicId = String(currentUser?.clinicId || '').trim();
@@ -589,6 +590,108 @@ document.addEventListener('DOMContentLoaded', () => {
       </li>`;
   };
 
+  const sanitizeDocumentText = (value, maxLen = 500) => String(value ?? '')
+    .replace(/[<>]/g, ' ')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
+
+  const normalizeBudgetProcedure = (service = {}) => {
+    const valor = parseMoney(service.valorCobrado ?? service.valor ?? service.value ?? 0);
+    const dentes = Array.isArray(service.dentes)
+      ? service.dentes.map((item) => sanitizeDocumentText(item, 20)).filter(Boolean).join(', ')
+      : sanitizeDocumentText(service.dente || '', 120);
+    const faces = Array.isArray(service.faces)
+      ? service.faces.map((face) => sanitizeDocumentText(face, 12)).filter(Boolean)
+      : [];
+    return {
+      id: sanitizeDocumentText(service.id || service.externalId || '', 80),
+      nome: sanitizeDocumentText(service.nome || service.tipo || service.procedureName || service.name || 'Procedimento', 180),
+      codigo: sanitizeDocumentText(service.codigo || service.code || '', 80),
+      dentes,
+      faces,
+      valorUnitario: valor,
+      valorTotal: valor,
+      observacoes: sanitizeDocumentText(service.observacoes || service.obs || '', 700),
+    };
+  };
+
+  const buildBudgetContentText = (procedimentos = [], valorTotal = 0, observacoes = '') => {
+    const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+    return [
+      'Orcamento gerado automaticamente ao salvar procedimentos em Servicos.',
+      ...procedimentos.map((item, index) => {
+        const dentes = item.dentes ? ` - Dentes: ${item.dentes}` : '';
+        return `${index + 1}. ${item.nome}${dentes} - ${money.format(Number(item.valorTotal) || 0)}`;
+      }),
+      `Total: ${money.format(Number(valorTotal) || 0)}`,
+      observacoes ? `Observacoes: ${observacoes}` : '',
+    ].filter(Boolean).join('\n');
+  };
+
+  const buildBudgetTimestampLabel = (date = new Date()) => {
+    const datePart = date.toLocaleDateString('pt-BR');
+    const timePart = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} ${timePart}`;
+  };
+
+  const saveProcedureBudgetDocument = async ({ prontuario, savedServices = [], dentInfo = null } = {}) => {
+    const saveBudgetDocument = documentsApi.saveOrcamento || documentsApi.saveCustom;
+    if (!saveBudgetDocument) return { ok: false, reason: 'documents_unavailable' };
+
+    const procedimentos = (Array.isArray(savedServices) ? savedServices : [])
+      .map(normalizeBudgetProcedure)
+      .filter((item) => item.nome);
+    if (!prontuario || !currentPatient || !procedimentos.length) {
+      return { ok: false, reason: 'missing_budget_data' };
+    }
+
+    const now = new Date();
+    const dateOnly = now.toISOString().slice(0, 10);
+    const title = `Orcamento - ${buildBudgetTimestampLabel(now)}`;
+    const observacoes = Array.from(new Set(procedimentos.map((item) => item.observacoes).filter(Boolean))).join('\n');
+    const valorTotal = procedimentos.reduce((sum, item) => sum + (Number(item.valorTotal) || 0), 0);
+    const patientId = currentPatient.id || currentPatient.prontuario || currentPatient._id || prontuario;
+
+    try {
+      await saveBudgetDocument({
+        prontuario,
+        patientId,
+        pacienteId: patientId,
+        pacienteNome: sanitizeDocumentText(currentPatient.fullName || currentPatient.nome || currentPatientNome || '', 160),
+        profissionalId: sanitizeDocumentText(dentInfo?.id || currentUser?.id || '', 120),
+        profissionalNome: sanitizeDocumentText(dentInfo?.nome || currentUser?.nome || '', 160),
+        data: dateOnly,
+        documentDate: dateOnly,
+        title,
+        titulo: title,
+        category: 'Orcamentos',
+        folder: 'Orcamentos',
+        type: 'ORCAMENTO',
+        procedimentos,
+        sourceProcedureIds: procedimentos.map((item) => item.id).filter(Boolean),
+        observacoes,
+        valorTotal,
+        conteudo: buildBudgetContentText(procedimentos, valorTotal, observacoes),
+      });
+      return { ok: true };
+    } catch (error) {
+      console.warn('[SERVICOS] procedimento salvo, mas orcamento nao foi gerado', {
+        message: error?.message || String(error || ''),
+      });
+      return { ok: false, reason: 'budget_save_failed' };
+    }
+  };
+
+  const setServicesSaving = (isSaving) => {
+    servicesSaveRunning = Boolean(isSaving);
+    if (btnSalvarServico) {
+      btnSalvarServico.disabled = servicesSaveRunning;
+      btnSalvarServico.textContent = servicesSaveRunning ? 'Salvando...' : 'Salvar procedimento';
+    }
+  };
+
   const addServiceToList = () => {
     const name = serviceNameInput.value.trim();
     const value = (serviceValueInput.value || '').trim().replace(',', '.') || '0';
@@ -725,6 +828,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const saveServices = async () => {
+    if (servicesSaveRunning) return;
     if (!hiddenProntuarioField.value) {
       logServicesContext('services_block_reason', {
         reason: 'missing_selected_patient',
@@ -758,9 +862,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return showToast('Adicione pelo menos um procedimento com valor antes de salvar.', 'error');
     }
 
+    setServicesSaving(true);
     try {
       let transferConfirmed = false;
       let financeWarningDetected = false;
+      const savedServicesForBudget = [];
       for (let i = 0; i < queue.length; i += 1) {
         const service = {
           ...queue[i],
@@ -806,14 +912,21 @@ document.addEventListener('DOMContentLoaded', () => {
             financeWarning: result.financeWarning,
           });
         }
+        savedServicesForBudget.push(result?.service || service);
       }
+      const budgetResult = await saveProcedureBudgetDocument({
+        prontuario: hiddenProntuarioField.value,
+        savedServices: savedServicesForBudget,
+        dentInfo,
+      });
       emitProcedureAndFinanceUpdated('servicos');
-      showToast(
-        financeWarningDetected
-          ? 'Procedimentos salvos, mas houve alerta na sincronizacao com o financeiro.'
-          : 'Procedimentos salvos com sucesso!',
-        financeWarningDetected ? 'error' : 'success'
-      );
+      const budgetMessage = budgetResult.ok
+        ? ' Orcamento salvo no prontuario.'
+        : ' Nao foi possivel gerar o orcamento agora.';
+      const procedureMessage = financeWarningDetected
+        ? 'Procedimentos salvos, mas houve alerta na sincronizacao com o financeiro.'
+        : 'Procedimentos salvos com sucesso.';
+      showToast(`${procedureMessage}${budgetMessage}`, (financeWarningDetected || !budgetResult.ok) ? 'error' : 'success');
       selectedServices = [];
       renderSelectedServices();
       serviceNameInput.value = '';
@@ -843,6 +956,8 @@ document.addEventListener('DOMContentLoaded', () => {
         message: error?.message || '',
       });
       showToast(error?.message || 'Nao foi possivel salvar o procedimento.', 'error');
+    } finally {
+      setServicesSaving(false);
     }
   };
 

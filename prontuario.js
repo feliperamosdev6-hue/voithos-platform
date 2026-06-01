@@ -19,6 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnNewReceita = document.getElementById('btn-new-receita');
   const docsList = document.getElementById('docs-list');
   const docsEmpty = document.getElementById('docs-empty');
+  const orcamentosList = document.getElementById('orcamentos-list');
+  const orcamentosEmpty = document.getElementById('orcamentos-empty');
   const arquivosList = document.getElementById('arquivos-list');
   const arquivosEmpty = document.getElementById('arquivos-empty');
   const anamneseList = document.getElementById('anamnese-list');
@@ -2727,20 +2729,26 @@ document.addEventListener('DOMContentLoaded', () => {
   const normalizeDocumentTypeValue = (doc) => String(doc?.type || doc?.tipo || '').trim().toUpperCase();
   const normalizeDocumentCategoryValue = (doc) => String(doc?.category || doc?.categoria || '').trim().toUpperCase();
   const attachmentCategories = new Set(['ARQUIVO_PACIENTE', 'ARQUIVOS', 'ANEXO', 'ANEXOS', 'EXAMES', 'IDENTIDADE', 'FINANCEIRO', 'IMAGEM', 'IMAGENS', 'OUTROS']);
-  const generatedDocumentTypes = new Set(['CUSTOMIZAVEL', 'RECEITA', 'ATESTADO', 'CONTRATO', 'DOSSIE', 'ORCAMENTO']);
+  const generatedDocumentTypes = new Set(['CUSTOMIZAVEL', 'RECEITA', 'ATESTADO', 'CONTRATO', 'DOSSIE']);
   const isMimeLikeType = (value) => /^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(String(value || '').trim());
   const isAnamneseDoc = (doc) => normalizeDocumentTypeValue(doc) === 'ANAMNESE';
+  const isOrcamentoDoc = (doc) => {
+    const type = normalizeDocumentTypeValue(doc);
+    const category = normalizeDocumentCategoryValue(doc);
+    const folder = String(doc?.folder || doc?.pasta || doc?.data?.pasta || '').trim().toUpperCase();
+    return type === 'ORCAMENTO' || category === 'ORCAMENTOS' || folder === 'ORCAMENTOS';
+  };
   const isEvolucaoDoc = (doc) => {
     const type = normalizeDocumentTypeValue(doc);
     return type === 'EVOLUCAO' || type === 'EVOLUCAO_CLINICA';
   };
   const isGeneratedClinicalDocument = (doc) => {
     const type = normalizeDocumentTypeValue(doc);
-    if (!type || isAnamneseDoc(doc) || isEvolucaoDoc(doc)) return false;
+    if (!type || isAnamneseDoc(doc) || isEvolucaoDoc(doc) || isOrcamentoDoc(doc)) return false;
     return generatedDocumentTypes.has(type);
   };
   const isAttachmentDocument = (doc) => {
-    if (!doc || isAnamneseDoc(doc) || isEvolucaoDoc(doc)) return false;
+    if (!doc || isAnamneseDoc(doc) || isEvolucaoDoc(doc) || isOrcamentoDoc(doc)) return false;
     const type = normalizeDocumentTypeValue(doc);
     const category = normalizeDocumentCategoryValue(doc);
     if (attachmentCategories.has(category)) return true;
@@ -2785,6 +2793,22 @@ document.addEventListener('DOMContentLoaded', () => {
     docsEmpty.classList.remove('show');
     list.forEach((doc) => {
       docsList.appendChild(buildDocumentCard(doc, 'open-doc', 'delete-doc', 'Documento clinico', 'Clinico'));
+    });
+  };
+
+  const renderOrcamentos = (docs) => {
+    if (!orcamentosList || !orcamentosEmpty) return;
+    const list = (Array.isArray(docs) ? docs : [])
+      .filter((doc) => isOrcamentoDoc(doc))
+      .sort((a, b) => String(b.createdAt || b.documentDate || '').localeCompare(String(a.createdAt || a.documentDate || '')));
+    orcamentosList.innerHTML = '';
+    if (!list.length) {
+      orcamentosEmpty.classList.add('show');
+      return;
+    }
+    orcamentosEmpty.classList.remove('show');
+    list.forEach((doc) => {
+      orcamentosList.appendChild(buildDocumentCard(doc, 'open-orcamento-doc', 'delete-orcamento-doc', 'Orcamento', 'Orcamentos'));
     });
   };
 
@@ -3302,6 +3326,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (loadToken !== documentsLoadToken) return [];
         docsCache = Array.isArray(docs) ? docs : [];
         renderDocuments(docs || []);
+        renderOrcamentos(docs || []);
         renderArquivos(docs || []);
         renderAnamneseDocuments(docs || []);
         renderAnotacoes(docs || []);
@@ -3312,6 +3337,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.warn('[PRONTUARIO] falha ao carregar documentos', err);
         docsCache = [];
         renderDocuments([]);
+        renderOrcamentos([]);
         renderArquivos([]);
         renderAnamneseDocuments([]);
         renderAnotacoes([], {
@@ -3355,7 +3381,7 @@ document.addEventListener('DOMContentLoaded', () => {
   tabs.forEach((tab) => {
     tab.addEventListener('click', async () => {
       setActiveTab(tab.dataset.tab);
-      if (tab.dataset.tab === 'documentos' || tab.dataset.tab === 'arquivos' || tab.dataset.tab === 'anamnese') {
+      if (tab.dataset.tab === 'documentos' || tab.dataset.tab === 'orcamentos' || tab.dataset.tab === 'arquivos' || tab.dataset.tab === 'anamnese') {
         loadDocuments();
       }
       if (tab.dataset.tab === 'financeiro') {
@@ -4181,6 +4207,34 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) {
       console.warn('[PRONTUARIO] nao foi possivel executar acao do documento', err);
       alert(err?.message || 'Nao foi possivel atualizar o documento.');
+    }
+  });
+
+  orcamentosList?.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const card = btn.closest('.doc-card');
+    const docId = card?.dataset?.docId || '';
+    if (!docId || !currentPatient?.prontuario) return;
+    try {
+      if (action === 'open-orcamento-doc') {
+        await documentsApi.open?.({ prontuario: currentPatient.prontuario, documentId: docId });
+        return;
+      }
+      if (action === 'delete-orcamento-doc') {
+        const ok = confirm('Excluir este orcamento?');
+        if (!ok) return;
+        await documentsApi.archive?.({
+          prontuario: currentPatient.prontuario,
+          documentId: docId,
+          archived: true,
+        });
+        await loadDocuments({ force: true });
+      }
+    } catch (err) {
+      console.warn('[PRONTUARIO] nao foi possivel executar acao do orcamento', err);
+      alert(err?.message || 'Nao foi possivel atualizar o orcamento.');
     }
   });
 
